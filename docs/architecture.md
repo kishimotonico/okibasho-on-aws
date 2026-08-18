@@ -43,6 +43,8 @@ Google Workspace / Google Account
 
 使うAWSサービス: S3 / CloudFront / Cognito / API Gateway HTTP API / Lambda / Route 53 / ACM。IaCはAWS CDK（TypeScript）。
 
+CDKのスタックは1つとし、機能的・概念的な境界はConstructで表現する（auth / storage / api / CDNなど）。Stack本体は各Constructの組み立てだけを行う。スタック分割によるcross-stack referenceの複雑さは持ち込まない。
+
 DynamoDB、WAF、Lambda@Edge、Step Functions、EventBridgeはMVPでは使わない。metadataの更新に厳密なtransactionが必要になるほど機能が増えたら、DynamoDB移行を検討する。
 
 ## origin分離
@@ -216,3 +218,11 @@ S3 bucketは完全privateにし、Public Access Blockを有効化する。S3 Web
 ## ログ
 
 CloudWatch Logsに最低限、page作成・削除・retention変更・upload失敗・authorization失敗を記録する。JWT、refresh token、presigned URLはログに出さない。
+
+## テスト
+
+テストランナーはVitestに統一する。web（TanStack Start = Vite）と同じランナーを使えるため、パッケージごとに別のランナーを覚えなくてよい。設定はパッケージごとの `vitest.config.ts` に置き、ルートの `pnpm test` が `pnpm -r test` で各パッケージへ委譲する。
+
+CDKは `Template.fromStack()` のsnapshotテストを正とする。個別リソースのアサーションは、意図を明示したい箇所（bucketがprivateであること、OACが付いていることなど）にだけ足す。snapshotは差分レビューの起点であり、テンプレートが意図せず変わったことに気付くための仕掛けとして使う。
+
+snapshotは `config.env` / `config.domains` が未設定の状態で合成する。これにより「設定が空でもsynthが通る」という制約がテストで守られる。

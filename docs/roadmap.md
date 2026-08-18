@@ -10,7 +10,7 @@
 
 ### 独自ドメイン
 
-当面はAWSのデフォルトドメイン（`*.cloudfront.net` など）で進める。CDKではドメイン名・証明書を設定値（context / props）でオプショナルにし、未設定ならデフォルトドメインで構築する。
+当面はAWSのデフォルトドメイン（`*.cloudfront.net` など）で進める。設定は `packages/infra/lib/config.ts` に集約してあり、`domains` が未設定ならデフォルトドメインで構築する。ドメインを用意したらconfigを埋めるだけで証明書・Route 53・カスタムドメインが有効になる形にする（分岐はドメイン関連リソースの1箇所に閉じ込める）。
 
 注意: `cloudfront.net` はPublic Suffix Listに載っているため、親ドメインCookieが設定できない。したがってSigned Cookieによる閲覧認証（Phase 3）は独自ドメイン設定後にしか有効化できない。それまでpages側は閲覧認証なしで検証する。
 
@@ -20,10 +20,10 @@ GWS Adminが当面ないため、Cognitoのローカルユーザー（管理者�
 
 ## Phase 0: 前提作業（手動）
 
-- [ ] AWSアカウントとリージョンの確定
+- [ ] AWSアカウントとリージョンの確定（決まったら `packages/infra/lib/config.ts` の `env` を設定）
 - [ ] `cdk bootstrap` 実行
 
-ドメイン取得・Route 53、Google OAuthクライアント作成は後付けタスクへ。
+アカウント未確定でも `cdk synth` とsnapshotテストは通せるため、Phase 1以降の実装はデプロイ以外先行できる。ドメイン取得・Route 53、Google OAuthクライアント作成は後付けタスクへ。
 
 ## Phase 1: 配信の背骨（infra）
 

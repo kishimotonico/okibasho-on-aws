@@ -27,6 +27,7 @@ pnpm install
 
 ```bash
 pnpm typecheck                          # 全パッケージの型チェック
+pnpm test                               # 全パッケージのテスト（Vitest）
 pnpm format                             # Prettier で整形
 pnpm --filter @page-share/infra synth   # CloudFormation テンプレートの生成
 pnpm --filter @page-share/infra diff    # デプロイ済みスタックとの差分
