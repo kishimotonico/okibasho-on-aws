@@ -11,11 +11,19 @@ export type ApiErrorCode =
   | 'file_too_large'
   | 'page_size_exceeded'
   | 'missing_index_html'
-  | 'not_implemented';
+  | 'not_implemented'
+  | 'slug_taken'
+  | 'invalid_json'
+  | 'invalid_request'
+  | 'unauthorized'
+  | 'internal_error'
+  | 'method_not_allowed';
 
 export interface ApiErrorBody {
   code: ApiErrorCode;
   message: string;
+  /** 検証エラーなど複数件あるときは全件を入れる。code / message は先頭のもの */
+  details?: ApiErrorBody[];
 }
 
 export interface ApiErrorResponse {
@@ -44,8 +52,8 @@ export interface PresignedUpload {
 /** POST /api/pages のレスポンス */
 export interface CreatePageResponse {
   slug: string;
-  /** 閲覧パス（完全 URL は API 側で組み立てる） */
-  viewPath: string;
+  /** 閲覧用の完全 URL（PAGES_BASE_URL は API だけが知っている） */
+  viewUrl: string;
   expiresAt: string | null;
   uploads: PresignedUpload[];
 }

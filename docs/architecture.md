@@ -82,6 +82,8 @@ CLIのログインはOAuth 2.0 Authorization Code + PKCE。CLIが一時的にloc
 
 API GatewayのJWT AuthorizerでCognito JWTを検証する。LambdaでJWT署名検証を実装しない。Lambdaは認証済みclaims（`sub` / `email` / `email_verified`）を受け取る前提で、更新系APIでは必ず `metadata.ownerSub == currentUser.sub` を確認し、違反は403にする。
 
+クライアントが `Authorization: Bearer` で送るのはIDトークンとする。Cognitoのアクセストークンには `email` クレームが入らないため、上の前提を満たすにはIDトークンが要る。アクセストークンで認可してemailを別途取りに行く形にもできるが、そのためだけにCognitoへの呼び出しと権限を増やすのは、この規模では割に合わない。IDトークンの `aud` はApp Client IDなので、JWT Authorizerのaudience設定とそのまま噛み合う。
+
 ### pages側の閲覧
 
 pages側もCloudFront Signed Cookieで社内ユーザーに限定する。1ページが複数ファイルを参照するため、Signed URLではなくSigned Cookieを使う。
@@ -234,6 +236,8 @@ App Distributionのルーティング:
 TypeScript + Node.jsで書き、npmで配布する。実行は `npx share-html`。依存は単一JSにバンドルする。
 
 CLIの対象は開発者とAIエージェントに割り切る。開発環境がないユーザーはWeb UIのdrag & dropを使う前提のため、単一バイナリ配布はしない。
+
+CLIが立てるlocalhostサーバーのポートは固定する。Cognitoはコールバックリダイレクト先をポートまで含めた完全一致で照合するため、空きポートを動的に選ぶことができない。ただし1つに固定するとそのポートが使用中のときログインの手段が無くなるので、`8976` / `8977` / `8978` の3つをApp Clientに登録し、CLIは空いているものを順に試す。
 
 OAuth / PKCEは既存ライブラリ（openid-clientなど）を使い、独自実装を最小限にする。token保存の方法は実装担当に委任（OS Credential Storeか、権限を絞ったユーザー専用ディレクトリへのファイル保存。tokenをログに出さない）。
 

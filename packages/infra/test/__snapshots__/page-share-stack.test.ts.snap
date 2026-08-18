@@ -3,6 +3,49 @@
 exports[`PageShareStack > テンプレートが意図せず変化していない 1`] = `
 {
   "Outputs": {
+    "ApiEndpointUrl": {
+      "Description": "API Gateway HTTP APIのエンドポイントURL（CLI設定用）",
+      "Value": {
+        "Fn::GetAtt": [
+          "PagesApiHttpApiB532950D",
+          "ApiEndpoint",
+        ],
+      },
+    },
+    "CliAppClientId": {
+      "Description": "CLI用 App Client ID",
+      "Value": {
+        "Ref": "AuthUserPoolCliClient8F1EE527",
+      },
+    },
+    "HostedUiBaseUrl": {
+      "Description": "Cognito Hosted UIのベースURL",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Ref": "AuthUserPoolHostedUiDomain786A45EE",
+            },
+            ".auth.",
+            {
+              "Ref": "AWS::Region",
+            },
+            ".amazoncognito.com",
+          ],
+        ],
+      },
+    },
+    "OidcIssuerUrl": {
+      "Description": "OIDC issuer URL (JWT Authorizer用)",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuthUserPool8115E87F",
+          "ProviderURL",
+        ],
+      },
+    },
     "PagesBucketName": {
       "Description": "pages bucket名（手動テスト用）",
       "Value": {
@@ -27,6 +70,18 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
         ],
       },
     },
+    "UserPoolId": {
+      "Description": "Cognito User Pool ID",
+      "Value": {
+        "Ref": "AuthUserPool8115E87F",
+      },
+    },
+    "WebAppClientId": {
+      "Description": "Web用 App Client ID",
+      "Value": {
+        "Ref": "AuthUserPoolWebClient147E4E38",
+      },
+    },
   },
   "Parameters": {
     "BootstrapVersion": {
@@ -36,6 +91,413 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
     },
   },
   "Resources": {
+    "AuthUserPool8115E87F": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "AccountRecoverySetting": {
+          "RecoveryMechanisms": [
+            {
+              "Name": "verified_email",
+              "Priority": 1,
+            },
+          ],
+        },
+        "AdminCreateUserConfig": {
+          "AllowAdminCreateUserOnly": true,
+        },
+        "AutoVerifiedAttributes": [
+          "email",
+        ],
+        "EmailVerificationMessage": "The verification code to your new account is {####}",
+        "EmailVerificationSubject": "Verify your new account",
+        "MfaConfiguration": "OFF",
+        "Policies": {
+          "PasswordPolicy": {
+            "MinimumLength": 12,
+            "RequireLowercase": true,
+            "RequireNumbers": true,
+            "RequireSymbols": false,
+            "RequireUppercase": true,
+          },
+        },
+        "Schema": [
+          {
+            "Mutable": true,
+            "Name": "email",
+            "Required": true,
+          },
+        ],
+        "SmsVerificationMessage": "The verification code to your new account is {####}",
+        "UsernameAttributes": [
+          "email",
+        ],
+        "VerificationMessageTemplate": {
+          "DefaultEmailOption": "CONFIRM_WITH_CODE",
+          "EmailMessage": "The verification code to your new account is {####}",
+          "EmailSubject": "Verify your new account",
+          "SmsMessage": "The verification code to your new account is {####}",
+        },
+      },
+      "Type": "AWS::Cognito::UserPool",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "AuthUserPoolCliClient8F1EE527": {
+      "Properties": {
+        "AccessTokenValidity": 60,
+        "AllowedOAuthFlows": [
+          "code",
+        ],
+        "AllowedOAuthFlowsUserPoolClient": true,
+        "AllowedOAuthScopes": [
+          "openid",
+          "email",
+          "profile",
+        ],
+        "CallbackURLs": [
+          "http://localhost:8976/callback",
+          "http://localhost:8977/callback",
+          "http://localhost:8978/callback",
+        ],
+        "GenerateSecret": false,
+        "IdTokenValidity": 60,
+        "RefreshTokenValidity": 43200,
+        "SupportedIdentityProviders": [
+          "COGNITO",
+        ],
+        "TokenValidityUnits": {
+          "AccessToken": "minutes",
+          "IdToken": "minutes",
+          "RefreshToken": "minutes",
+        },
+        "UserPoolId": {
+          "Ref": "AuthUserPool8115E87F",
+        },
+      },
+      "Type": "AWS::Cognito::UserPoolClient",
+    },
+    "AuthUserPoolHostedUiDomain786A45EE": {
+      "Properties": {
+        "Domain": {
+          "Fn::Join": [
+            "",
+            [
+              "page-share-",
+              {
+                "Ref": "AWS::AccountId",
+              },
+            ],
+          ],
+        },
+        "UserPoolId": {
+          "Ref": "AuthUserPool8115E87F",
+        },
+      },
+      "Type": "AWS::Cognito::UserPoolDomain",
+    },
+    "AuthUserPoolWebClient147E4E38": {
+      "Properties": {
+        "AccessTokenValidity": 60,
+        "AllowedOAuthFlows": [
+          "code",
+        ],
+        "AllowedOAuthFlowsUserPoolClient": true,
+        "AllowedOAuthScopes": [
+          "openid",
+          "email",
+          "profile",
+        ],
+        "CallbackURLs": [
+          "http://localhost:3000/auth/callback",
+        ],
+        "GenerateSecret": false,
+        "IdTokenValidity": 60,
+        "LogoutURLs": [
+          "http://localhost:3000",
+        ],
+        "RefreshTokenValidity": 43200,
+        "SupportedIdentityProviders": [
+          "COGNITO",
+        ],
+        "TokenValidityUnits": {
+          "AccessToken": "minutes",
+          "IdToken": "minutes",
+          "RefreshToken": "minutes",
+        },
+        "UserPoolId": {
+          "Ref": "AuthUserPool8115E87F",
+        },
+      },
+      "Type": "AWS::Cognito::UserPoolClient",
+    },
+    "PagesApiHttpApiB532950D": {
+      "Properties": {
+        "Name": "HttpApi",
+        "ProtocolType": "HTTP",
+      },
+      "Type": "AWS::ApiGatewayV2::Api",
+    },
+    "PagesApiHttpApiDefaultStage64261924": {
+      "Properties": {
+        "ApiId": {
+          "Ref": "PagesApiHttpApiB532950D",
+        },
+        "AutoDeploy": true,
+        "StageName": "$default",
+      },
+      "Type": "AWS::ApiGatewayV2::Stage",
+    },
+    "PagesApiHttpApiJwtAuthorizerBEA63326": {
+      "Properties": {
+        "ApiId": {
+          "Ref": "PagesApiHttpApiB532950D",
+        },
+        "AuthorizerType": "JWT",
+        "IdentitySource": [
+          "$request.header.Authorization",
+        ],
+        "JwtConfiguration": {
+          "Audience": [
+            {
+              "Ref": "AuthUserPoolWebClient147E4E38",
+            },
+            {
+              "Ref": "AuthUserPoolCliClient8F1EE527",
+            },
+          ],
+          "Issuer": {
+            "Fn::GetAtt": [
+              "AuthUserPool8115E87F",
+              "ProviderURL",
+            ],
+          },
+        },
+        "Name": "JwtAuthorizer",
+      },
+      "Type": "AWS::ApiGatewayV2::Authorizer",
+    },
+    "PagesApiHttpApiPOSTapipagesBDE29B97": {
+      "Properties": {
+        "ApiId": {
+          "Ref": "PagesApiHttpApiB532950D",
+        },
+        "AuthorizationType": "JWT",
+        "AuthorizerId": {
+          "Ref": "PagesApiHttpApiJwtAuthorizerBEA63326",
+        },
+        "RouteKey": "POST /api/pages",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "PagesApiHttpApiPOSTapipagesPagesIntegrationD2AE35E8",
+              },
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::ApiGatewayV2::Route",
+    },
+    "PagesApiHttpApiPOSTapipagesPagesIntegrationD2AE35E8": {
+      "Properties": {
+        "ApiId": {
+          "Ref": "PagesApiHttpApiB532950D",
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::GetAtt": [
+            "PagesApiPagesHandler945894AC",
+            "Arn",
+          ],
+        },
+        "PayloadFormatVersion": "2.0",
+      },
+      "Type": "AWS::ApiGatewayV2::Integration",
+    },
+    "PagesApiHttpApiPOSTapipagesPagesIntegrationPermissionAC3216A6": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PagesApiPagesHandler945894AC",
+            "Arn",
+          ],
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":execute-api:",
+              {
+                "Ref": "AWS::Region",
+              },
+              ":",
+              {
+                "Ref": "AWS::AccountId",
+              },
+              ":",
+              {
+                "Ref": "PagesApiHttpApiB532950D",
+              },
+              "/*/*/api/pages",
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "PagesApiPagesHandler945894AC": {
+      "DependsOn": [
+        "PagesApiPagesHandlerServiceRoleDefaultPolicyCFE3011F",
+        "PagesApiPagesHandlerServiceRoleB20FB24C",
+      ],
+      "Properties": {
+        "Architectures": [
+          "arm64",
+        ],
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "ASSET_HASH_PLACEHOLDER.zip",
+        },
+        "Environment": {
+          "Variables": {
+            "PAGES_BASE_URL": {
+              "Fn::Join": [
+                "",
+                [
+                  "https://",
+                  {
+                    "Fn::GetAtt": [
+                      "PagesDeliveryDistribution52AA7C1B",
+                      "DomainName",
+                    ],
+                  },
+                ],
+              ],
+            },
+            "PAGES_BUCKET": {
+              "Ref": "PagesStorageBucketDFEB6C7C",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesApiPagesHandlerLogGroup723A7CD8",
+          },
+        },
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "PagesApiPagesHandlerServiceRoleB20FB24C",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 10,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "PagesApiPagesHandlerLogGroup723A7CD8": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "RetentionInDays": 30,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "PagesApiPagesHandlerServiceRoleB20FB24C": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "PagesApiPagesHandlerServiceRoleDefaultPolicyCFE3011F": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesStorageBucketDFEB6C7C",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "PagesApiPagesHandlerServiceRoleDefaultPolicyCFE3011F",
+        "Roles": [
+          {
+            "Ref": "PagesApiPagesHandlerServiceRoleB20FB24C",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
     "PagesDeliveryDistribution52AA7C1B": {
       "Properties": {
         "DistributionConfig": {

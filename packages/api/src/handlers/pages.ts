@@ -1,4 +1,11 @@
 import type { APIGatewayProxyEventV2WithJWTAuthorizer, APIGatewayProxyResultV2 } from 'aws-lambda';
+import { S3Client } from '@aws-sdk/client-s3';
+import { createPage, defaultCreatePageDeps } from '../create-page.js';
+import { createPageStore } from '../page-store.js';
+
+// Lambdaの実行環境は複数リクエストで使い回されるため、クライアントはモジュールスコープに置く。
+// ハンドラ内で作ると毎回コネクションプールを作り直すことになる。
+const s3 = new S3Client({});
 
 /**
  * /api/pages 系のハンドラ。
@@ -16,16 +23,73 @@ import type { APIGatewayProxyEventV2WithJWTAuthorizer, APIGatewayProxyResultV2 }
 export const handler = async (
   event: APIGatewayProxyEventV2WithJWTAuthorizer,
 ): Promise<APIGatewayProxyResultV2> => {
+  const method = event.requestContext.http.method;
+
+  if (method !== 'POST') {
+    return jsonResponse(405, {
+      error: {
+        code: 'method_not_allowed',
+        message: `${method} はサポートされていません`,
+      },
+    });
+  }
+
   const claims = event.requestContext.authorizer.jwt.claims;
-  console.log('request', {
-    method: event.requestContext.http.method,
-    path: event.requestContext.http.path,
-    sub: claims['sub'],
+  const sub = claims['sub'];
+  if (typeof sub !== 'string' || sub.length === 0) {
+    console.log('page_create_failed', { errorCode: 'unauthorized' });
+    return jsonResponse(401, {
+      error: {
+        code: 'unauthorized',
+        message: '認証情報が不足しています',
+      },
+    });
+  }
+
+  const email = typeof claims['email'] === 'string' ? claims['email'] : '';
+
+  let body: unknown;
+  try {
+    body = event.body ? JSON.parse(event.body) : null;
+  } catch {
+    console.log('page_create_failed', { errorCode: 'invalid_json', ownerSub: sub });
+    return jsonResponse(400, {
+      error: {
+        code: 'invalid_json',
+        message: 'リクエスト body は有効な JSON である必要があります',
+      },
+    });
+  }
+
+  const bucket = process.env['PAGES_BUCKET'];
+  const pagesBaseUrl = process.env['PAGES_BASE_URL'];
+  if (!bucket || !pagesBaseUrl) {
+    console.log('page_create_failed', { errorCode: 'internal_error', ownerSub: sub });
+    return jsonResponse(500, {
+      error: {
+        code: 'internal_error',
+        message: 'サーバー設定が不完全です',
+      },
+    });
+  }
+
+  const result = await createPage({
+    store: createPageStore(bucket, s3),
+    pagesBaseUrl,
+    ownerSub: sub,
+    ownerEmail: email,
+    body,
+    now: () => new Date(),
+    generateSlug: defaultCreatePageDeps.generateSlug,
   });
 
-  return {
-    statusCode: 501,
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ error: { code: 'not_implemented', message: 'TODO' } }),
-  };
+  return jsonResponse(result.status, result.body);
 };
+
+function jsonResponse(statusCode: number, body: unknown): APIGatewayProxyResultV2 {
+  return {
+    statusCode,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  };
+}
