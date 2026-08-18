@@ -41,6 +41,34 @@ function synthJson(): Record<string, unknown> {
   return normalizeAssetHashes(synth().toJSON()) as Record<string, unknown>;
 }
 
+type DistributionResource = {
+  Properties?: {
+    DistributionConfig?: {
+      Comment?: string;
+      DefaultRootObject?: string;
+      CustomErrorResponses?: unknown;
+      DefaultCacheBehavior?: {
+        FunctionAssociations?: Array<{ EventType?: string }>;
+      };
+      CacheBehaviors?: Array<{
+        PathPattern?: string;
+        OriginRequestPolicyId?: string;
+        FunctionAssociations?: unknown;
+      }>;
+    };
+  };
+};
+
+function findDistributionByComment(
+  template: Template,
+  comment: string,
+): DistributionResource | undefined {
+  const distributions = template.findResources('AWS::CloudFront::Distribution');
+  return Object.values(distributions).find(
+    (distribution) => distribution.Properties?.DistributionConfig?.Comment === comment,
+  );
+}
+
 describe('PageShareStack', () => {
   it('テンプレートが意図せず変化していない', () => {
     expect(synthJson()).toMatchSnapshot();
@@ -50,8 +78,8 @@ describe('PageShareStack', () => {
     it('bucketは完全privateでHTTPS必須、Website Hostingは使わない', () => {
       const template = synth();
 
-      template.resourceCountIs('AWS::S3::Bucket', 1);
-      template.resourceCountIs('AWS::S3::BucketPolicy', 1);
+      template.resourceCountIs('AWS::S3::Bucket', 2);
+      template.resourceCountIs('AWS::S3::BucketPolicy', 2);
 
       template.hasResourceProperties('AWS::S3::Bucket', {
         PublicAccessBlockConfiguration: {
@@ -63,8 +91,9 @@ describe('PageShareStack', () => {
       });
 
       const buckets = template.findResources('AWS::S3::Bucket');
-      const bucket = Object.values(buckets)[0];
-      expect(bucket?.Properties?.WebsiteConfiguration).toBeUndefined();
+      for (const bucket of Object.values(buckets)) {
+        expect(bucket.Properties?.WebsiteConfiguration).toBeUndefined();
+      }
 
       template.hasResourceProperties('AWS::S3::BucketPolicy', {
         PolicyDocument: {
@@ -81,14 +110,33 @@ describe('PageShareStack', () => {
         },
       });
     });
+
+    it('Web UIからのpresigned PUTのためにCORSでPUTだけ許可する', () => {
+      const template = synth();
+
+      const withCors = Object.values(template.findResources('AWS::S3::Bucket')).filter(
+        (bucket) => bucket.Properties?.CorsConfiguration !== undefined,
+      );
+      // CORSを許すのはアップロード先のpages bucketだけ。UI用bucketには要らない
+      expect(withCors).toHaveLength(1);
+
+      const rules = withCors[0]?.Properties?.CorsConfiguration?.CorsRules as
+        Array<{ AllowedMethods?: string[]; AllowedOrigins?: unknown[] }> | undefined;
+      expect(rules).toHaveLength(1);
+      expect(rules?.[0]?.AllowedMethods).toEqual(['PUT']);
+      expect(rules?.[0]?.AllowedOrigins).toContain('http://localhost:3000');
+    });
   });
 
   describe('PagesDelivery', () => {
     it('CloudFront Distribution + OAC、ListBucket許可、viewer request関数が付く', () => {
       const template = synth();
 
-      template.resourceCountIs('AWS::CloudFront::Distribution', 1);
-      template.resourceCountIs('AWS::CloudFront::OriginAccessControl', 1);
+      template.resourceCountIs('AWS::CloudFront::Distribution', 2);
+      template.resourceCountIs('AWS::CloudFront::OriginAccessControl', 2);
+
+      const pagesDistribution = findDistributionByComment(template, 'untrusted pages配信');
+      expect(pagesDistribution).toBeDefined();
 
       template.hasResourceProperties('AWS::S3::BucketPolicy', {
         PolicyDocument: {
@@ -102,7 +150,8 @@ describe('PageShareStack', () => {
       });
 
       template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: {
+        DistributionConfig: Match.objectLike({
+          Comment: 'untrusted pages配信',
           DefaultCacheBehavior: Match.objectLike({
             FunctionAssociations: Match.arrayWith([
               Match.objectLike({
@@ -110,6 +159,44 @@ describe('PageShareStack', () => {
               }),
             ]),
           }),
+        }),
+      });
+    });
+  });
+
+  describe('AppDelivery', () => {
+    it('管理UI用Distribution、SPAシェル、/api/* behavior、ListBucket許可', () => {
+      const template = synth();
+
+      const appDistribution = findDistributionByComment(template, 'trusted 管理UI配信');
+      expect(appDistribution).toBeDefined();
+
+      expect(appDistribution?.Properties?.DistributionConfig?.DefaultRootObject).toBe(
+        '_shell.html',
+      );
+
+      // SPAのディープリンクはviewer request関数で寄せる。CustomErrorResponseは
+      // Distribution全体に効き、/api/* の404までSPAシェル(200)に化けるため使わない
+      expect(appDistribution?.Properties?.DistributionConfig?.CustomErrorResponses).toBeUndefined();
+      expect(
+        appDistribution?.Properties?.DistributionConfig?.DefaultCacheBehavior?.FunctionAssociations,
+      ).toEqual(expect.arrayContaining([expect.objectContaining({ EventType: 'viewer-request' })]));
+
+      const apiBehavior = appDistribution?.Properties?.DistributionConfig?.CacheBehaviors?.find(
+        (behavior) => behavior.PathPattern === '/api/*',
+      );
+      expect(apiBehavior?.OriginRequestPolicyId).toBeDefined();
+      // /api/* にSPA寄せの関数が掛かっていないこと
+      expect(apiBehavior?.FunctionAssociations).toBeUndefined();
+
+      template.hasResourceProperties('AWS::S3::BucketPolicy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Action: Match.arrayWith(['s3:ListBucket']),
+            }),
+          ]),
         },
       });
     });
@@ -149,6 +236,27 @@ describe('PageShareStack', () => {
           'http://localhost:8978/callback',
         ]),
       );
+
+      const webClient = Object.values(template.findResources('AWS::Cognito::UserPoolClient')).find(
+        (client) =>
+          client.Properties?.CallbackURLs?.includes('http://localhost:3000/auth/callback'),
+      );
+      const callbackUrls = webClient?.Properties?.CallbackURLs as unknown[] | undefined;
+      expect(callbackUrls).toEqual(expect.arrayContaining(['http://localhost:3000/auth/callback']));
+
+      const distributionCallback = callbackUrls?.find(
+        (url): url is { 'Fn::Join': [string, unknown[]] } =>
+          typeof url === 'object' && url !== null && 'Fn::Join' in url,
+      );
+      expect(distributionCallback).toBeDefined();
+      const joinParts = distributionCallback!['Fn::Join'];
+      expect(joinParts[0]).toBe('');
+      expect(joinParts[1]).toEqual(expect.arrayContaining(['https://', '/auth/callback']));
+      const getAtt = (joinParts[1] as unknown[]).find(
+        (part) => typeof part === 'object' && part !== null && 'Fn::GetAtt' in part,
+      ) as { 'Fn::GetAtt': [string, string] } | undefined;
+      expect(getAtt?.['Fn::GetAtt'][0]).toMatch(/AppDeliveryDistribution/);
+      expect(getAtt?.['Fn::GetAtt'][1]).toBe('DomainName');
     });
   });
 

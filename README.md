@@ -32,6 +32,8 @@ pnpm format                             # Prettier で整形
 pnpm --filter @page-share/infra synth   # CloudFormation テンプレートの生成
 pnpm --filter @page-share/infra diff    # デプロイ済みスタックとの差分
 pnpm --filter @page-share/infra deploy  # デプロイ
+pnpm --filter @page-share/web dev        # 管理UIの開発サーバー
+pnpm --filter @page-share/cli build      # CLIを単一JSにバンドル
 ```
 
 ## ドキュメント

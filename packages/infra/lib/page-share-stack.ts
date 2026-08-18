@@ -1,5 +1,6 @@
 import { CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
+import { AppDelivery } from './constructs/app-delivery.js';
 import { Auth } from './constructs/auth.js';
 import { PagesApi } from './constructs/pages-api.js';
 import { PagesDelivery } from './constructs/pages-delivery.js';
@@ -25,9 +26,11 @@ export class PageShareStack extends Stack {
     const pagesDelivery = new PagesDelivery(this, 'PagesDelivery', {
       bucket: pagesStorage.bucket,
     });
+    const appDelivery = new AppDelivery(this, 'AppDelivery');
 
     const auth = new Auth(this, 'Auth', {
       appDomain: config.domains?.app,
+      appDistributionDomain: appDelivery.distribution.distributionDomainName,
     });
 
     new CfnOutput(this, 'PagesViewUrl', {
@@ -73,11 +76,30 @@ export class PageShareStack extends Stack {
       cliClient: auth.cliClient,
     });
 
+    appDelivery.addApiBehavior(pagesApi.httpApi);
+
+    // Web UIはpresigned URLでS3へ直接PUTするため、app originからのCORSを許可する。
+    // localhost:3000 は開発サーバー用
+    pagesStorage.allowUploadsFrom([
+      `https://${appDelivery.distribution.distributionDomainName}`,
+      'http://localhost:3000',
+    ]);
+
+    new CfnOutput(this, 'AppUrl', {
+      value: `https://${appDelivery.distribution.distributionDomainName}`,
+      description: '管理UIのURL',
+    });
+
+    new CfnOutput(this, 'AppBucketName', {
+      value: appDelivery.bucket.bucketName,
+      description: 'UI用bucket名（ビルド成果物のアップロード先）',
+    });
+
     new CfnOutput(this, 'ApiEndpointUrl', {
       value: pagesApi.httpApi.apiEndpoint,
       description: 'API Gateway HTTP APIのエンドポイントURL（CLI設定用）',
     });
 
-    // TODO: Route 53 / ACM, app Distribution
+    // TODO: Route 53 / ACM
   }
 }

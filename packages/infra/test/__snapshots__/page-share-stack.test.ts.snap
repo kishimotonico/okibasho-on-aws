@@ -12,6 +12,29 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
         ],
       },
     },
+    "AppBucketName": {
+      "Description": "UI用bucket名（ビルド成果物のアップロード先）",
+      "Value": {
+        "Ref": "AppDeliveryBucketAB77B814",
+      },
+    },
+    "AppUrl": {
+      "Description": "管理UIのURL",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Fn::GetAtt": [
+                "AppDeliveryDistribution02142691",
+                "DomainName",
+              ],
+            },
+          ],
+        ],
+      },
+    },
     "CliAppClientId": {
       "Description": "CLI用 App Client ID",
       "Value": {
@@ -91,6 +114,345 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
     },
   },
   "Resources": {
+    "AppDeliveryBucketAB77B814": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "AppDeliveryBucketAutoDeleteObjectsCustomResource15226D2F": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "AppDeliveryBucketPolicy54A8BC03",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "AppDeliveryBucketAB77B814",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "AppDeliveryBucketPolicy54A8BC03": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "AppDeliveryBucketAB77B814",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "AppDeliveryBucketAB77B814",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "AppDeliveryBucketAB77B814",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "AppDeliveryBucketAB77B814",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "AppDeliveryBucketAB77B814",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:GetObject",
+                "s3:ListBucket",
+              ],
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:",
+                        {
+                          "Ref": "AWS::Partition",
+                        },
+                        ":cloudfront::",
+                        {
+                          "Ref": "AWS::AccountId",
+                        },
+                        ":distribution/",
+                        {
+                          "Ref": "AppDeliveryDistribution02142691",
+                        },
+                      ],
+                    ],
+                  },
+                },
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com",
+              },
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "AppDeliveryBucketAB77B814",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+                {
+                  "Fn::GetAtt": [
+                    "AppDeliveryBucketAB77B814",
+                    "Arn",
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
+    "AppDeliveryDistribution02142691": {
+      "Properties": {
+        "DistributionConfig": {
+          "CacheBehaviors": [
+            {
+              "AllowedMethods": [
+                "GET",
+                "HEAD",
+                "OPTIONS",
+                "PUT",
+                "PATCH",
+                "POST",
+                "DELETE",
+              ],
+              "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+              "Compress": true,
+              "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
+              "PathPattern": "/api/*",
+              "TargetOriginId": "PageShareAppDeliveryDistributionOrigin22033F960",
+              "ViewerProtocolPolicy": "redirect-to-https",
+            },
+          ],
+          "Comment": "trusted 管理UI配信",
+          "DefaultCacheBehavior": {
+            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+            "Compress": true,
+            "FunctionAssociations": [
+              {
+                "EventType": "viewer-request",
+                "FunctionARN": {
+                  "Fn::GetAtt": [
+                    "AppDeliveryRouterFunction43E4024D",
+                    "FunctionARN",
+                  ],
+                },
+              },
+            ],
+            "TargetOriginId": "PageShareAppDeliveryDistributionOrigin16E502F17",
+            "ViewerProtocolPolicy": "redirect-to-https",
+          },
+          "DefaultRootObject": "_shell.html",
+          "Enabled": true,
+          "HttpVersion": "http2",
+          "IPV6Enabled": true,
+          "Origins": [
+            {
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "AppDeliveryBucketAB77B814",
+                  "RegionalDomainName",
+                ],
+              },
+              "Id": "PageShareAppDeliveryDistributionOrigin16E502F17",
+              "OriginAccessControlId": {
+                "Fn::GetAtt": [
+                  "AppDeliveryDistributionOrigin1S3OriginAccessControl2535E57C",
+                  "Id",
+                ],
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": "",
+              },
+            },
+            {
+              "CustomOriginConfig": {
+                "OriginProtocolPolicy": "https-only",
+                "OriginSSLProtocols": [
+                  "TLSv1.2",
+                ],
+              },
+              "DomainName": {
+                "Fn::Select": [
+                  2,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::GetAtt": [
+                          "PagesApiHttpApiB532950D",
+                          "ApiEndpoint",
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              "Id": "PageShareAppDeliveryDistributionOrigin22033F960",
+            },
+          ],
+          "PriceClass": "PriceClass_200",
+        },
+      },
+      "Type": "AWS::CloudFront::Distribution",
+    },
+    "AppDeliveryDistributionOrigin1S3OriginAccessControl2535E57C": {
+      "Properties": {
+        "OriginAccessControlConfig": {
+          "Name": "PageShareAppDeliveryDistribuOrigin1S3OriginAccessControl9D849CC1",
+          "OriginAccessControlOriginType": "s3",
+          "SigningBehavior": "always",
+          "SigningProtocol": "sigv4",
+        },
+      },
+      "Type": "AWS::CloudFront::OriginAccessControl",
+    },
+    "AppDeliveryRouterFunction43E4024D": {
+      "Properties": {
+        "AutoPublish": true,
+        "FunctionCode": "/**
+ * app Distribution 用 viewer request 関数。
+ *
+ * SPAのディープリンク(/upload など)はS3上に存在しないので、シェルへ寄せる必要がある。
+ * これをCloudFrontのCustomErrorResponse(404 → /_shell.html)でやると、
+ * CustomErrorResponseがDistribution全体に効くため /api/* から返った404まで
+ * SPAのHTML(200)に化けてしまう。behaviorごとに掛けられるviewer request関数で寄せる。
+ *
+ * 判定は「最終セグメントに . を含むか」だけ。アセットは必ず拡張子付き、
+ * ルーティング用のパスは拡張子なし、という前提に乗っている。
+ */
+function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+
+  var lastSlash = uri.lastIndexOf('/');
+  var lastSegment = uri.substring(lastSlash + 1);
+
+  if (lastSegment.indexOf('.') === -1) {
+    request.uri = '/_shell.html';
+  }
+
+  return request;
+}
+",
+        "FunctionConfig": {
+          "Comment": "SPAのディープリンクを _shell.html へ寄せる",
+          "Runtime": "cloudfront-js-2.0",
+        },
+        "Name": {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Ref": "AWS::Region",
+              },
+              "PageShareAppDeliryRouterFunction93B4D559",
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::CloudFront::Function",
+    },
     "AuthUserPool8115E87F": {
       "DeletionPolicy": "Retain",
       "Properties": {
@@ -208,11 +570,40 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
         ],
         "CallbackURLs": [
           "http://localhost:3000/auth/callback",
+          {
+            "Fn::Join": [
+              "",
+              [
+                "https://",
+                {
+                  "Fn::GetAtt": [
+                    "AppDeliveryDistribution02142691",
+                    "DomainName",
+                  ],
+                },
+                "/auth/callback",
+              ],
+            ],
+          },
         ],
         "GenerateSecret": false,
         "IdTokenValidity": 60,
         "LogoutURLs": [
           "http://localhost:3000",
+          {
+            "Fn::Join": [
+              "",
+              [
+                "https://",
+                {
+                  "Fn::GetAtt": [
+                    "AppDeliveryDistribution02142691",
+                    "DomainName",
+                  ],
+                },
+              ],
+            ],
+          },
         ],
         "RefreshTokenValidity": 43200,
         "SupportedIdentityProviders": [
@@ -228,6 +619,64 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
         },
       },
       "Type": "AWS::Cognito::UserPoolClient",
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+      "DependsOn": [
+        "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "ASSET_HASH_PLACEHOLDER.zip",
+        },
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Lambda function for auto-deleting objects in ",
+              {
+                "Ref": "AppDeliveryBucketAB77B814",
+              },
+              " S3 bucket.",
+            ],
+          ],
+        },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 900,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:\${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
     },
     "PagesApiHttpApiB532950D": {
       "Properties": {
@@ -656,6 +1105,39 @@ function buildQueryString(querystring) {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "AES256",
               },
+            },
+          ],
+        },
+        "CorsConfiguration": {
+          "CorsRules": [
+            {
+              "AllowedHeaders": [
+                "*",
+              ],
+              "AllowedMethods": [
+                "PUT",
+              ],
+              "AllowedOrigins": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::GetAtt": [
+                          "AppDeliveryDistribution02142691",
+                          "DomainName",
+                        ],
+                      },
+                    ],
+                  ],
+                },
+                "http://localhost:3000",
+              ],
+              "ExposedHeaders": [
+                "ETag",
+              ],
+              "MaxAge": 3000,
             },
           ],
         },

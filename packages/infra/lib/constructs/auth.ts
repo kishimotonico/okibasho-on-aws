@@ -23,6 +23,8 @@ const WEB_LOCAL_LOGOUT_URL = 'http://localhost:3000';
 export interface AuthProps {
   /** 管理アプリのドメイン (例: app.share.example.jp)。未設定ならlocalhostのみ */
   readonly appDomain?: string;
+  /** 管理UI用 CloudFront のデフォルトドメイン。Hosted UI のコールバック登録に使う */
+  readonly appDistributionDomain?: string;
 }
 
 /**
@@ -71,6 +73,10 @@ export class Auth extends Construct {
     if (props.appDomain) {
       webCallbackUrls.push(`https://${props.appDomain}/auth/callback`);
       webLogoutUrls.push(`https://${props.appDomain}`);
+    }
+    if (props.appDistributionDomain) {
+      webCallbackUrls.push(`https://${props.appDistributionDomain}/auth/callback`);
+      webLogoutUrls.push(`https://${props.appDistributionDomain}`);
     }
 
     this.webClient = this.userPool.addClient('WebClient', {

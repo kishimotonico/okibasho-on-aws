@@ -85,13 +85,38 @@ GWS Adminが当面ないため、Cognitoのローカルユーザー（管理者�
 
 ## Phase 4: Web UI（web）
 
-- [ ] TanStack Start scaffold（SPAモード + prerender、S3配信）
-- [ ] App DistributionにUI用S3 originを追加（/api/* はAPI Gatewayのまま）
-- [ ] ログイン（Hosted UIリダイレクト）
-- [ ] アップロード画面（単一ファイル / ディレクトリ / drag & drop、名前指定、retention選択）
+- [x] TanStack Start scaffold（SPAモード + prerender、S3配信）
+- [x] App DistributionにUI用S3 originを追加（/api/* はAPI Gatewayのまま）
+- [x] ログイン（Hosted UIリダイレクト）
+- [x] アップロード画面（単一ファイル / ディレクトリ / drag & drop、名前指定、retention選択）
 - [ ] My Pages（一覧、URLコピー）
 
 受け入れ条件: ブラウザだけでログイン → drag & dropアップロード → URLコピーまでできる。
+
+進行状況: My Pages 以外は実装済み。My Pages は一覧API（`GET /api/pages`）が Phase 5 にあるため、そちらを先にやってから戻る。
+
+検証状況: **未検証**。通したのは typecheck、unitテスト、`vite build`（静的ファイルのみが出ることを確認）、dev serverでの `/`・`/upload`・`/auth/callback` の200応答。ログインとアップロードの実挙動はデプロイしないと確認できない。デプロイ後に見るべき点:
+
+- Hosted UIからのリダイレクトが `https://<app distributionのドメイン>/auth/callback` に戻ってくるか
+- CloudFrontの `/api/*` behaviorが `Authorization` ヘッダをAPI Gatewayまで運ぶか
+- ブラウザからのpresigned PUTがCORSとContent-Lengthの署名で通るか（ブラウザは `Content-Length` を明示指定できず自動付与に頼っている）
+
+Cognitoまわりで踏んだ実装上の注意が2つある。どちらも `packages/web/src/auth/user-manager.ts` にコメントを残した。
+
+- discovery document（`/.well-known/openid-configuration`）があるのはissuer側で、Hosted UIのドメインには無い。一方でauthorize / tokenの実体はHosted UI側にある。どちらか一方をauthorityにすると片方が欠けるため、endpointを明示して渡している
+- ログアウトは標準のRP-Initiated Logoutではなく `/logout?client_id=...&logout_uri=...` という独自形式
+
+### ビルド成果物のデプロイ
+
+App DistributionのUI用bucketへは、`cdk deploy` とは別に手でアップロードする。`cdk synth` が web のビルドに依存する形にしたくないため、CDKのBucketDeploymentは使っていない。
+
+```bash
+pnpm --filter @page-share/web build
+aws s3 sync packages/web/dist/client s3://<AppBucketName> --delete
+aws cloudfront create-invalidation --distribution-id <id> --paths '/*'
+```
+
+`_shell.html` は毎回入れ替わるので、`Cache-Control` を短くして上げるか、デプロイのたびにinvalidationを打つ。ハッシュ付きのアセットはそのまま長期キャッシュでよい。
 
 ## Phase 5: 仕上げ（api + infra + web + cli）
 
