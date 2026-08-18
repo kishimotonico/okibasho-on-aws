@@ -4,6 +4,8 @@
 
 方針は「縦に薄く」。CDKで全リソースを作り切ってからアプリではなく、統合リスクの高い部分（認証、Signed Cookie、presigned PUT）を最小構成で早く一周させる。
 
+チェックボックスは「実装が終わった」印である。受け入れ条件はデプロイして初めて確認できるものが多いため、AWSアカウントが決まるまでは各フェーズに検証状況を注記し、未検証のまま先へ進む。
+
 ## 後で設定できるようにするもの
 
 最初から用意しなくてよいものと、その代わりの進め方。
@@ -27,12 +29,20 @@ GWS Adminが当面ないため、Cognitoのローカルユーザー（管理者�
 
 ## Phase 1: 配信の背骨（infra）
 
-- [ ] pages用S3 bucket（完全private、Public Access Block）
-- [ ] Pages Distribution + OAC
-- [ ] CloudFront Function（末尾 `/` への index.html 補完）
-- [ ] CDKのsnapshotテスト
+- [x] pages用S3 bucket（完全private、Public Access Block）
+- [x] Pages Distribution + OAC
+- [x] CloudFront Function（末尾 `/` への index.html 補完）
+- [x] CDKのsnapshotテスト
 
 受け入れ条件: 手でS3の `pages/test/index.html` に置いたHTMLが、デフォルトドメインの `/p/test/` で表示される。
+
+検証状況: **未検証**（AWSアカウント未確定のためデプロイしていない）。ここまでで通したのは `cdk synth`、スタックのsnapshotテスト、CloudFront Functionのunitテスト（`node:vm` でhandlerを直接実行し、rewrite・301・404を確認）。CloudFrontとS3を実際につないだときの挙動は確認できていない。デプロイ後にまず見るべき点:
+
+- OACでS3から実際にオブジェクトが取れるか
+- 存在しないslugが403ではなく404で返るか（`s3:ListBucket` を足した狙いどおりか）
+- CloudFront Functionが runtime 2.0 で構文エラーなく動くか
+
+デプロイ時は `PagesBucketName` の出力を見て `pages/test/index.html` を置き、`PagesViewUrl` + `test/` を開けば確認できる。
 
 ## Phase 2: 認証と最初のE2E（infra + api + shared + cli）
 

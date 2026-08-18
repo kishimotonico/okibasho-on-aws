@@ -128,7 +128,7 @@ PATCH  /api/pages/{slug}   retention変更
 DELETE /api/pages/{slug}   削除（冪等にする）
 ```
 
-DELETEは `pages/<slug>/` と `users/<sub>/<slug>.json` を消す。
+DELETEは `pages/<slug>/`、`meta/<slug>.json`、`users/<sub>/<slug>.json` を消す。
 
 ## slug
 
@@ -144,18 +144,21 @@ DynamoDBを使わず、metadata / indexもS3で管理する。
 
 ```text
 pages/
-  <slug>/
+  <slug>/            # pages Distributionから配信される唯一のprefix
     index.html
     assets/...
-    metadata.json      # metadataの正本
+meta/
+  <slug>.json        # metadataの正本
 users/
   <cognito-sub>/
-    <slug>.json        # My Pages一覧用のインデックス
+    <slug>.json      # My Pages一覧用のインデックス
 ```
+
+metadataを `pages/<slug>/` の中に置かないのは、そこがCloudFrontから配信されるprefixだからである。中に置くと `/p/<slug>/metadata.json` で誰でもownerのメールアドレスを読めてしまい、さらにユーザーが `metadata.json` という名前のファイルをアップロードしたときに正本と衝突する。配信対象と管理データのprefixを分ければ、この2つの問題がまとめて消える。CloudFront側で特定パスを弾く例外ルールも要らなくなる。
 
 一覧は `ListObjectsV2` の prefix 指定で取得する。この規模では十分な性能になる想定。
 
-slugの空き確認は `pages/<slug>/metadata.json` の存在チェックで行う。専用のindexは持たない。
+slugの空き確認は `meta/<slug>.json` の存在チェックで行う。専用のindexは持たない。
 
 S3にtransactionはないので、削除などの複数オブジェクト更新は、冪等・再実行可能にし、中途半端な状態を検出できるようにする。
 
@@ -172,13 +175,28 @@ Lifecycleは即時ではないため、論理期限と物理削除の役割を�
 
 ## URL解決
 
-slugがそのままS3のkeyなので、動的なlookupは不要。CloudFront Functionは末尾 `/` のリクエストに `index.html` を補完するだけの静的なrewriteを行う。
+slugがそのままS3のkeyなので、動的なlookupは不要。CloudFront Functionは静的なrewriteだけを行う。
 
 ```text
 閲覧リクエスト /p/<slug>/
-    ↓ CloudFront Function（index.html補完のみ）
+    ↓ CloudFront Function（prefix付け替えとindex.html補完）
   S3 origin: pages/<slug>/index.html
 ```
+
+viewer requestに適用するルールは4つだけ。
+
+| 入力 | 出力 |
+| --- | --- |
+| `/p/<rest>` | `/pages/<rest>` にrewrite |
+| 末尾が `/` | `index.html` を補完 |
+| 末尾が `/` でなく最終セグメントに `.` が無い | 末尾 `/` 付きへ301 redirect |
+| `/p/` 以外 | 404 |
+
+3つ目のredirectは利便性のためだけではない。`/p/<slug>` のままHTMLを返すと、ページ内の相対パス（`./assets/style.css`）が `/p/assets/style.css` に解決されて壊れるため、正規URLへ寄せる必要がある。
+
+4つ目でURL空間を `/p/` だけに閉じている。配信されるprefixが `pages/` ひとつであることをedgeでも明示し、S3の他のprefixがURLとして生えないようにする。
+
+CloudFrontのOACには `s3:GetObject` に加えて `s3:ListBucket` を与える。これがないとS3は存在しないkeyに403 AccessDeniedを返す。存在しないslugを404、認可されていないアクセスを403として区別できるようにしておかないと、閲覧認証（Signed Cookie）を入れたときにtypoしたURLがログイン画面へのリダイレクトループになる。
 
 Lambda@EdgeもKeyValueStoreも使わない。
 
