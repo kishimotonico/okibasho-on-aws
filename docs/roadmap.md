@@ -46,14 +46,26 @@ GWS Adminが当面ないため、Cognitoのローカルユーザー（管理者�
 
 ## Phase 2: 認証と最初のE2E（infra + api + shared + cli）
 
-- [ ] Cognito User Pool + Hosted UI（ローカルユーザー、Web/CLIの2 App Client）
-- [ ] API Gateway HTTP API + JWT Authorizer
-- [ ] shared: API型・slug規則・Content-Type対応の実装
-- [ ] api: POST /api/pages（slug確定、metadata作成、presigned PUT発行）
-- [ ] cli: login（PKCE + localhostコールバック、token保存）
-- [ ] cli: upload（単一ファイル / ディレクトリ、presigned PUT、URL表示）
+- [x] Cognito User Pool + Hosted UI（ローカルユーザー、Web/CLIの2 App Client）
+- [x] API Gateway HTTP API + JWT Authorizer
+- [x] shared: API型・slug規則・Content-Type対応の実装
+- [x] api: POST /api/pages（slug確定、metadata作成、presigned PUT発行）
+- [x] cli: login（PKCE + localhostコールバック、token保存）
+- [x] cli: upload（単一ファイル / ディレクトリ、presigned PUT、URL表示）
 
 受け入れ条件: `share-html login` → `share-html ./dist/` でアップロードし、発行されたURLで閲覧できる（このフェーズでは閲覧認証なし）。
+
+検証状況: **未検証**（デプロイしていないため一周できていない）。通したのは `cdk synth`、snapshotテスト、sharedとapiとcliのunitテスト、CLIのビルド成果物での `--help` と `--dry-run` の実行。CLIの `--dry-run` は、ディレクトリ走査・単一ファイルのindex.html読み替え・パス検証・Content-Type判定・送信前の検証までを、ネットワークに出ずに確認できる。APIのハンドラはS3操作をインターフェースに切り出してあるため、ロジックはフェイク実装でテストしている。
+
+一方、AWSに繋がないと確認できないのは次の点。デプロイ後にここから見る:
+
+- Cognito Hosted UIでのログインが実際に通り、CLIのlocalhostコールバックが受け取れるか（ポート8976〜8978のいずれか）
+- JWT AuthorizerがIDトークンを受け入れるか（`aud` とApp Client IDの噛み合わせ）
+- `PutObject` の `IfNoneMatch: '*'` がslug予約として期待どおり412を返すか
+- presigned PUTの署名対象に `Content-Length` を含めた形で、実際にPUTが通るか（宣言と違うサイズが拒否されるか）
+- Lambdaのバンドル（AWS SDK同梱、1.4MB）が実行環境で動くか
+
+設定の受け渡しについて。CLIは接続先を環境変数（`SHARE_HTML_API_URL` / `SHARE_HTML_ISSUER` / `SHARE_HTML_CLIENT_ID`）か `~/.config/share-html/config.json` から読む。値はすべて `cdk deploy` のCfnOutputに出る。未設定のときはどの値がどの出力に対応するかを表示して終了する。
 
 ## Phase 3: 閲覧認証（infra + api）※要・独自ドメイン
 
@@ -63,6 +75,13 @@ GWS Adminが当面ないため、Cognitoのローカルユーザー（管理者�
 - [ ] 403カスタムエラーページ → app → 元URLの再認証フロー
 
 受け入れ条件: 未ログインでpages URLを開くとログインへ誘導され、ログイン後に元のページが表示される。
+
+進行状況: **保留。Phase 4 を先にやる**。理由は2つある。
+
+- 独自ドメインがまだ無い。`cloudfront.net` はPublic Suffix Listに載っていて親ドメインCookieを設定できないため、このフェーズは実装しても一切動かせない
+- app側にセッションCookieを発行する受け口が無い。`__Host-` Cookieを置く先も、403から戻ってくる先も、Phase 4 で作る App Distribution とWeb UIの上にある
+
+先に着手すると、ドメイン名もキーペアの置き場も動作確認の手段も無いまま、検証できないコードだけが増える。ドメインが決まり、Phase 4 でapp側が立ち上がってから戻ってくる。
 
 ## Phase 4: Web UI（web）
 

@@ -1,0 +1,154 @@
+import { parseArgs } from 'node:util';
+import { createRequire } from 'node:module';
+import { runLogin } from './commands/login.js';
+import { runLogout } from './commands/logout.js';
+import { runUpload } from './commands/upload.js';
+import { ConfigError } from './config.js';
+import { PortsInUseError } from './port.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json') as { version: string };
+
+const HELP_TEXT = `share-html — 社内向けHTML共有サービスのCLI
+
+使い方:
+  share-html login              ブラウザでログイン (OAuth PKCE)
+  share-html logout             保存したトークンを削除
+  share-html <path>             HTMLをアップロード
+  share-html --help, -h         このヘルプを表示
+  share-html --version          バージョンを表示
+
+アップロード:
+  share-html <path> [--name <slug>] [--retention temporary|permanent] [--dry-run]
+    <path>        単一ファイル (.html/.htm) またはディレクトリ
+    --name        ページの slug (省略時はサーバーが生成)
+    --retention   保存期間 (省略時: temporary)
+    --dry-run     ネットワークにアクセスせず送信内容だけ表示
+
+接続先の設定 (環境変数は設定ファイルより優先):
+  SHARE_HTML_API_URL            APIエンドポイント (CfnOutput: ApiEndpointUrl)
+  SHARE_HTML_ISSUER             OIDC issuer URL (CfnOutput: OidcIssuerUrl)
+  SHARE_HTML_CLIENT_ID          CLI用 App Client ID (CfnOutput: CliAppClientId)
+
+設定ファイル: ~/.config/share-html/config.json
+  (XDG_CONFIG_HOME が設定されていれば $XDG_CONFIG_HOME/share-html/config.json)
+`;
+
+export interface CliResult {
+  exitCode: number;
+}
+
+function printHelp(): void {
+  console.log(HELP_TEXT.trimEnd());
+}
+
+function printVersion(): void {
+  console.log(version);
+}
+
+function formatCliError(err: unknown): string {
+  if (err instanceof ConfigError || err instanceof PortsInUseError) {
+    return err.message;
+  }
+  if (err instanceof Error) {
+    if (err.message.startsWith('Unknown option')) {
+      return `${err.message}\nshare-html --help で使い方を確認できます。`;
+    }
+    return err.message;
+  }
+  return '予期しないエラーが発生しました。';
+}
+
+/**
+ * 引数を解釈してサブコマンドを実行する。テストから argv を渡せるようにする。
+ */
+export async function runCli(argv: string[]): Promise<CliResult> {
+  let parsed: ReturnType<typeof parseArgs>;
+  try {
+    parsed = parseArgs({
+      args: argv,
+      options: {
+        help: { type: 'boolean', short: 'h' },
+        version: { type: 'boolean' },
+        name: { type: 'string' },
+        retention: { type: 'string' },
+        'dry-run': { type: 'boolean' },
+      },
+      allowPositionals: true,
+      strict: true,
+    });
+  } catch (err) {
+    console.error(formatCliError(err));
+    return { exitCode: 1 };
+  }
+
+  const { values, positionals } = parsed;
+
+  if (values.help) {
+    printHelp();
+    return { exitCode: 0 };
+  }
+
+  if (values.version) {
+    printVersion();
+    return { exitCode: 0 };
+  }
+
+  if (positionals.length === 0) {
+    console.error('サブコマンドまたはアップロードするパスを指定してください。');
+    console.error('share-html --help で使い方を確認できます。');
+    return { exitCode: 1 };
+  }
+
+  const [command, ...rest] = positionals;
+
+  if (command === 'login') {
+    if (rest.length > 0) {
+      console.error('login サブコマンドに余分な引数は指定できません。');
+      return { exitCode: 1 };
+    }
+    await runLogin();
+    const code = process.exitCode;
+    return { exitCode: typeof code === 'number' ? code : 0 };
+  }
+
+  if (command === 'logout') {
+    if (rest.length > 0) {
+      console.error('logout サブコマンドに余分な引数は指定できません。');
+      return { exitCode: 1 };
+    }
+    try {
+      await runLogout();
+      return { exitCode: 0 };
+    } catch (err) {
+      console.error(formatCliError(err));
+      return { exitCode: 1 };
+    }
+  }
+
+  // それ以外の先頭引数はアップロード対象のパスとみなす
+  if (rest.length > 0) {
+    console.error('不明なサブコマンドです。share-html --help で使い方を確認できます。');
+    return { exitCode: 1 };
+  }
+
+  if (!command) {
+    console.error('サブコマンドまたはアップロードするパスを指定してください。');
+    return { exitCode: 1 };
+  }
+
+  const retention = values.retention;
+  if (retention !== undefined && retention !== 'temporary' && retention !== 'permanent') {
+    console.error('retention は temporary または permanent を指定してください。');
+    return { exitCode: 1 };
+  }
+
+  const name = typeof values.name === 'string' ? values.name : undefined;
+  const dryRun = values['dry-run'] === true;
+
+  return runUpload(command, {
+    name,
+    retention: retention as 'temporary' | 'permanent' | undefined,
+    dryRun,
+  });
+}
