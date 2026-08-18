@@ -112,6 +112,27 @@ describe('PageShareStack', () => {
       });
     });
 
+    it('CloudFrontから読めるのは pages/ 配下だけに絞られている', () => {
+      const template = synth();
+
+      const policies = Object.values(template.findResources('AWS::S3::BucketPolicy'));
+      const statements = policies.flatMap(
+        (p) => (p.Properties?.PolicyDocument?.Statement ?? []) as Array<Record<string, unknown>>,
+      );
+
+      const denyGet = statements.find((st) => st.Sid === 'DenyCloudFrontGetOutsidePagesPrefix');
+      expect(denyGet?.Effect).toBe('Deny');
+      expect(denyGet?.Action).toBe('s3:GetObject');
+      // NotResource で pages/ 以外を落とす。Resource側で許可を絞るとCDKの自動生成policyと噛み合わない
+      expect(denyGet?.NotResource).toBeDefined();
+      expect(denyGet?.Resource).toBeUndefined();
+
+      const denyList = statements.find((st) => st.Sid === 'DenyCloudFrontListOutsidePagesPrefix');
+      expect(denyList?.Effect).toBe('Deny');
+      // s3:prefix が無いリクエスト(存在しないkeyの404判定)まで巻き込まないための Null 条件
+      expect(denyList?.Condition).toMatchObject({ Null: { 's3:prefix': 'false' } });
+    });
+
     it('temporaryタグの付いたオブジェクトだけをLifecycleで物理削除する', () => {
       const template = synth();
 

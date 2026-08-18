@@ -10,7 +10,9 @@ export class FakePageStore implements PageStore {
   readonly tags = new Map<string, Record<string, string>>();
   readonly invalidJsonKeys = new Set<string>();
   readonly deleteCalls: string[][] = [];
+  readonly putJsonCalls: Array<{ key: string; body: unknown }> = [];
   readonly setObjectTagsCalls: Array<{ key: string; tags: Record<string, string> }> = [];
+  readonly failDeleteKeys = new Set<string>();
   listResult: ListUserIndexKeysResult = { keys: [], truncated: false };
   listKeysResult: ListKeysResult = { keys: [], truncated: false };
   listKeysCalls: string[] = [];
@@ -41,6 +43,7 @@ export class FakePageStore implements PageStore {
   }
 
   async putJson(key: string, body: unknown): Promise<void> {
+    this.putJsonCalls.push({ key, body });
     this.objects.set(key, body);
   }
 
@@ -88,6 +91,11 @@ export class FakePageStore implements PageStore {
   }
 
   async deleteObjects(keys: string[]): Promise<void> {
+    for (const key of keys) {
+      if (this.failDeleteKeys.has(key)) {
+        throw new Error(`delete failed: ${key}`);
+      }
+    }
     this.deleteCalls.push([...keys]);
     for (const key of keys) {
       this.objects.delete(key);

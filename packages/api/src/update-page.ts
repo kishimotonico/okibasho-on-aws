@@ -4,13 +4,7 @@ import type {
   PageMetadata,
   Retention,
 } from '@page-share/shared';
-import {
-  isValidSlug,
-  metaObjectKey,
-  pagePrefix,
-  userIndexObjectKey,
-  type UserPageIndexEntry,
-} from '@page-share/shared';
+import { isValidSlug, metaObjectKey, pagePrefix } from '@page-share/shared';
 import { isPageMetadata } from './page-metadata.js';
 import type { PageStore } from './page-store.js';
 import { computeExpiresAt, retentionObjectTags } from './retention.js';
@@ -59,37 +53,23 @@ function invalidRequest(message: string): { ok: false; body: ApiErrorResponse } 
   };
 }
 
-function isUserPageIndexEntry(value: unknown): value is UserPageIndexEntry {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-  const entry = value as Record<string, unknown>;
-  return (
-    typeof entry['slug'] === 'string' &&
-    (entry['retention'] === 'temporary' || entry['retention'] === 'permanent') &&
-    typeof entry['createdAt'] === 'string' &&
-    (entry['expiresAt'] === null || typeof entry['expiresAt'] === 'string') &&
-    typeof entry['fileCount'] === 'number' &&
-    typeof entry['totalSize'] === 'number'
-  );
-}
-
 async function applyRetentionTags(
   store: PageStore,
   slug: string,
-  ownerSub: string,
   retention: Retention,
 ): Promise<void> {
   const tags = retentionObjectTags(retention);
-  const keysToTag: string[] = [metaObjectKey(slug), userIndexObjectKey(ownerSub, slug)];
+  const keysToTag: string[] = [metaObjectKey(slug)];
 
   const { keys: pageKeys, truncated } = await store.listKeys(pagePrefix(slug));
   if (truncated) {
     // 1ページ200ファイル上限なので通常は収まるが、黙って切り捨てない
-    console.log('page_update_tags_truncated', { slug, ownerSub, keyCount: pageKeys.length });
+    console.log('page_update_tags_truncated', { slug, keyCount: pageKeys.length });
   }
   keysToTag.push(...pageKeys);
 
+  // users/ マーカーには Lifecycle 用タグを付けない。
+  // temporary ページが物理削除されたあとマーカーだけ残るが、一覧の lazy cleanup が掃除する。
   await Promise.all(keysToTag.map((key) => store.setObjectTags(key, tags)));
 }
 
@@ -214,31 +194,9 @@ export async function updatePage(input: UpdatePageInput): Promise<UpdatePageResu
       expiresAt,
     };
 
-    const indexKey = userIndexObjectKey(input.ownerSub, input.slug);
-    const indexResult = await input.store.getJson<UserPageIndexEntry>(indexKey);
-    let indexEntry: UserPageIndexEntry;
-
-    if (indexResult.ok && isUserPageIndexEntry(indexResult.data)) {
-      indexEntry = {
-        ...indexResult.data,
-        retention,
-        expiresAt,
-      };
-    } else {
-      // インデックスが欠けていても metadata 更新は続行する
-      indexEntry = {
-        slug: metadata.slug,
-        retention,
-        createdAt: metadata.createdAt,
-        expiresAt,
-        fileCount: metadata.fileCount,
-        totalSize: metadata.totalSize,
-      };
-    }
-
+    // 可変データは meta/ だけを更新する。users/ マーカーは触らない。
     await input.store.putJson(metaKey, updatedMetadata);
-    await input.store.putJson(indexKey, indexEntry);
-    await applyRetentionTags(input.store, input.slug, input.ownerSub, retention);
+    await applyRetentionTags(input.store, input.slug, retention);
 
     console.log('page_retention_updated', {
       slug: input.slug,

@@ -44,21 +44,10 @@ function makeMetadata(slug: string, overrides?: Partial<PageMetadata>): PageMeta
   };
 }
 
-function makeIndexEntry(slug: string, overrides?: Partial<UserPageIndexEntry>): UserPageIndexEntry {
-  const createdAt = overrides?.createdAt ?? OLD_CREATED_AT;
-  const retention = overrides?.retention ?? 'temporary';
+function makeMarker(slug: string, overrides?: Partial<UserPageIndexEntry>): UserPageIndexEntry {
   return {
     slug,
-    retention,
-    createdAt,
-    expiresAt:
-      overrides?.expiresAt !== undefined
-        ? overrides.expiresAt
-        : retention === 'permanent'
-          ? null
-          : expectedExpiresAt(createdAt),
-    fileCount: 1,
-    totalSize: 100,
+    createdAt: overrides?.createdAt ?? OLD_CREATED_AT,
     ...overrides,
   };
 }
@@ -68,16 +57,13 @@ function seedPage(
   slug: string,
   options?: {
     metadata?: Partial<PageMetadata>;
-    index?: Partial<UserPageIndexEntry>;
+    marker?: Partial<UserPageIndexEntry>;
     pageFiles?: string[];
   },
 ): void {
   const metadata = makeMetadata(slug, options?.metadata);
   store.objects.set(metaObjectKey(slug), metadata);
-  store.objects.set(
-    userIndexObjectKey(metadata.ownerSub, slug),
-    makeIndexEntry(slug, options?.index),
-  );
+  store.objects.set(userIndexObjectKey(metadata.ownerSub, slug), makeMarker(slug, options?.marker));
   for (const path of options?.pageFiles ?? ['index.html']) {
     store.objects.set(pageObjectKey(slug, path), '<html></html>');
   }
@@ -114,13 +100,9 @@ describe('updatePage', () => {
     expect(metadata.retention).toBe('permanent');
     expect(metadata.expiresAt).toBe(null);
 
-    const index = store.objects.get(userIndexObjectKey(OWNER_SUB, 'my-page')) as UserPageIndexEntry;
-    expect(index.retention).toBe('permanent');
-    expect(index.expiresAt).toBe(null);
-
     const taggedKeys = store.setObjectTagsCalls.map((call) => call.key);
     expect(taggedKeys).toContain(metaObjectKey('my-page'));
-    expect(taggedKeys).toContain(userIndexObjectKey(OWNER_SUB, 'my-page'));
+    expect(taggedKeys).not.toContain(userIndexObjectKey(OWNER_SUB, 'my-page'));
     expect(taggedKeys).toContain(pageObjectKey('my-page', 'index.html'));
     expect(taggedKeys).toContain(pageObjectKey('my-page', 'assets/app.js'));
 
@@ -133,7 +115,6 @@ describe('updatePage', () => {
     const store = new FakePageStore();
     seedPage(store, 'perm-page', {
       metadata: { retention: 'permanent', expiresAt: null },
-      index: { retention: 'permanent', expiresAt: null },
     });
 
     const result = await updatePage({
@@ -162,7 +143,6 @@ describe('updatePage', () => {
     const createdAt = '2025-01-01T00:00:00.000Z';
     seedPage(store, 'old-page', {
       metadata: { retention: 'permanent', createdAt, expiresAt: null },
-      index: { retention: 'permanent', createdAt, expiresAt: null },
     });
 
     const result = await updatePage({
@@ -183,7 +163,7 @@ describe('updatePage', () => {
     expect(new Date(result.body.expiresAt!).getTime()).toBeLessThanOrEqual(FIXED_NOW.getTime());
   });
 
-  it('metadata と users インデックスの両方が更新される', async () => {
+  it('users/ には一切書き込まない', async () => {
     const store = new FakePageStore();
     seedPage(store, 'both-page', { metadata: { retention: 'temporary' } });
 
@@ -195,12 +175,29 @@ describe('updatePage', () => {
       body: { retention: 'permanent' },
     });
 
-    const metadata = store.objects.get(metaObjectKey('both-page')) as PageMetadata;
-    const index = store.objects.get(
-      userIndexObjectKey(OWNER_SUB, 'both-page'),
-    ) as UserPageIndexEntry;
+    const usersKey = userIndexObjectKey(OWNER_SUB, 'both-page');
+    expect(store.putJsonCalls.every((call) => call.key !== usersKey)).toBe(true);
+    expect(store.setObjectTagsCalls.every((call) => call.key !== usersKey)).toBe(true);
+
+    const marker = store.objects.get(usersKey) as UserPageIndexEntry;
+    expect(marker).toEqual(makeMarker('both-page'));
+  });
+
+  it('meta/ の retention と expiresAt が更新される', async () => {
+    const store = new FakePageStore();
+    seedPage(store, 'meta-only', { metadata: { retention: 'temporary' } });
+
+    await updatePage({
+      store,
+      pagesBaseUrl: PAGES_BASE_URL,
+      ownerSub: OWNER_SUB,
+      slug: 'meta-only',
+      body: { retention: 'permanent' },
+    });
+
+    const metadata = store.objects.get(metaObjectKey('meta-only')) as PageMetadata;
     expect(metadata.retention).toBe('permanent');
-    expect(index.retention).toBe('permanent');
+    expect(metadata.expiresAt).toBe(null);
   });
 
   it('他人のページで 403', async () => {
@@ -294,7 +291,7 @@ describe('updatePage', () => {
 });
 
 describe('deletePage', () => {
-  it('3箇所すべてが消え、削除順序が pages → meta → users である', async () => {
+  it('3箇所すべてが消え、削除順序が users → pages → meta である', async () => {
     const store = new FakePageStore();
     seedPage(store, 'del-page', { pageFiles: ['index.html', 'assets/app.js'] });
 
@@ -306,12 +303,12 @@ describe('deletePage', () => {
 
     expect(result.ok).toBe(true);
     expect(store.deleteCalls).toHaveLength(3);
-    expect(store.deleteCalls[0]).toEqual([
+    expect(store.deleteCalls[0]).toEqual([userIndexObjectKey(OWNER_SUB, 'del-page')]);
+    expect(store.deleteCalls[1]).toEqual([
       pageObjectKey('del-page', 'index.html'),
       pageObjectKey('del-page', 'assets/app.js'),
     ]);
-    expect(store.deleteCalls[1]).toEqual([metaObjectKey('del-page')]);
-    expect(store.deleteCalls[2]).toEqual([userIndexObjectKey(OWNER_SUB, 'del-page')]);
+    expect(store.deleteCalls[2]).toEqual([metaObjectKey('del-page')]);
 
     expect(store.objects.size).toBe(0);
   });
@@ -327,10 +324,10 @@ describe('deletePage', () => {
     expect(second.ok && second.status).toBe(204);
   });
 
-  it('meta が無く users インデックスだけある状態でも削除できる', async () => {
+  it('meta が無く users マーカーだけある状態でも削除できる', async () => {
     const store = new FakePageStore();
     store.objects.set(pageObjectKey('orphan-page', 'index.html'), '<html></html>');
-    store.objects.set(userIndexObjectKey(OWNER_SUB, 'orphan-page'), makeIndexEntry('orphan-page'));
+    store.objects.set(userIndexObjectKey(OWNER_SUB, 'orphan-page'), makeMarker('orphan-page'));
 
     const result = await deletePage({ store, ownerSub: OWNER_SUB, slug: 'orphan-page' });
 

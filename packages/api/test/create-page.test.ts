@@ -73,11 +73,9 @@ describe('createPage', () => {
     });
 
     const index = store.objects.get(userIndexObjectKey(OWNER_SUB, 'my-page')) as UserPageIndexEntry;
-    expect(index).toMatchObject({
+    expect(index).toEqual({
       slug: 'my-page',
-      retention: 'temporary',
-      fileCount: 2,
-      totalSize: 300,
+      createdAt: FIXED_NOW.toISOString(),
     });
 
     for (const log of logSpy.mock.calls) {
@@ -86,14 +84,14 @@ describe('createPage', () => {
     logSpy.mockRestore();
   });
 
-  it('作成時に meta と users インデックスへ retention タグが付く', async () => {
+  it('作成時に meta へだけ retention タグが付き、users マーカーには付かない', async () => {
     const store = new FakePageStore();
     await createPage(createPageInput(store, { slug: 'tagged-page', files: validFiles }));
 
     const metaTags = store.tags.get(metaObjectKey('tagged-page'));
     const indexTags = store.tags.get(userIndexObjectKey(OWNER_SUB, 'tagged-page'));
     expect(metaTags).toEqual({ [RETENTION_TAG_KEY]: RETENTION_TAG_VALUE_TEMPORARY });
-    expect(indexTags).toEqual({ [RETENTION_TAG_KEY]: RETENTION_TAG_VALUE_TEMPORARY });
+    expect(indexTags).toBeUndefined();
   });
 
   it('slug 未指定: generateSlug で確定する', async () => {

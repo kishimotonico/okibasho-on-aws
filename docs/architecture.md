@@ -166,15 +166,19 @@ pages/
     index.html
     assets/...
 meta/
-  <slug>.json        # metadataの正本
+  <slug>.json        # metadataの正本（可変データはすべてここ）
 users/
   <cognito-sub>/
-    <slug>.json      # My Pages一覧用のインデックス
+    <slug>.json      # 所有関係のマーカー（slug と createdAt だけ。可変データは持たない）
 ```
 
 metadataを `pages/<slug>/` の中に置かないのは、そこがCloudFrontから配信されるprefixだからである。中に置くと `/p/<slug>/metadata.json` で誰でもownerのメールアドレスを読めてしまい、さらにユーザーが `metadata.json` という名前のファイルをアップロードしたときに正本と衝突する。配信対象と管理データのprefixを分ければ、この2つの問題がまとめて消える。CloudFront側で特定パスを弾く例外ルールも要らなくなる。
 
-一覧は `ListObjectsV2` の prefix 指定で取得する。この規模では十分な性能になる想定。
+`users/<sub>/<slug>.json` は My Pages 一覧用のインデックスではなく、**誰がどの slug を持つか**を示すマーカーである。retention や fileCount など可変な値は `meta/` にだけ置き、同じ情報を2箇所に持たない。PATCH など更新系で meta/ と users/ の整合を揃える必要がなくなり、片方だけ成功して表示と実体がずれる余地をなくすため。
+
+一覧は `users/<sub>/` で slug を列挙し、各 `meta/<slug>.json` を読んで組み立てる。マーカーに対応する meta が無い孤立エントリは、一覧取得時に lazy cleanup でマーカーを削除する。専用ジョブを置かず「読んだときに直す」形にする。加えて `packages/api/scripts/reconcile-user-index.ts` を手動実行して、足りないマーカーの作成や余分なマーカーの削除もできる。
+
+一覧の列挙は `users/<sub>/` の ListObjectsV2 で行う。この規模では十分な性能になる想定。
 
 slugの空き確認は `meta/<slug>.json` の存在チェックで行う。専用のindexは持たない。
 

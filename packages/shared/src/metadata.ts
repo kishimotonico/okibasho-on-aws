@@ -18,12 +18,13 @@ export interface PageMetadata {
   totalSize: number;
 }
 
-/** users/<sub>/<slug>.json — 一覧表示に必要な項目だけを持ち、毎回 metadata を引かない */
+/**
+ * users/<sub>/<slug>.json。所有関係を表すだけのマーカーで、可変な値は持たない。
+ * retention や fileCount などは meta/ にだけ置き、更新系で2オブジェクトを揃える必要を
+ * なくす。一覧は meta/ を読む。マーカーだけ残った孤立エントリは一覧取得時の lazy cleanup
+ * か reconcile スクリプトで掃除する。
+ */
 export interface UserPageIndexEntry {
   slug: string;
-  retention: Retention;
   createdAt: string;
-  expiresAt: string | null;
-  fileCount: number;
-  totalSize: number;
 }

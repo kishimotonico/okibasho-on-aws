@@ -91,7 +91,7 @@ export async function deletePage(input: DeletePageInput): Promise<DeletePageResu
         },
       };
     } else {
-      // meta が無いときは users インデックスで所有者を確認する
+      // meta が無いときは users マーカーで所有者を確認する（Lifecycle が meta を先に消したあとの掃除用）
       const hasIndex = await input.store.exists(indexKey);
       if (!hasIndex) {
         // 冪等: 既に消えていれば何もしない
@@ -104,6 +104,13 @@ export async function deletePage(input: DeletePageInput): Promise<DeletePageResu
     let indexDeleted = false;
 
     try {
+      // users マーカーを先に消す。所有者確認の正本は meta/ なので、それを最後まで残せば
+      // 途中で失敗しても再実行時に必ず所有者を確認して完走できる。
+      if (await input.store.exists(indexKey)) {
+        await input.store.deleteObjects([indexKey]);
+        indexDeleted = true;
+      }
+
       const { keys: pageKeys, truncated } = await input.store.listKeys(pagePrefix(input.slug));
       if (truncated) {
         console.log('page_delete_list_truncated', {
@@ -118,16 +125,10 @@ export async function deletePage(input: DeletePageInput): Promise<DeletePageResu
         deletedPageKeys.push(...pageKeys);
       }
 
+      // meta/ を最後に消す。再実行時の所有者確認に使えるよう、pages/ より後に片付ける。
       if (await input.store.exists(metaKey)) {
         await input.store.deleteObjects([metaKey]);
         metaDeleted = true;
-      }
-
-      // users インデックスは所有権の証拠になるので最後に消す。
-      // 途中で失敗しても再実行で続きから片付けられる。
-      if (await input.store.exists(indexKey)) {
-        await input.store.deleteObjects([indexKey]);
-        indexDeleted = true;
       }
 
       console.log('page_deleted', {

@@ -209,19 +209,16 @@ export async function createPage(input: CreatePageInput): Promise<CreatePageResu
   }
 
   try {
+    // 所有関係だけを示すマーカー。可変データは meta/ に集約する。
     const indexEntry: UserPageIndexEntry = {
       slug,
-      retention,
       createdAt: createdAtIso,
-      expiresAt,
-      fileCount,
-      totalSize,
     };
     await input.store.putJson(userIndexObjectKey(input.ownerSub, slug), indexEntry);
 
     const retentionTags = retentionObjectTags(retention);
     await input.store.setObjectTags(metaObjectKey(slug), retentionTags);
-    await input.store.setObjectTags(userIndexObjectKey(input.ownerSub, slug), retentionTags);
+    // users/ マーカーには Lifecycle 用タグを付けない（一覧 lazy cleanup で孤立マーカーを掃除する）
 
     const tagging = retentionTaggingHeader(retention);
     const uploads: PresignedUpload[] = [];

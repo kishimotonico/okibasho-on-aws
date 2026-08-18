@@ -1452,6 +1452,52 @@ function buildQueryString(querystring) {
               ],
             },
             {
+              "Action": "s3:GetObject",
+              "Effect": "Deny",
+              "NotResource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "PagesStorageBucketDFEB6C7C",
+                        "Arn",
+                      ],
+                    },
+                    "/pages/*",
+                  ],
+                ],
+              },
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com",
+              },
+              "Sid": "DenyCloudFrontGetOutsidePagesPrefix",
+            },
+            {
+              "Action": "s3:ListBucket",
+              "Condition": {
+                "Null": {
+                  "s3:prefix": "false",
+                },
+                "StringNotLike": {
+                  "s3:prefix": [
+                    "pages/*",
+                  ],
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com",
+              },
+              "Resource": {
+                "Fn::GetAtt": [
+                  "PagesStorageBucketDFEB6C7C",
+                  "Arn",
+                ],
+              },
+              "Sid": "DenyCloudFrontListOutsidePagesPrefix",
+            },
+            {
               "Action": [
                 "s3:GetObject",
                 "s3:ListBucket",

@@ -27,6 +27,14 @@ GWS Adminが当面ないため、Cognitoのローカルユーザー（管理者�
 
 アカウント未確定でも `cdk synth` とsnapshotテストは通せるため、Phase 1以降の実装はデプロイ以外先行できる。ドメイン取得・Route 53、Google OAuthクライアント作成は後付けタスクへ。
 
+### ローカルで一周させる仕組みは作らない
+
+「アップロードして、発行されたURLを開いて表示される」という一周は、まだ一度もできていない。デプロイを待たずにこれを確認する方法は検討した。`packages/api` はS3操作を `PageStore` インターフェース越しにしてあるのでローカル実装を差し込めるし、閲覧側もCloudFront Functionの実物のコードを `node:vm` で読み込んで静的配信に噛ませられる（unitテストと同じ手口）。CLIは保存済みトークンの期限が切れていなければCognitoに問い合わせないので、期限を先にしたトークンファイルを置けばコードを変えずにローカルAPIへ向けられる。
+
+それでも作らないことにした。この方法で確かめられるのはアプリ側の動線までで、いま未検証として残っている中身——Cognito Hosted UIとPKCEの往復、JWT Authorizerの `aud` / issuer の突き合わせ、CloudFrontが `Authorization` を運ぶか、OACとbucket policyのDenyが効くか、presigned PUTの署名検証、S3 Lifecycleの実削除——はどれもAWS側の挙動そのもので、ローカルの模擬では答えが出ない。一周の見た目を先に作っても、デプロイ後に確認すべき項目は1つも減らない。そのぶん保守するコードだけが増える。
+
+アカウントが決まったら、各フェーズの「デプロイ後にまず見るべき点」から順に潰す。
+
 ## Phase 1: 配信の背骨（infra）
 
 - [x] pages用S3 bucket（完全private、Public Access Block）

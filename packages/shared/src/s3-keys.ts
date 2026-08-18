@@ -4,7 +4,7 @@ export const PAGES_PREFIX = 'pages/';
 /** metadata 正本の prefix */
 export const META_PREFIX = 'meta/';
 
-/** My Pages インデックスの prefix */
+/** 所有関係マーカーの prefix */
 export const USERS_PREFIX = 'users/';
 
 /** 配信対象オブジェクトの S3 key: pages/<slug>/<path> */
@@ -22,7 +22,7 @@ export function metaObjectKey(slug: string): string {
   return `${META_PREFIX}${slug}.json`;
 }
 
-/** My Pages インデックス: users/<sub>/<slug>.json */
+/** 所有関係マーカー: users/<sub>/<slug>.json */
 export function userIndexObjectKey(ownerSub: string, slug: string): string {
   return `${USERS_PREFIX}${ownerSub}/${slug}.json`;
 }

@@ -1,6 +1,7 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket, BucketEncryption, HttpMethods } from 'aws-cdk-lib/aws-s3';
-import { DEFAULT_RETENTION_DAYS } from '@page-share/shared';
+import { DEFAULT_RETENTION_DAYS, PAGES_PREFIX } from '@page-share/shared';
 import { Construct } from 'constructs';
 
 /** Lifecycleの対象を選ぶObject Tag。APIが付ける値と一致している必要がある */
@@ -16,7 +17,7 @@ const RETENTION_TAG = { key: 'retention', value: 'temporary' };
 const PHYSICAL_DELETE_GRACE_DAYS = 7;
 
 /**
- * pages/ と users/ を格納する S3 bucket。
+ * pages/ meta/ users/ を格納する S3 bucket。
  * 配信は CloudFront + OAC 経由に限定するため、公開アクセスはすべてブロックする。
  */
 export class PagesStorage extends Construct {
@@ -43,6 +44,52 @@ export class PagesStorage extends Construct {
         },
       ],
     });
+
+    this.denyCloudFrontOutsidePagesPrefix();
+  }
+
+  /**
+   * CloudFront から読めるのを pages/ 配下だけに制限する。
+   *
+   * 「配信されるのは pages/ だけ」という不変条件は、これまで CloudFront Function の
+   * URL書き換え1枚だけが守っていた。関数のバグやCloudFront側のパス正規化の隙が
+   * そのまま meta/ の閲覧（ownerのメールアドレス）につながる形だったので、
+   * 同じ境界を bucket policy にも書いて2枚にする。
+   *
+   * Lambda はこの bucket policy の対象外（サービスプリンシパルが違う）ため、
+   * meta/ と users/ の読み書きには影響しない。
+   */
+  private denyCloudFrontOutsidePagesPrefix(): void {
+    const cloudFront = new ServicePrincipal('cloudfront.amazonaws.com');
+
+    this.bucket.addToResourcePolicy(
+      new PolicyStatement({
+        sid: 'DenyCloudFrontGetOutsidePagesPrefix',
+        effect: Effect.DENY,
+        principals: [cloudFront],
+        actions: ['s3:GetObject'],
+        notResources: [this.bucket.arnForObjects(`${PAGES_PREFIX}*`)],
+      }),
+    );
+
+    this.bucket.addToResourcePolicy(
+      new PolicyStatement({
+        sid: 'DenyCloudFrontListOutsidePagesPrefix',
+        effect: Effect.DENY,
+        principals: [cloudFront],
+        actions: ['s3:ListBucket'],
+        resources: [this.bucket.bucketArn],
+        conditions: {
+          StringNotLike: { 's3:prefix': [`${PAGES_PREFIX}*`] },
+          // s3:prefix が付いているリクエストにだけ効かせる。
+          // 存在しないkeyへのGETで S3 が 403 ではなく 404 を返すかの判定にも
+          // ListBucket 権限が使われるが、そこには s3:prefix が無い。
+          // この Null 条件が無いと、その判定まで Deny に巻き込んで
+          // 「存在しないslugが404」という狙いが静かに壊れる
+          Null: { 's3:prefix': 'false' },
+        },
+      }),
+    );
   }
 
   /**
