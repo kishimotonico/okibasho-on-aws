@@ -69,7 +69,13 @@ export class PagesApi extends Construct {
 
     this.httpApi.addRoutes({
       path: '/api/pages',
-      methods: [HttpMethod.POST],
+      methods: [HttpMethod.POST, HttpMethod.GET],
+      integration,
+    });
+
+    this.httpApi.addRoutes({
+      path: '/api/pages/{slug}',
+      methods: [HttpMethod.GET, HttpMethod.PATCH, HttpMethod.DELETE],
       integration,
     });
   }

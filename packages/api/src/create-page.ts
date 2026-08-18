@@ -5,22 +5,21 @@ import type {
   CreatePageResponse,
   PageMetadata,
   PresignedUpload,
-  Retention,
   UserPageIndexEntry,
 } from '@page-share/shared';
 import {
   contentTypeFromPath,
   DEFAULT_RETENTION,
-  DEFAULT_RETENTION_DAYS,
   generateSlug,
   metaObjectKey,
   pageObjectKey,
-  pageViewPath,
   userIndexObjectKey,
   validateCreatePageRequest,
   validateUploadPath,
 } from '@page-share/shared';
 import type { PageStore } from './page-store.js';
+import { computeExpiresAt, retentionObjectTags, retentionTaggingHeader } from './retention.js';
+import { buildViewUrl } from './view-url.js';
 
 const SLUG_RESERVE_MAX_ATTEMPTS = 5;
 
@@ -109,20 +108,6 @@ function validationErrorResponse(errors: ApiErrorBody[]): ApiErrorResponse {
       details: errors,
     },
   };
-}
-
-function buildViewUrl(pagesBaseUrl: string, slug: string): string {
-  const base = pagesBaseUrl.endsWith('/') ? pagesBaseUrl.slice(0, -1) : pagesBaseUrl;
-  return `${base}${pageViewPath(slug)}`;
-}
-
-function computeExpiresAt(retention: Retention, createdAt: Date): string | null {
-  if (retention === 'permanent') {
-    return null;
-  }
-  const expires = new Date(createdAt);
-  expires.setUTCDate(expires.getUTCDate() + DEFAULT_RETENTION_DAYS);
-  return expires.toISOString();
 }
 
 function sumFileSizes(files: Array<{ size: number }>): number {
@@ -234,6 +219,11 @@ export async function createPage(input: CreatePageInput): Promise<CreatePageResu
     };
     await input.store.putJson(userIndexObjectKey(input.ownerSub, slug), indexEntry);
 
+    const retentionTags = retentionObjectTags(retention);
+    await input.store.setObjectTags(metaObjectKey(slug), retentionTags);
+    await input.store.setObjectTags(userIndexObjectKey(input.ownerSub, slug), retentionTags);
+
+    const tagging = retentionTaggingHeader(retention);
     const uploads: PresignedUpload[] = [];
     for (const file of parsed.body.files) {
       const pathResult = validateUploadPath(file.path);
@@ -245,13 +235,18 @@ export async function createPage(input: CreatePageInput): Promise<CreatePageResu
       const normalizedPath = pathResult.path;
       const contentType = contentTypeFromPath(normalizedPath);
       const key = pageObjectKey(slug, normalizedPath);
-      const url = await input.store.presignPut(key, contentType, file.size);
+      // pages/<slug>/ 配下はクライアントが直接PUTするため、こちらから後でタグを
+      // 付けようとすると「アップロードが終わったこと」を知る必要が出てくる。
+      // 完了APIを作らないと決めているので、代わりにアップロードそのものに
+      // タグを付けさせる。x-amz-tagging も署名対象なので勝手に変えられない
+      const url = await input.store.presignPut(key, contentType, file.size, tagging);
       uploads.push({
         path: normalizedPath,
         url,
         headers: {
           'content-type': contentType,
           'content-length': String(file.size),
+          ...(tagging ? { 'x-amz-tagging': tagging } : {}),
         },
       });
     }

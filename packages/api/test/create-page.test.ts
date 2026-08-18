@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageMetadata, UserPageIndexEntry } from '@page-share/shared';
 import {
   contentTypeFromPath,
@@ -7,7 +7,8 @@ import {
   userIndexObjectKey,
 } from '@page-share/shared';
 import { createPage, parseCreatePageRequestBody } from '../src/create-page.js';
-import type { PageStore } from '../src/page-store.js';
+import { RETENTION_TAG_KEY, RETENTION_TAG_VALUE_TEMPORARY } from '../src/retention.js';
+import { FakePageStore } from './fake-page-store.js';
 
 const PAGES_BASE_URL = 'https://pages.example.com';
 const OWNER_SUB = 'user-sub-123';
@@ -20,42 +21,8 @@ function expectedExpiresAt(): string {
   return expires.toISOString();
 }
 
-class FakePageStore implements PageStore {
-  readonly objects = new Map<string, unknown>();
-  private failPutIfAbsentCount: number;
-
-  constructor(options?: { failPutIfAbsentCount?: number }) {
-    this.failPutIfAbsentCount = options?.failPutIfAbsentCount ?? 0;
-  }
-
-  async putJsonIfAbsent(key: string, body: unknown): Promise<boolean> {
-    if (this.failPutIfAbsentCount > 0) {
-      this.failPutIfAbsentCount -= 1;
-      return false;
-    }
-    if (this.objects.has(key)) {
-      return false;
-    }
-    this.objects.set(key, body);
-    return true;
-  }
-
-  async putJson(key: string, body: unknown): Promise<void> {
-    this.objects.set(key, body);
-  }
-
-  async presignPut(key: string, contentType: string, contentLength: number): Promise<string> {
-    return `https://s3.example.com/${key}?content-type=${encodeURIComponent(contentType)}&content-length=${contentLength}`;
-  }
-}
-
-const validFiles = [
-  { path: 'index.html', size: 100 },
-  { path: 'assets/app.js', size: 200 },
-];
-
 function createPageInput(
-  store: PageStore,
+  store: FakePageStore,
   body: unknown,
   options?: { generateSlug?: () => string },
 ) {
@@ -69,6 +36,11 @@ function createPageInput(
     generateSlug: options?.generateSlug ?? (() => 'generated-slug'),
   };
 }
+
+const validFiles = [
+  { path: 'index.html', size: 100 },
+  { path: 'assets/app.js', size: 200 },
+];
 
 describe('createPage', () => {
   it('slug 指定あり: metadata とインデックスが正しいキーに書かれ、uploads と viewUrl を返す', async () => {
@@ -114,6 +86,16 @@ describe('createPage', () => {
     logSpy.mockRestore();
   });
 
+  it('作成時に meta と users インデックスへ retention タグが付く', async () => {
+    const store = new FakePageStore();
+    await createPage(createPageInput(store, { slug: 'tagged-page', files: validFiles }));
+
+    const metaTags = store.tags.get(metaObjectKey('tagged-page'));
+    const indexTags = store.tags.get(userIndexObjectKey(OWNER_SUB, 'tagged-page'));
+    expect(metaTags).toEqual({ [RETENTION_TAG_KEY]: RETENTION_TAG_VALUE_TEMPORARY });
+    expect(indexTags).toEqual({ [RETENTION_TAG_KEY]: RETENTION_TAG_VALUE_TEMPORARY });
+  });
+
   it('slug 未指定: generateSlug で確定する', async () => {
     const store = new FakePageStore();
     const result = await createPage(
@@ -145,10 +127,12 @@ describe('createPage', () => {
     expect(htmlUpload?.headers).toEqual({
       'content-type': contentTypeFromPath('index.html'),
       'content-length': '100',
+      'x-amz-tagging': 'retention=temporary',
     });
     expect(jsUpload?.headers).toEqual({
       'content-type': contentTypeFromPath('assets/app.js'),
       'content-length': '200',
+      'x-amz-tagging': 'retention=temporary',
     });
   });
 
@@ -279,6 +263,18 @@ describe('parseCreatePageRequestBody', () => {
 });
 
 describe('handler auth', () => {
+  const envBackup = { ...process.env };
+
+  beforeEach(() => {
+    process.env['PAGES_BUCKET'] = 'test-bucket';
+    process.env['PAGES_BASE_URL'] = 'https://pages.example.com';
+  });
+
+  afterEach(() => {
+    process.env = { ...envBackup };
+    vi.restoreAllMocks();
+  });
+
   it('JWT クレームに sub が無いとき 401', async () => {
     const { handler } = await import('../src/handlers/pages.js');
 
@@ -311,5 +307,43 @@ describe('handler auth', () => {
     expect(result).toMatchObject({ statusCode: 400 });
     const body = JSON.parse((result as { body: string }).body);
     expect(body.error.code).toBe('invalid_json');
+  });
+});
+
+describe('createPage の Lifecycle 用タグ', () => {
+  it('temporaryではpresigned PUTにx-amz-taggingが載り、署名対象にも渡る', async () => {
+    const store = new FakePageStore();
+    const result = await createPage({
+      store,
+      pagesBaseUrl: 'https://pages.example.com',
+      ownerSub: 'sub-1',
+      ownerEmail: 'a@example.com',
+      body: { files: [{ path: 'index.html', size: 10 }] },
+      now: () => new Date('2026-01-01T00:00:00.000Z'),
+      generateSlug: () => 'abc123456789',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.body.uploads[0]?.headers['x-amz-tagging']).toBe('retention=temporary');
+    expect(store.presignCalls[0]?.tagging).toBe('retention=temporary');
+  });
+
+  it('permanentではタグを付けない', async () => {
+    const store = new FakePageStore();
+    const result = await createPage({
+      store,
+      pagesBaseUrl: 'https://pages.example.com',
+      ownerSub: 'sub-1',
+      ownerEmail: 'a@example.com',
+      body: { retention: 'permanent', files: [{ path: 'index.html', size: 10 }] },
+      now: () => new Date('2026-01-01T00:00:00.000Z'),
+      generateSlug: () => 'abc123456789',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.body.uploads[0]?.headers['x-amz-tagging']).toBeUndefined();
+    expect(store.presignCalls[0]?.tagging).toBeNull();
   });
 });

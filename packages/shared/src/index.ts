@@ -11,6 +11,9 @@ export type {
   CreatePageRequest,
   CreatePageResponse,
   DeclaredFile,
+  GetPageResponse,
+  ListPageItem,
+  ListPagesResponse,
   PresignedUpload,
 } from './api.js';
 

@@ -230,3 +230,88 @@ a:hover {
 .upload-page .button {
   margin-top: 0.5rem;
 }
+
+.button-link--secondary {
+  background: #eef1f6;
+  color: #1a1a1a;
+}
+
+.button-link--secondary:hover {
+  background: #dde3ec;
+}
+
+.button--danger {
+  background: #b42318;
+}
+
+.button--danger:hover {
+  background: #912018;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.page-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #d8dce3;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.page-table th,
+.page-table td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #e8ebf0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.page-table th {
+  background: #f6f7f9;
+  font-weight: 600;
+}
+
+.page-table tr:last-child td {
+  border-bottom: none;
+}
+
+.page-table__url {
+  max-width: 16rem;
+  word-break: break-all;
+}
+
+.page-row--expired {
+  background: #fff8f8;
+}
+
+.expiration {
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.expiration--expired {
+  color: #b42318;
+  font-weight: 600;
+}
+
+.retention-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.row-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.copy-feedback {
+  color: #0f7b3a;
+  font-size: 0.85rem;
+}

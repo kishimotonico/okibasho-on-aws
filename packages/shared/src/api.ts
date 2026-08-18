@@ -1,4 +1,4 @@
-import type { Retention } from './metadata.js';
+import type { PageMetadata, Retention, UserPageIndexEntry } from './metadata.js';
 
 /** API エラーコード。文字列リテラル union でクライアントとサーバーが同じ語彙を使う */
 export type ApiErrorCode =
@@ -16,6 +16,9 @@ export type ApiErrorCode =
   | 'invalid_json'
   | 'invalid_request'
   | 'unauthorized'
+  | 'forbidden'
+  | 'page_not_found'
+  | 'page_expired'
   | 'internal_error'
   | 'method_not_allowed';
 
@@ -56,4 +59,19 @@ export interface CreatePageResponse {
   viewUrl: string;
   expiresAt: string | null;
   uploads: PresignedUpload[];
+}
+
+/** GET /api/pages の各要素。インデックスに viewUrl を足したもの */
+export interface ListPageItem extends UserPageIndexEntry {
+  viewUrl: string;
+}
+
+/** GET /api/pages のレスポンス */
+export interface ListPagesResponse {
+  pages: ListPageItem[];
+}
+
+/** GET /api/pages/{slug} のレスポンス */
+export interface GetPageResponse extends PageMetadata {
+  viewUrl: string;
 }

@@ -186,10 +186,16 @@ Object Tagは検索インデックスには使わず、Lifecycleなどの運用�
 
 デフォルト30日（temporary）。ユーザー操作で無期限（permanent）に変更できる。
 
-- アクセス可否の正本は `metadata.expiresAt`。期限切れは閲覧時に404/410相当にする（論理期限）
+- アクセス可否の正本は `metadata.expiresAt`。API（所有者向けの取得）は期限切れに410を返す。ただし**pages側の閲覧は現状止まらない**（CloudFront → S3 直結でmetadataを見る層が無いため）。この食い違いの扱いは [open-questions.md](open-questions.md) で未確定
 - 物理削除はS3 Lifecycleに任せる。temporaryページにLifecycle対象のタグを付け、無期限ページは対象外にする。retention変更時はタグも更新する
 
 Lifecycleは即時ではないため、論理期限と物理削除の役割を分けている。
+
+`temporary` の `expiresAt` は**常に `createdAt` + 30日**とする。retentionを変更した時刻からの30日ではない。S3 Lifecycleはオブジェクトの作成日からしか日数を数えられないため、論理期限を変更時刻起点にすると「APIはまだ有効と言うのに実体は消えている」「その逆」が起きる。基準を作成日に揃えれば齟齬が出ない。結果として、作成から30日以上経ったページを `permanent` から `temporary` に戻すと即座に期限切れになる。これは意図した挙動で、`temporary` は「作成から30日」という意味だと決めたということ。
+
+論理期限を過ぎたページに対しても retention の変更は許す。物理削除まで猶予があるので、その間に `permanent` へ変えて救えるほうがよい（Lifecycleが既に走っていればファイルは戻らない）。
+
+Lifecycle用のタグは、`pages/<slug>/` 配下についてはpresigned PUTの署名対象に `x-amz-tagging` を含めることで、**アップロードそのものに付けさせる**。後からAPIがタグを付ける形にすると「アップロードが完了したこと」を知る必要があり、完了APIを作らないという判断と噛み合わない。署名対象に入れてあるため、クライアントが勝手にタグを外すこともできない。`meta/<slug>.json` と `users/<sub>/<slug>.json` はAPIが自分で書くので、書いたあとにタグを付ける。
 
 ## URL解決
 

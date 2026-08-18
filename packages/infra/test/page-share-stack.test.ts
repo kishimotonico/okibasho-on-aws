@@ -1,3 +1,4 @@
+import { DEFAULT_RETENTION_DAYS } from '@page-share/shared';
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
@@ -109,6 +110,32 @@ describe('PageShareStack', () => {
           ]),
         },
       });
+    });
+
+    it('temporaryタグの付いたオブジェクトだけをLifecycleで物理削除する', () => {
+      const template = synth();
+
+      const withLifecycle = Object.values(template.findResources('AWS::S3::Bucket')).filter(
+        (bucket) => bucket.Properties?.LifecycleConfiguration !== undefined,
+      );
+      // Lifecycleを持つのはユーザー成果物が入るpages bucketだけ
+      expect(withLifecycle).toHaveLength(1);
+
+      const rules = withLifecycle[0]?.Properties?.LifecycleConfiguration?.Rules as
+        | Array<{
+            Status?: string;
+            ExpirationInDays?: number;
+            TagFilters?: Array<{ Key?: string; Value?: string }>;
+            Prefix?: string;
+          }>
+        | undefined;
+      expect(rules).toHaveLength(1);
+      expect(rules?.[0]?.Status).toBe('Enabled');
+      expect(rules?.[0]?.TagFilters).toEqual([{ Key: 'retention', Value: 'temporary' }]);
+      // prefixで絞ると permanent に変えたページまで巻き込むので、絞りはタグだけ
+      expect(rules?.[0]?.Prefix).toBeUndefined();
+      // 論理期限(30日)より後であること。猶予を潰すと期限切れページを救えなくなる
+      expect(rules?.[0]?.ExpirationInDays).toBeGreaterThan(DEFAULT_RETENTION_DAYS);
     });
 
     it('Web UIからのpresigned PUTのためにCORSでPUTだけ許可する', () => {
@@ -288,6 +315,26 @@ describe('PageShareStack', () => {
         AuthorizationType: 'JWT',
       });
 
+      template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+        RouteKey: 'GET /api/pages',
+        AuthorizationType: 'JWT',
+      });
+
+      template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+        RouteKey: 'GET /api/pages/{slug}',
+        AuthorizationType: 'JWT',
+      });
+
+      template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+        RouteKey: 'PATCH /api/pages/{slug}',
+        AuthorizationType: 'JWT',
+      });
+
+      template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+        RouteKey: 'DELETE /api/pages/{slug}',
+        AuthorizationType: 'JWT',
+      });
+
       template.hasResourceProperties('AWS::Lambda::Function', {
         Environment: {
           Variables: Match.objectLike({
@@ -301,7 +348,7 @@ describe('PageShareStack', () => {
         PolicyDocument: {
           Statement: Match.arrayWith([
             Match.objectLike({
-              Action: Match.arrayWith(['s3:PutObject']),
+              Action: Match.arrayWith(['s3:DeleteObject*', 's3:PutObject', 's3:PutObjectTagging']),
             }),
           ]),
         },

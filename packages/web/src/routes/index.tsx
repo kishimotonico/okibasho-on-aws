@@ -12,6 +12,9 @@ function HomePage() {
       <p>
         <Link to="/upload" className="button-link">
           アップロードへ
+        </Link>{' '}
+        <Link to="/my-pages" className="button-link button-link--secondary">
+          My Pages
         </Link>
       </p>
     </div>

@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MyPagesRouteImport } from './routes/my-pages'
 import { Route as UploadRouteImport } from './routes/upload'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyPagesRoute = MyPagesRouteImport.update({
+  id: '/my-pages',
+  path: '/my-pages',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UploadRoute = UploadRouteImport.update({
@@ -31,30 +37,34 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/my-pages': typeof MyPagesRoute
   '/upload': typeof UploadRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/my-pages': typeof MyPagesRoute
   '/upload': typeof UploadRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/my-pages': typeof MyPagesRoute
   '/upload': typeof UploadRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/upload' | '/auth/callback'
+  fullPaths: '/' | '/my-pages' | '/upload' | '/auth/callback'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/upload' | '/auth/callback'
-  id: '__root__' | '/' | '/upload' | '/auth/callback'
+  to: '/' | '/my-pages' | '/upload' | '/auth/callback'
+  id: '__root__' | '/' | '/my-pages' | '/upload' | '/auth/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MyPagesRoute: typeof MyPagesRoute
   UploadRoute: typeof UploadRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-pages': {
+      id: '/my-pages'
+      path: '/my-pages'
+      fullPath: '/my-pages'
+      preLoaderRoute: typeof MyPagesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/upload': {
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MyPagesRoute: MyPagesRoute,
   UploadRoute: UploadRoute,
   AuthCallbackRoute: AuthCallbackRoute,
 }

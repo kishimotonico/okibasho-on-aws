@@ -26,7 +26,4 @@ pnpm --filter @page-share/web build
 
 - Cognito Hosted UI によるログイン（Authorization Code + PKCE、`oidc-client-ts`）
 - アップロード画面（単一ファイル / ディレクトリ / drag & drop、slug 指定、保存期間選択）
-
-## 未実装（Phase 5 以降）
-
-- My Pages（一覧・URL コピー・保存期間変更・削除）
+- My Pages（自分のページ一覧、閲覧 URL コピー、保存期間の変更、削除）

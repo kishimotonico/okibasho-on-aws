@@ -89,11 +89,11 @@ GWS Adminが当面ないため、Cognitoのローカルユーザー（管理者�
 - [x] App DistributionにUI用S3 originを追加（/api/* はAPI Gatewayのまま）
 - [x] ログイン（Hosted UIリダイレクト）
 - [x] アップロード画面（単一ファイル / ディレクトリ / drag & drop、名前指定、retention選択）
-- [ ] My Pages（一覧、URLコピー）
+- [x] My Pages（一覧、URLコピー）
 
 受け入れ条件: ブラウザだけでログイン → drag & dropアップロード → URLコピーまでできる。
 
-進行状況: My Pages 以外は実装済み。My Pages は一覧API（`GET /api/pages`）が Phase 5 にあるため、そちらを先にやってから戻る。
+進行状況: 完了。My Pages には保存期間の変更と削除も入れた（`packages/web/README.md` に書いてあり、APIが Phase 5 で揃ったため）。
 
 検証状況: **未検証**。通したのは typecheck、unitテスト、`vite build`（静的ファイルのみが出ることを確認）、dev serverでの `/`・`/upload`・`/auth/callback` の200応答。ログインとアップロードの実挙動はデプロイしないと確認できない。デプロイ後に見るべき点:
 
@@ -120,11 +120,22 @@ aws cloudfront create-invalidation --distribution-id <id> --paths '/*'
 
 ## Phase 5: 仕上げ（api + infra + web + cli）
 
-- [ ] GET /api/pages（My Pages API）、GET /api/pages/{slug}
-- [ ] PATCH（retention変更 + タグ更新）、DELETE（冪等）
-- [ ] S3 Lifecycle（retentionタグ連動）と論理期限（expiresAtで404/410）
-- [ ] ログ整備（page作成・削除・retention変更・失敗系）
-- [ ] サイズ上限・入力検証の詰め（委任項目の決定を含む）
+- [x] GET /api/pages（My Pages API）、GET /api/pages/{slug}
+- [x] PATCH（retention変更 + タグ更新）、DELETE（冪等）
+- [x] S3 Lifecycle（retentionタグ連動）と論理期限（expiresAtで404/410）
+- [x] ログ整備（page作成・削除・retention変更・失敗系）
+- [x] サイズ上限・入力検証の詰め（委任項目の決定を含む）
+
+検証状況: **未検証**（デプロイしていない）。通したのは typecheck、unitテスト（APIは `PageStore` のフェイクで47ケース）、`cdk synth`、snapshotテスト。
+
+積み残しが1つある。「論理期限（expiresAtで404/410）」は**APIについてのみ**実装できた。pages側の閲覧は CloudFront → S3 直結でmetadataを見る層が無く、止められない。実際に見えなくなるのはS3 Lifecycleがオブジェクトを消したときになる。これは配信構成そのものの帰結で、判定を入れるには使わないと決めた Lambda@Edge か KeyValueStore が要る。扱いは [open-questions.md](open-questions.md) に選択肢を並べて残した。
+
+デプロイ後に見るべき点:
+
+- `IfNoneMatch: '*'` によるslug予約が期待どおり412を返すか
+- presigned PUTの署名対象に `x-amz-tagging` を含めた形で、実際にPUTが通りタグが付くか
+- S3 Lifecycleが `retention=temporary` のタグだけを拾って消すか（反映は数十時間遅れる）
+- 削除が3箇所（`pages/` `meta/` `users/`）を消し切るか
 
 ## 後付けタスク（時期未定）
 

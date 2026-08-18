@@ -13,6 +13,7 @@ export function AppHeader() {
         </Link>
         <nav className="nav" aria-label="メイン">
           <Link to="/upload">アップロード</Link>
+          <Link to="/my-pages">My Pages</Link>
           {auth.isLoading ? (
             <span className="auth-status">読み込み中...</span>
           ) : auth.isAuthenticated ? (

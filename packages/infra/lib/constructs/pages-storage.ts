@@ -1,6 +1,19 @@
-import { RemovalPolicy } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { BlockPublicAccess, Bucket, BucketEncryption, HttpMethods } from 'aws-cdk-lib/aws-s3';
+import { DEFAULT_RETENTION_DAYS } from '@page-share/shared';
 import { Construct } from 'constructs';
+
+/** Lifecycleの対象を選ぶObject Tag。APIが付ける値と一致している必要がある */
+const RETENTION_TAG = { key: 'retention', value: 'temporary' };
+
+/**
+ * 論理期限を過ぎてから物理削除するまでの猶予。
+ *
+ * 論理期限(createdAt + 30日)ちょうどで消すと、期限切れに気付いて permanent へ
+ * 変えようとしたときには実体が無い、ということが起きる。1週間の猶予を置いて
+ * 救える窓を作っておく。Lifecycle自体も即時ではなく最大で数十時間ずれる。
+ */
+const PHYSICAL_DELETE_GRACE_DAYS = 7;
 
 /**
  * pages/ と users/ を格納する S3 bucket。
@@ -19,6 +32,16 @@ export class PagesStorage extends Construct {
       enforceSSL: true,
       // スタック削除でユーザー成果物が消えないようにする
       removalPolicy: RemovalPolicy.RETAIN,
+      lifecycleRules: [
+        {
+          id: 'expire-temporary-pages',
+          enabled: true,
+          // prefixではなくタグで絞る。permanentに変えたページは
+          // 同じ pages/ 配下にいてもタグが外れるので対象から外れる
+          tagFilters: { [RETENTION_TAG.key]: RETENTION_TAG.value },
+          expiration: Duration.days(DEFAULT_RETENTION_DAYS + PHYSICAL_DELETE_GRACE_DAYS),
+        },
+      ],
     });
   }
 
