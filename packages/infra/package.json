@@ -1,0 +1,22 @@
+{
+  "name": "@page-share/infra",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.265.0",
+    "constructs": "^10.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "aws-cdk": "^2.1129.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@page-share/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@page-share/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.162",
+    "@types/node": "^24.13.3",
+    "typescript": "^5.9.3"
+  }
+}
