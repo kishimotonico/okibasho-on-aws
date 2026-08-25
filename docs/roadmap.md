@@ -2,119 +2,126 @@
 
 実装の進め方。設計の正本は [architecture.md](architecture.md)、要件は [concept.md](concept.md)。
 
-方針は「縦に薄く」。CDKで全リソースを作り切ってからアプリではなく、統合リスクの高い部分（認証、Signed Cookie、presigned PUT）を最小構成で早く一周させる。
+方針は「縦に薄く」。CDKで全リソースを作り切ってからアプリではなく、統合リスクの高い部分（認証、KVSエイリアス、presigned PUT、Signed Cookie）を最小構成で早く一周させる。
 
 チェックボックスは「実装が終わった」印である。受け入れ条件はデプロイして初めて確認できるものが多いため、AWSアカウントが決まるまでは各フェーズに検証状況を注記し、未検証のまま先へ進む。
 
-## 後で設定できるようにするもの
+## 現状
 
-最初から用意しなくてよいものと、その代わりの進め方。
+現行コードには旧仕様の機能が一部実装されている。ユーザー指定のslug、単一のpages prefix、上書きによる再アップロード不可、閲覧認証なし、という前提で書かれている。
 
-### 独自ドメイン
+[architecture.md](architecture.md) は公開範囲・バージョン・KVSエイリアスを含む新しい設計に更新済みで、**既存コードはまだ追随していない**。またデプロイを一度も行っておらず、AWSと繋いだ動作は全て未検証である。
 
-当面はAWSのデフォルトドメイン（`*.cloudfront.net` など）で進める。設定は `packages/infra/lib/config.ts` に集約してあり、`domains` が未設定ならデフォルトドメインで構築する。ドメインを用意したらconfigを埋めるだけで証明書・Route 53・カスタムドメインが有効になる形にする（分岐はドメイン関連リソースの1箇所に閉じ込める）。
-
-注意: `cloudfront.net` はPublic Suffix Listに載っているため、親ドメインCookieが設定できない。したがってSigned Cookieによる閲覧認証（Phase 3）は独自ドメイン設定後にしか有効化できない。それまでpages側は閲覧認証なしで検証する。
-
-### Google認証
-
-GWS Adminが当面ないため、Cognitoのローカルユーザー（管理者作成のメール+パスワード）で始める。Hosted UI + Authorization Code + PKCEというフローは同じなので、後からGoogle IdPを追加してもCLI / Webのコードは変わらない。IdP追加とメールドメイン制限は後付けタスクとする。
+したがって次にやることは2つ。デプロイして旧仕様のまま一周させ、未検証の項目を潰すこと。そのうえで新仕様へのリファクタに入ること。順序を逆にすると、失敗したときに「新仕様のバグ」か「未検証のAWS挙動」かの切り分けができなくなる。
 
 ## Phase 0: 前提作業（手動）
 
 - [ ] AWSアカウントとリージョンの確定（決まったら `packages/infra/lib/config.ts` の `env` を設定）
-- [ ] `cdk bootstrap` 実行
+- [ ] `cdk bootstrap`（デプロイ先リージョンと、証明書用に us-east-1 の両方）
+- [ ] 請求アラート / Budgets の設定
 
-アカウント未確定でも `cdk synth` とsnapshotテストは通せるため、Phase 1以降の実装はデプロイ以外先行できる。ドメイン取得・Route 53、Google OAuthクライアント作成は後付けタスクへ。
+ドメイン取得とRoute 53、Google OAuthクライアント作成は後付けタスクへ。
 
 ### ローカルで一周させる仕組みは作らない
 
-「アップロードして、発行されたURLを開いて表示される」という一周は、まだ一度もできていない。デプロイを待たずにこれを確認する方法は検討した。`packages/api` はS3操作を `PageStore` インターフェース越しにしてあるのでローカル実装を差し込めるし、閲覧側もCloudFront Functionの実物のコードを `node:vm` で読み込んで静的配信に噛ませられる（unitテストと同じ手口）。CLIは保存済みトークンの期限が切れていなければCognitoに問い合わせないので、期限を先にしたトークンファイルを置けばコードを変えずにローカルAPIへ向けられる。
+「アップロードして、発行されたURLを開いて表示される」という一周は、まだ一度もできていない。デプロイを待たずにこれを確認する方法は検討した。`packages/api` はS3操作を `PageStore` インターフェース越しにしてあるのでローカル実装を差し込めるし、閲覧側もCloudFront Functionの実物のコードを `node:vm` で読み込んで静的配信に噛ませられる。CLIは保存済みトークンの期限が切れていなければCognitoに問い合わせないので、期限を先にしたトークンファイルを置けばコードを変えずにローカルAPIへ向けられる。
 
-それでも作らないことにした。この方法で確かめられるのはアプリ側の動線までで、いま未検証として残っている中身——Cognito Hosted UIとPKCEの往復、JWT Authorizerの `aud` / issuer の突き合わせ、CloudFrontが `Authorization` を運ぶか、OACとbucket policyのDenyが効くか、presigned PUTの署名検証、S3 Lifecycleの実削除——はどれもAWS側の挙動そのもので、ローカルの模擬では答えが出ない。一周の見た目を先に作っても、デプロイ後に確認すべき項目は1つも減らない。そのぶん保守するコードだけが増える。
+それでも作らないことにした。この方法で確かめられるのはアプリ側の動線までで、いま未検証として残っている中身——Cognito Hosted UIとPKCEの往復、JWT Authorizerの `aud` / issuer の突き合わせ、CloudFrontが `Authorization` を運ぶか、OACとbucket policyのDenyが効くか、presigned PUTの署名検証、KVSの伝播、S3 Lifecycleの実削除——はどれもAWS側の挙動そのもので、ローカルの模擬では答えが出ない。一周の見た目を先に作っても、デプロイ後に確認すべき項目は1つも減らない。
 
-アカウントが決まったら、各フェーズの「デプロイ後にまず見るべき点」から順に潰す。
+## Phase 1: デプロイして旧仕様で一周させる
 
-## Phase 1: 配信の背骨（infra）
+新しい実装には入らず、いまあるコードをそのままデプロイして、AWSと繋いだときの挙動を確認する。ここで得たデータは捨てる前提でよい。
 
-- [x] pages用S3 bucket（完全private、Public Access Block）
-- [x] Pages Distribution + OAC
-- [x] CloudFront Function（末尾 `/` への index.html 補完）
-- [x] CDKのsnapshotテスト
+- [ ] `cdk deploy`
+- [ ] 手でS3に置いたHTMLが旧仕様のデフォルトURL `/p/test/` で表示される（このURLは新仕様へ引き継がない）
+- [ ] `share-html login` が通る（Hosted UI + PKCE、localhostコールバック）
+- [ ] `share-html ./dist/` でアップロードでき、発行されたURLで閲覧できる
+- [ ] Web UIでログイン → drag & drop → URLコピーまで通る
+- [ ] My Pages の一覧・retention変更・削除が動く
 
-受け入れ条件: 手でS3の `pages/test/index.html` に置いたHTMLが、デフォルトドメインの `/p/test/` で表示される。
-
-検証状況: **未検証**（AWSアカウント未確定のためデプロイしていない）。ここまでで通したのは `cdk synth`、スタックのsnapshotテスト、CloudFront Functionのunitテスト（`node:vm` でhandlerを直接実行し、rewrite・301・404を確認）。CloudFrontとS3を実際につないだときの挙動は確認できていない。デプロイ後にまず見るべき点:
+ここで確認したいAWS側の挙動:
 
 - OACでS3から実際にオブジェクトが取れるか
-- 存在しないslugが403ではなく404で返るか（`s3:ListBucket` を足した狙いどおりか）
+- 存在しないkeyが403ではなく404で返るか（`s3:ListBucket` を足した狙いどおりか）
 - CloudFront Functionが runtime 2.0 で構文エラーなく動くか
-
-デプロイ時は `PagesBucketName` の出力を見て `pages/test/index.html` を置き、`PagesViewUrl` + `test/` を開けば確認できる。
-
-## Phase 2: 認証と最初のE2E（infra + api + shared + cli）
-
-- [x] Cognito User Pool + Hosted UI（ローカルユーザー、Web/CLIの2 App Client）
-- [x] API Gateway HTTP API + JWT Authorizer
-- [x] shared: API型・slug規則・Content-Type対応の実装
-- [x] api: POST /api/pages（slug確定、metadata作成、presigned PUT発行）
-- [x] cli: login（PKCE + localhostコールバック、token保存）
-- [x] cli: upload（単一ファイル / ディレクトリ、presigned PUT、URL表示）
-
-受け入れ条件: `share-html login` → `share-html ./dist/` でアップロードし、発行されたURLで閲覧できる（このフェーズでは閲覧認証なし）。
-
-検証状況: **未検証**（デプロイしていないため一周できていない）。通したのは `cdk synth`、snapshotテスト、sharedとapiとcliのunitテスト、CLIのビルド成果物での `--help` と `--dry-run` の実行。CLIの `--dry-run` は、ディレクトリ走査・単一ファイルのindex.html読み替え・パス検証・Content-Type判定・送信前の検証までを、ネットワークに出ずに確認できる。APIのハンドラはS3操作をインターフェースに切り出してあるため、ロジックはフェイク実装でテストしている。
-
-一方、AWSに繋がないと確認できないのは次の点。デプロイ後にここから見る:
-
-- Cognito Hosted UIでのログインが実際に通り、CLIのlocalhostコールバックが受け取れるか（ポート8976〜8978のいずれか）
 - JWT AuthorizerがIDトークンを受け入れるか（`aud` とApp Client IDの噛み合わせ）
-- `PutObject` の `IfNoneMatch: '*'` がslug予約として期待どおり412を返すか
-- presigned PUTの署名対象に `Content-Length` を含めた形で、実際にPUTが通るか（宣言と違うサイズが拒否されるか）
-- Lambdaのバンドル（AWS SDK同梱、1.4MB）が実行環境で動くか
-
-設定の受け渡しについて。CLIは接続先を環境変数（`SHARE_HTML_API_URL` / `SHARE_HTML_ISSUER` / `SHARE_HTML_CLIENT_ID`）か `~/.config/share-html/config.json` から読む。値はすべて `cdk deploy` のCfnOutputに出る。未設定のときはどの値がどの出力に対応するかを表示して終了する。
-
-## Phase 3: 閲覧認証（infra + api）※要・独自ドメイン
-
-- [ ] 独自ドメイン導入（Route 53 + ACM、app / pages のカスタムドメイン）
-- [ ] Signed Cookie発行（親ドメイン、キーペア管理）
-- [ ] appセッションの `__Host-` Cookie
-- [ ] 403カスタムエラーページ → app → 元URLの再認証フロー
-
-受け入れ条件: 未ログインでpages URLを開くとログインへ誘導され、ログイン後に元のページが表示される。
-
-進行状況: **保留。Phase 4 を先にやる**。理由は2つある。
-
-- 独自ドメインがまだ無い。`cloudfront.net` はPublic Suffix Listに載っていて親ドメインCookieを設定できないため、このフェーズは実装しても一切動かせない
-- app側にセッションCookieを発行する受け口が無い。`__Host-` Cookieを置く先も、403から戻ってくる先も、Phase 4 で作る App Distribution とWeb UIの上にある
-
-先に着手すると、ドメイン名もキーペアの置き場も動作確認の手段も無いまま、検証できないコードだけが増える。ドメインが決まり、Phase 4 でapp側が立ち上がってから戻ってくる。
-
-## Phase 4: Web UI（web）
-
-- [x] TanStack Start scaffold（SPAモード + prerender、S3配信）
-- [x] App DistributionにUI用S3 originを追加（/api/* はAPI Gatewayのまま）
-- [x] ログイン（Hosted UIリダイレクト）
-- [x] アップロード画面（単一ファイル / ディレクトリ / drag & drop、名前指定、retention選択）
-- [x] My Pages（一覧、URLコピー）
-
-受け入れ条件: ブラウザだけでログイン → drag & dropアップロード → URLコピーまでできる。
-
-進行状況: 完了。My Pages には保存期間の変更と削除も入れた（`packages/web/README.md` に書いてあり、APIが Phase 5 で揃ったため）。
-
-検証状況: **未検証**。通したのは typecheck、unitテスト、`vite build`（静的ファイルのみが出ることを確認）、dev serverでの `/`・`/upload`・`/auth/callback` の200応答。ログインとアップロードの実挙動はデプロイしないと確認できない。デプロイ後に見るべき点:
-
-- Hosted UIからのリダイレクトが `https://<app distributionのドメイン>/auth/callback` に戻ってくるか
 - CloudFrontの `/api/*` behaviorが `Authorization` ヘッダをAPI Gatewayまで運ぶか
-- ブラウザからのpresigned PUTがCORSとContent-Lengthの署名で通るか（ブラウザは `Content-Length` を明示指定できず自動付与に頼っている）
+- Hosted UIからのリダイレクトが `https://<app distributionのドメイン>/auth/callback` に戻ってくるか
+- presigned PUTの署名対象に `Content-Length` と `x-amz-tagging` を含めた形で、実際にPUTが通るか
+- ブラウザからのpresigned PUTがCORSで通るか（ブラウザは `Content-Length` を明示指定できず自動付与に頼っている）
+- Lambdaのバンドルが実行環境で動くか
+- S3 Lifecycleが `retention=temporary` のタグを拾って消すか（反映は数十時間遅れる）
 
-Cognitoまわりで踏んだ実装上の注意が2つある。どちらも `packages/web/src/auth/user-manager.ts` にコメントを残した。
+## Phase 2: slug / title / バージョン（shared → api → infra → web → cli）
 
-- discovery document（`/.well-known/openid-configuration`）があるのはissuer側で、Hosted UIのドメインには無い。一方でauthorize / tokenの実体はHosted UI側にある。どちらか一方をauthorityにすると片方が欠けるため、endpointを明示して渡している
-- ログアウトは標準のRP-Initiated Logoutではなく `/logout?client_id=...&logout_uri=...` という独自形式
+新仕様へのリファクタ。sharedから順に進めれば途中でも型チェックが通る。
 
-### ビルド成果物のデプロイ
+- [ ] shared: slugをユーザー指定不可の16文字乱数に。`slug_taken` などの関連エラーを削除
+- [ ] shared: `title`、`visibility`、`version`、`activeVersionId`、`contentUpdatedAt` を metadata に追加。`expiresAt` の保存をやめて純粋関数で計算する
+- [ ] api: 宣言（`POST` / `PUT`）と `complete` の2段階に分割。HeadObjectによる検証
+- [ ] api: 古いバージョンディレクトリの回収（complete 後、配信中でなく一定時間更新されていないもの）
+- [ ] infra: S3 prefixを `internal-pages/` `shared-pages/` の2本に。bucket policyの追随
+- [ ] web / cli: title入力、`--shared`、バージョン番号の表示
+
+受け入れ条件: 同じURLに再アップロードして内容が差し替わり、途中で中断しても既存のページが壊れない。
+
+## Phase 3: KVSエイリアスとorigin分離（infra + api）
+
+- [ ] KeyValueStore を CDK で作成（`RemovalPolicy.RETAIN`）、Functionへ関連付け
+- [ ] CloudFront Function を KVS参照 + URI検証 + バージョン合成に書き換え（async化）
+- [ ] Pages Distributionを社内限定用とURL共有用に分け、それぞれのorigin pathとResponse Headers Policyを設定
+- [ ] 社内限定側に `Cross-Origin-Resource-Policy: same-origin`、URL共有側に `Referrer-Policy: no-referrer` と `X-Robots-Tag: noindex, nofollow` を設定
+- [ ] api: `visibility` に応じてpages originまたはshare originの完全な `viewUrl` を返す
+- [ ] api: `complete` / `PATCH` / `DELETE` からのKVS書き込み（CAS + リトライ）。`retention` 変更はタグ→metadata→KVSの順で一まとまりにする
+- [ ] `packages/api/scripts/reconcile.ts`（KVS再構築・マーカー修正・孤児削除）
+- [ ] invalidation 関連のコードとIAM権限を削除
+
+受け入れ条件: 社内限定ページとURL共有ページがそれぞれのCloudFrontデフォルトドメインの `/<slug>/` で表示され、各Distributionが反対側のS3 prefixを読めない。共有ページでstorageを利用でき、共有ページから社内限定ページの応答を読めない。再アップロードがキャッシュ無効化なしで反映される。削除または期限切れのページが数秒で404になる（sentinelへrewriteされるため410ではない）。
+
+デプロイ後に見るべき点:
+
+- KVSの書き込みが全エッジに伝播するまでの実測時間
+- `UpdateKeys` の `If-Match` と412のリトライが期待どおり動くか
+- Function内の `Date` が期限判定に使えるか
+- rewrite後のURIがキャッシュキーになっているか（新バージョンがinvalidationなしで出るか）
+- KVSのキーを消したときにキャッシュを無視して404が返るか
+
+## Phase 4: 独自ドメイン
+
+origin分離まではCloudFrontのデフォルトドメインで検証し、独自ドメインの作業は閲覧認証の直前に行う。Signed Cookieを親ドメインへ発行するPhase 5までには完了させる。
+
+- [ ] 配信用サブドメインのRoute 53 hosted zoneを作成
+- [ ] 親ドメインのDNSにRoute 53が発行したNSレコードを追加し、配信用サブドメインを委譲
+- [ ] ACM証明書を **us-east-1** で発行し、DNS検証
+- [ ] `config.ts` の `domains` を埋めてカスタムドメインを有効化
+
+使用するhostnameは `app.<service-domain>`、`pages.<service-domain>`、`share.<service-domain>`。3つを同じ親ドメインの下に置くことが、Signed Cookieを親ドメインで発行する設計の前提になる。実際のドメイン名はこの文書では固定しない。
+
+受け入れ条件: 3つのhostnameが対応するDistributionへ到達し、TLS証明書の警告なく表示できる。
+
+## Phase 5: 閲覧認証（infra + api）※要・独自ドメイン
+
+- [ ] Signed Cookie発行（親ドメイン、`Path=/`、キーペア管理）
+- [ ] Internal Pages Distribution に Trusted Key Group
+- [ ] appセッションの `__Host-` Cookie
+- [ ] Internal Pages Distributionの403カスタムエラーページ → app → 元URLの再認証フロー
+- [ ] KVSの結果によってレスポンスを変えない（sentinel URIへのrewrite）
+
+受け入れ条件: 未ログインでpages originのURLを開くとログインへ誘導され、ログイン後に元のページが表示される。share originは認証なしで表示され、その404や403からログイン画面へは遷移しない。
+
+デプロイ後に見るべき点:
+
+- viewer request Function と Signed Cookie 検証の実行順序（sentinel rewrite で未認証の第三者に一律403が返るか）
+- 親ドメインCookieが pages ホストへ届くか
+
+## 後付けタスク（時期未定）
+
+- [ ] Google IdP追加 + メールドメイン制限（`email_verified` / ドメイン判定）
+- [ ] CLIのnpm配布（レジストリ選定含む）
+- [ ] CI（typecheck / test / synth）
+- [ ] 公開範囲の棚卸しスクリプト（`meta/` を走査）
+
+## ビルド成果物のデプロイ
 
 App DistributionのUI用bucketへは、`cdk deploy` とは別に手でアップロードする。`cdk synth` が web のビルドに依存する形にしたくないため、CDKのBucketDeploymentは使っていない。
 
@@ -124,36 +131,11 @@ aws s3 sync packages/web/dist/client s3://<AppBucketName> --delete
 aws cloudfront create-invalidation --distribution-id <id> --paths '/*'
 ```
 
-`_shell.html` は毎回入れ替わるので、`Cache-Control` を短くして上げるか、デプロイのたびにinvalidationを打つ。ハッシュ付きのアセットはそのまま長期キャッシュでよい。
-
-## Phase 5: 仕上げ（api + infra + web + cli）
-
-- [x] GET /api/pages（My Pages API）、GET /api/pages/{slug}
-- [x] PATCH（retention変更 + タグ更新）、DELETE（冪等）
-- [x] S3 Lifecycle（retentionタグ連動）と論理期限（expiresAtで404/410）
-- [x] ログ整備（page作成・削除・retention変更・失敗系）
-- [x] サイズ上限・入力検証の詰め（委任項目の決定を含む）
-
-検証状況: **未検証**（デプロイしていない）。通したのは typecheck、unitテスト（APIは `PageStore` のフェイクで47ケース）、`cdk synth`、snapshotテスト。
-
-積み残しが1つある。「論理期限（expiresAtで404/410）」は**APIについてのみ**実装できた。pages側の閲覧は CloudFront → S3 直結でmetadataを見る層が無く、止められない。実際に見えなくなるのはS3 Lifecycleがオブジェクトを消したときになる。これは配信構成そのものの帰結で、判定を入れるには使わないと決めた Lambda@Edge か KeyValueStore が要る。扱いは [open-questions.md](open-questions.md) に選択肢を並べて残した。
-
-デプロイ後に見るべき点:
-
-- `IfNoneMatch: '*'` によるslug予約が期待どおり412を返すか
-- presigned PUTの署名対象に `x-amz-tagging` を含めた形で、実際にPUTが通りタグが付くか
-- S3 Lifecycleが `retention=temporary` のタグだけを拾って消すか（反映は数十時間遅れる）
-- 削除が3箇所（`pages/` `meta/` `users/`）を消し切るか
-
-## 後付けタスク（時期未定）
-
-- [ ] Google IdP追加 + メールドメイン制限（`email_verified` / ドメイン判定）
-- [ ] CLIのnpm配布（レジストリ選定含む）
-- [ ] CI（typecheck / test / synth）
+`_shell.html` は毎回入れ替わるので、`Cache-Control` を短くして上げるか、デプロイのたびにinvalidationを打つ。ハッシュ付きのアセットはそのまま長期キャッシュでよい。Pages Distributionでinvalidationを使わない方針は、こちらのapp配信には適用されない。
 
 ## 並行の指針
 
-- 基本は「CDKの縦切り1本 + 並行1本」まで。Phase 1〜2のCDKと並行できるのは shared の実装、cli のPKCE骨組み、web のscaffold
+- 基本は「CDKの縦切り1本 + 並行1本」まで
 - 分担はパッケージ単位にする。パッケージが違えばworktree分離は不要
 - `pnpm-lock.yaml` が唯一の衝突点なので、依存を追加するタスクを同時に走らせない
 - タスクは「1タスク = 1コミットできる粒度 + 受け入れ条件」で切って渡す

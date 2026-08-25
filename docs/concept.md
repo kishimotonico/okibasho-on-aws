@@ -2,7 +2,9 @@
 
 ## 目的
 
-Claude Code、Codex などのAIエージェントや開発者が生成したHTMLを、社内メンバーへ簡単に共有するための小さなWebサービスを作る。
+Claude Code、Codex などのAIエージェントや開発者が生成したHTMLを、URLひとつで簡単に共有するための小さなWebサービスを作る。
+
+共有相手は基本的に社内メンバーだが、一部のページは社外の相手にも渡せるようにする。アップロードできるのは常に認証済みの社内メンバーだけで、公開範囲はページごとに選ぶ。
 
 主な用途:
 
@@ -11,6 +13,7 @@ Claude Code、Codex などのAIエージェントや開発者が生成したHTML
 - 単一HTMLだけでなく、画像・CSS・JavaScriptを含む複数ファイル構成も共有する
 - ブラウザからドラッグ＆ドロップでアップロードする
 - Claude Code / Codex などからCLI経由でアップロードする
+- 内容を差し替えながら、同じURLで最新版を見せ続ける
 
 ## 規模感
 
@@ -41,22 +44,25 @@ Claude Code、Codex などのAIエージェントや開発者が生成したHTML
 - ディレクトリアップロード
 - Webのdrag & dropアップロード
 - CLIからのアップロード（ブラウザ連携のログイン付き）
-- 共有URLの発行。アップロード時に読みやすい名前（slug）を指定できる（省略時はランダムID）
+- 共有URLの発行。URLは推測できないランダムなIDになる。表示用の名前は別に付けられる
+- 公開範囲の選択。既定は社内限定（要ログイン）、明示操作でURLを知っていれば誰でも見られる共有に切り替えられる
+- 同じURLへの再アップロード（内容の差し替え）。参照できるのは常に最新版
 - 保存期間はデフォルト30日、操作で無期限に変更可能
 - My Pages（自分のページ一覧）
 - ページ削除
-- 閲覧側も社内認証済みユーザーのみ
 
 ## MVPでやらないこと
 
 - 管理者ロール、RBAC
 - 他人のページ編集、owner変更
-- 組織・チーム、コメント、version管理、履歴
+- 組織・チーム、コメント、履歴の閲覧
+- 過去バージョンの参照・切り戻しのUI（実体は1世代残すが、操作は出さない）
+- 公開範囲の後からの変更（変えたければ再アップロードする）
 - analytics、全文検索、アクセスログ閲覧
+- パスワードによる共有、共有相手の限定
 - MCP server
 - CI/CDからのアップロード統合
-- 社外公開、パスワード共有
-- slugの後からの変更（名前を変えたければ再アップロードする）
+- URLの後からの変更
 
 ## 将来の拡張候補
 
@@ -64,12 +70,12 @@ Claude Code、Codex などのAIエージェントや開発者が生成したHTML
 
 - MCP（CLI/APIのwrapperとして追加できる想定）
 - GitHub Actionsからのアップロード
-- ページのtitle・description、検索
-- 共有先の限定（shared-with）
+- 過去バージョンへの切り戻しUI
+- 公開範囲の変更（prefix間の移動として実装できる）
+- ページのdescription、検索
+- 共有先の限定（shared-with）、パスワード共有
 - 期限延長、カスタム保存期間
 - owner移譲、管理者ビュー
-- ページのversioning
-- 可変slug（CloudFront Function + KeyValueStoreのマッピング層で、データ移動なしに後付けできる）
 
 ## 完成イメージ
 
@@ -77,8 +83,8 @@ Web:
 
 1. 管理アプリを開いてGoogleログイン
 2. HTMLまたはディレクトリをdrop
-3. 30日 / 無期限を選択してUpload
-4. 表示されたURLを社内メンバーへ共有
+3. タイトル、公開範囲（社内限定 / URL共有）、保存期間（30日 / 無期限）を選んでUpload
+4. 表示されたURLを共有
 
 CLI:
 
@@ -90,7 +96,12 @@ Authenticated.
 $ share-html ./report/
 Uploading 4 files...
 
-https://pages.share.example.jp/p/019c1292-.../
+https://pages.example.com/k3n8xq2mv9pd4wtb/   (社内限定)
+
+$ share-html ./report/ --shared
+Uploading 4 files...
+
+https://share.example.com/a7fqx9tbk3n8xq2m/   (URLを知っていれば誰でも閲覧可)
 ```
 
-閲覧者はURLを開き、未認証ならGoogleログインを挟んでHTMLが表示される。
+社内限定ページは、閲覧者がURLを開くと未認証ならGoogleログインを挟んでHTMLが表示される。URL共有ページは認証なしで表示される。
