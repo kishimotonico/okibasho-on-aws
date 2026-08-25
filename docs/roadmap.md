@@ -8,11 +8,9 @@
 
 ## 現状
 
-現行コードには旧仕様の機能が一部実装されている。ユーザー指定のslug、単一のpages prefix、上書きによる再アップロード不可、閲覧認証なし、という前提で書かれている。
+コードは公開範囲・バージョン・KVSエイリアス・origin分離を含む新しい設計に追随済み。独自ドメインと Signed Cookie による閲覧認証はまだ入れていない。デプロイは一度も行っておらず、AWSと繋いだ動作は全て未検証である。
 
-[architecture.md](architecture.md) は公開範囲・バージョン・KVSエイリアスを含む新しい設計に更新済みで、**既存コードはまだ追随していない**。またデプロイを一度も行っておらず、AWSと繋いだ動作は全て未検証である。
-
-したがって次にやることは2つ。デプロイして旧仕様のまま一周させ、未検証の項目を潰すこと。そのうえで新仕様へのリファクタに入ること。順序を逆にすると、失敗したときに「新仕様のバグ」か「未検証のAWS挙動」かの切り分けができなくなる。
+ロードマップ上は「旧仕様のまま一周してからリファクタ」だったが、本番データが無いので新仕様へ先に寄せた。初回デプロイは CloudFront のデフォルトドメインで行い、ドメインと閲覧認証はリリース直前に入れる。
 
 ## Phase 0: 前提作業（手動）
 
@@ -28,22 +26,23 @@
 
 それでも作らないことにした。この方法で確かめられるのはアプリ側の動線までで、いま未検証として残っている中身——Cognito Hosted UIとPKCEの往復、JWT Authorizerの `aud` / issuer の突き合わせ、CloudFrontが `Authorization` を運ぶか、OACとbucket policyのDenyが効くか、presigned PUTの署名検証、KVSの伝播、S3 Lifecycleの実削除——はどれもAWS側の挙動そのもので、ローカルの模擬では答えが出ない。一周の見た目を先に作っても、デプロイ後に確認すべき項目は1つも減らない。
 
-## Phase 1: デプロイして旧仕様で一周させる
+## Phase 1: デプロイして一周させる
 
-新しい実装には入らず、いまあるコードをそのままデプロイして、AWSと繋いだときの挙動を確認する。ここで得たデータは捨てる前提でよい。
+コード側は新仕様へ寄せ済みなので、ここは初回デプロイそのものの検証になる。ここで得たデータは捨ててよい。
 
 - [ ] `cdk deploy`
-- [ ] 手でS3に置いたHTMLが旧仕様のデフォルトURL `/p/test/` で表示される（このURLは新仕様へ引き継がない）
 - [ ] `share-html login` が通る（Hosted UI + PKCE、localhostコールバック）
 - [ ] `share-html ./dist/` でアップロードでき、発行されたURLで閲覧できる
 - [ ] Web UIでログイン → drag & drop → URLコピーまで通る
-- [ ] My Pages の一覧・retention変更・削除が動く
+- [ ] My Pages の一覧・retention変更・title変更・再アップロード・削除が動く
+- [ ] `--shared` で上げたページが Shared Distribution の `/<slug>/` で見える
 
 ここで確認したいAWS側の挙動:
 
 - OACでS3から実際にオブジェクトが取れるか
 - 存在しないkeyが403ではなく404で返るか（`s3:ListBucket` を足した狙いどおりか）
 - CloudFront Functionが runtime 2.0 で構文エラーなく動くか
+- KVSの書き込みが Function から読めるか
 - JWT AuthorizerがIDトークンを受け入れるか（`aud` とApp Client IDの噛み合わせ）
 - CloudFrontの `/api/*` behaviorが `Authorization` ヘッダをAPI Gatewayまで運ぶか
 - Hosted UIからのリダイレクトが `https://<app distributionのドメイン>/auth/callback` に戻ってくるか
@@ -56,27 +55,27 @@
 
 新仕様へのリファクタ。sharedから順に進めれば途中でも型チェックが通る。
 
-- [ ] shared: slugをユーザー指定不可の16文字乱数に。`slug_taken` などの関連エラーを削除
-- [ ] shared: `title`、`visibility`、`version`、`activeVersionId`、`contentUpdatedAt` を metadata に追加。`expiresAt` の保存をやめて純粋関数で計算する
-- [ ] api: 宣言（`POST` / `PUT`）と `complete` の2段階に分割。HeadObjectによる検証
-- [ ] api: 古いバージョンディレクトリの回収（complete 後、配信中でなく一定時間更新されていないもの）
-- [ ] infra: S3 prefixを `internal-pages/` `shared-pages/` の2本に。bucket policyの追随
-- [ ] web / cli: title入力、`--shared`、バージョン番号の表示
+- [x] shared: slugをユーザー指定不可の16文字乱数に。`slug_taken` などの関連エラーを削除
+- [x] shared: `title`、`visibility`、`version`、`activeVersionId`、`contentUpdatedAt` を metadata に追加。`expiresAt` の保存をやめて純粋関数で計算する
+- [x] api: 宣言（`POST` / `PUT`）と `complete` の2段階に分割。HeadObjectによる検証
+- [x] api: 古いバージョンディレクトリの回収（complete 後、配信中でなく一定時間更新されていないもの）
+- [x] infra: S3 prefixを `internal-pages/` `shared-pages/` の2本に。bucket policyの追随
+- [x] web / cli: title入力、`--shared`、バージョン番号の表示
 
-受け入れ条件: 同じURLに再アップロードして内容が差し替わり、途中で中断しても既存のページが壊れない。
+受け入れ条件: 同じURLに再アップロードして内容が差し替わり、途中で中断しても既存のページが壊れない。コード上は実装済み。AWS上の確認は Phase 1 のデプロイ後。
 
 ## Phase 3: KVSエイリアスとorigin分離（infra + api）
 
-- [ ] KeyValueStore を CDK で作成（`RemovalPolicy.RETAIN`）、Functionへ関連付け
-- [ ] CloudFront Function を KVS参照 + URI検証 + バージョン合成に書き換え（async化）
-- [ ] Pages Distributionを社内限定用とURL共有用に分け、それぞれのorigin pathとResponse Headers Policyを設定
-- [ ] 社内限定側に `Cross-Origin-Resource-Policy: same-origin`、URL共有側に `Referrer-Policy: no-referrer` と `X-Robots-Tag: noindex, nofollow` を設定
-- [ ] api: `visibility` に応じてpages originまたはshare originの完全な `viewUrl` を返す
-- [ ] api: `complete` / `PATCH` / `DELETE` からのKVS書き込み（CAS + リトライ）。`retention` 変更はタグ→metadata→KVSの順で一まとまりにする
-- [ ] `packages/api/scripts/reconcile.ts`（KVS再構築・マーカー修正・孤児削除）
-- [ ] invalidation 関連のコードとIAM権限を削除
+- [x] KeyValueStore を CDK で作成（`RemovalPolicy.RETAIN`）、Functionへ関連付け
+- [x] CloudFront Function を KVS参照 + URI検証 + バージョン合成に書き換え（async化）
+- [x] Pages Distributionを社内限定用とURL共有用に分け、それぞれのorigin pathとResponse Headers Policyを設定
+- [x] 社内限定側に `Cross-Origin-Resource-Policy: same-origin`、URL共有側に `Referrer-Policy: no-referrer` と `X-Robots-Tag: noindex, nofollow` を設定
+- [x] api: `visibility` に応じてpages originまたはshare originの完全な `viewUrl` を返す
+- [x] api: `complete` / `PATCH` / `DELETE` からのKVS書き込み（CAS + リトライ）。`retention` 変更はタグ→metadata→KVSの順で一まとまりにする
+- [x] `packages/api/scripts/reconcile.ts`（KVS再構築・マーカー修正・孤児削除）
+- [x] invalidation 関連のコードとIAM権限を削除
 
-受け入れ条件: 社内限定ページとURL共有ページがそれぞれのCloudFrontデフォルトドメインの `/<slug>/` で表示され、各Distributionが反対側のS3 prefixを読めない。共有ページでstorageを利用でき、共有ページから社内限定ページの応答を読めない。再アップロードがキャッシュ無効化なしで反映される。削除または期限切れのページが数秒で404になる（sentinelへrewriteされるため410ではない）。
+受け入れ条件: 社内限定ページとURL共有ページがそれぞれのCloudFrontデフォルトドメインの `/<slug>/` で表示され、各Distributionが反対側のS3 prefixを読めない。共有ページでstorageを利用でき、共有ページから社内限定ページの応答を読めない。再アップロードがキャッシュ無効化なしで反映される。削除または期限切れのページが数秒で404になる（sentinelへrewriteされるため410ではない）。コード上は実装済み。AWS上の確認は Phase 1 のデプロイ後。
 
 デプロイ後に見るべき点:
 

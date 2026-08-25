@@ -8,11 +8,15 @@ export function isPageMetadata(value: unknown): value is PageMetadata {
   const metadata = value as Record<string, unknown>;
   return (
     typeof metadata['slug'] === 'string' &&
+    typeof metadata['title'] === 'string' &&
     typeof metadata['ownerSub'] === 'string' &&
     typeof metadata['ownerEmail'] === 'string' &&
+    (metadata['visibility'] === 'internal' || metadata['visibility'] === 'shared') &&
     (metadata['retention'] === 'temporary' || metadata['retention'] === 'permanent') &&
     typeof metadata['createdAt'] === 'string' &&
-    (metadata['expiresAt'] === null || typeof metadata['expiresAt'] === 'string') &&
+    typeof metadata['contentUpdatedAt'] === 'string' &&
+    typeof metadata['version'] === 'number' &&
+    typeof metadata['activeVersionId'] === 'string' &&
     typeof metadata['fileCount'] === 'number' &&
     typeof metadata['totalSize'] === 'number'
   );

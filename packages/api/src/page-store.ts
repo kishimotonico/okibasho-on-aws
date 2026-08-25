@@ -2,6 +2,7 @@ import {
   DeleteObjectTaggingCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
+  GetObjectTaggingCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -28,6 +29,16 @@ export interface ListKeysResult {
   truncated: boolean;
 }
 
+export interface ObjectInfo {
+  key: string;
+  lastModified: Date;
+}
+
+export interface ListObjectInfosResult {
+  objects: ObjectInfo[];
+  truncated: boolean;
+}
+
 export interface PageStore {
   /** キーが存在しないときだけ JSON を書く。既存なら false を返す */
   putJsonIfAbsent(key: string, body: unknown): Promise<boolean>;
@@ -42,27 +53,32 @@ export interface PageStore {
   listUserIndexKeys(ownerSub: string): Promise<ListUserIndexKeysResult>;
   /** 任意の prefix 配下のキーを列挙する */
   listKeys(prefix: string): Promise<ListKeysResult>;
+  /** 任意の prefix 配下のオブジェクト情報を列挙する */
+  listObjectInfos(prefix: string): Promise<ListObjectInfosResult>;
   getJson<T>(key: string): Promise<GetJsonResult<T>>;
   exists(key: string): Promise<boolean>;
+  getObjectTags(key: string): Promise<Record<string, string>>;
   deleteObjects(keys: string[]): Promise<void>;
   /** タグを上書きする。空オブジェクトならタグをすべて外す */
   setObjectTags(key: string, tags: Record<string, string>): Promise<void>;
 }
 
 function isPreconditionFailed(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) {
-    return false;
-  }
-  const err = error as { name?: string; $metadata?: { httpStatusCode?: number } };
-  return err.name === 'PreconditionFailed' || err.$metadata?.httpStatusCode === 412;
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error as { name: string }).name === 'PreconditionFailed'
+  );
 }
 
 function isNotFound(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) {
-    return false;
-  }
-  const err = error as { name?: string; $metadata?: { httpStatusCode?: number } };
-  return err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error as { name: string }).name === 'NotFound'
+  );
 }
 
 /** 本番用の S3 実装 */
@@ -76,8 +92,6 @@ export function createPageStore(bucket: string, client: S3Client = new S3Client(
             Key: key,
             Body: JSON.stringify(body),
             ContentType: 'application/json',
-            // 存在チェックと書き込みを分けると同時リクエストで後勝ち上書きになる。
-            // IfNoneMatch で原子的に予約し、HeadObject を省く。
             IfNoneMatch: '*',
           }),
         );
@@ -109,14 +123,8 @@ export function createPageStore(bucket: string, client: S3Client = new S3Client(
         ContentLength: contentLength,
         ...(tagging ? { Tagging: tagging } : {}),
       });
-      // presigned PUT には POST policy の content-length-range が無い。
-      // 宣言サイズを署名対象ヘッダに含め、S3 がちょうどそのサイズだけ受け付けるようにする。
       const signableHeaders = new Set(['content-type', 'content-length']);
       if (tagging) {
-        // Lifecycle用のタグは、アップロードそのものに付けさせる。
-        // 後からタグを付ける方法だと「アップロードが終わったこと」を知る必要があり、
-        // 完了APIを作らないと決めた設計と噛み合わない。
-        // 署名対象に入れることで、クライアントが勝手に付け替えることもできない
         signableHeaders.add('x-amz-tagging');
       }
       return getSignedUrl(client, command, {
@@ -133,6 +141,10 @@ export function createPageStore(bucket: string, client: S3Client = new S3Client(
       return listKeysUnderPrefix(client, bucket, prefix);
     },
 
+    async listObjectInfos(prefix) {
+      return listObjectInfosUnderPrefix(client, bucket, prefix);
+    },
+
     async exists(key) {
       try {
         await client.send(
@@ -145,6 +157,29 @@ export function createPageStore(bucket: string, client: S3Client = new S3Client(
       } catch (error) {
         if (isNotFound(error)) {
           return false;
+        }
+        throw error;
+      }
+    },
+
+    async getObjectTags(key) {
+      try {
+        const result = await client.send(
+          new GetObjectTaggingCommand({
+            Bucket: bucket,
+            Key: key,
+          }),
+        );
+        const tags: Record<string, string> = {};
+        for (const tag of result.TagSet ?? []) {
+          if (tag.Key !== undefined && tag.Value !== undefined) {
+            tags[tag.Key] = tag.Value;
+          }
+        }
+        return tags;
+      } catch (error) {
+        if (isNotFound(error)) {
+          return {};
         }
         throw error;
       }
@@ -255,4 +290,35 @@ async function listKeysUnderPrefix(
   } while (continuationToken !== undefined);
 
   return { keys, truncated };
+}
+
+async function listObjectInfosUnderPrefix(
+  client: S3Client,
+  bucket: string,
+  prefix: string,
+): Promise<ListObjectInfosResult> {
+  const objects: ObjectInfo[] = [];
+  let continuationToken: string | undefined;
+  let truncated = false;
+
+  do {
+    const result = await client.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      }),
+    );
+
+    for (const item of result.Contents ?? []) {
+      if (item.Key !== undefined && item.LastModified !== undefined) {
+        objects.push({ key: item.Key, lastModified: item.LastModified });
+      }
+    }
+
+    truncated = result.IsTruncated ?? false;
+    continuationToken = result.NextContinuationToken;
+  } while (continuationToken !== undefined);
+
+  return { objects, truncated };
 }

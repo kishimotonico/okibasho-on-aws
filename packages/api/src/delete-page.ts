@@ -1,16 +1,19 @@
 import type { ApiErrorResponse, PageMetadata } from '@page-share/shared';
-import { isValidSlug, metaObjectKey, pagePrefix, userIndexObjectKey } from '@page-share/shared';
+import { isValidSlug, kvsKey, metaObjectKey, pagePrefix, userIndexObjectKey } from '@page-share/shared';
+import type { AliasStore } from './alias-store.js';
 import { isPageMetadata } from './page-metadata.js';
 import type { PageStore } from './page-store.js';
 
 export interface DeletePageInput {
   store: PageStore;
+  aliasStore: AliasStore;
   ownerSub: string;
   slug: string;
 }
 
 export type DeletePageResult =
-  { ok: true; status: 204 } | { ok: false; status: 400 | 403 | 500; body: ApiErrorResponse };
+  | { ok: true; status: 204 }
+  | { ok: false; status: 400 | 403 | 500; body: ApiErrorResponse };
 
 export async function deletePage(input: DeletePageInput): Promise<DeletePageResult> {
   if (!isValidSlug(input.slug)) {
@@ -36,24 +39,11 @@ export async function deletePage(input: DeletePageInput): Promise<DeletePageResu
 
   try {
     const metaResult = await input.store.getJson<PageMetadata>(metaKey);
+    let visibility: PageMetadata['visibility'] | null = null;
 
     if (metaResult.ok) {
       if (!isPageMetadata(metaResult.data)) {
-        console.log('page_delete_failed', {
-          errorCode: 'internal_error',
-          ownerSub: input.ownerSub,
-          slug: input.slug,
-        });
-        return {
-          ok: false,
-          status: 500,
-          body: {
-            error: {
-              code: 'internal_error',
-              message: 'ページの削除に失敗しました',
-            },
-          },
-        };
+        return internalError(input.ownerSub, input.slug);
       }
 
       if (metaResult.data.ownerSub !== input.ownerSub) {
@@ -74,104 +64,76 @@ export async function deletePage(input: DeletePageInput): Promise<DeletePageResu
           },
         };
       }
+
+      visibility = metaResult.data.visibility;
     } else if (metaResult.reason === 'invalid_json') {
-      console.log('page_delete_failed', {
-        errorCode: 'internal_error',
-        ownerSub: input.ownerSub,
-        slug: input.slug,
-      });
-      return {
-        ok: false,
-        status: 500,
-        body: {
-          error: {
-            code: 'internal_error',
-            message: 'ページの削除に失敗しました',
-          },
-        },
-      };
-    } else {
-      // meta が無いときは users マーカーで所有者を確認する（Lifecycle が meta を先に消したあとの掃除用）
-      const hasIndex = await input.store.exists(indexKey);
-      if (!hasIndex) {
-        // 冪等: 既に消えていれば何もしない
-        return { ok: true, status: 204 };
-      }
+      return internalError(input.ownerSub, input.slug);
     }
 
-    const deletedPageKeys: string[] = [];
-    let metaDeleted = false;
-    let indexDeleted = false;
+    const prefixes =
+      visibility === null
+        ? [pagePrefix('internal', input.slug), pagePrefix('shared', input.slug)]
+        : [pagePrefix(visibility, input.slug)];
 
-    try {
-      // users マーカーを先に消す。所有者確認の正本は meta/ なので、それを最後まで残せば
-      // 途中で失敗しても再実行時に必ず所有者を確認して完走できる。
-      if (await input.store.exists(indexKey)) {
-        await input.store.deleteObjects([indexKey]);
-        indexDeleted = true;
-      }
-
-      const { keys: pageKeys, truncated } = await input.store.listKeys(pagePrefix(input.slug));
+    const pageKeys: string[] = [];
+    for (const prefix of prefixes) {
+      const { keys, truncated } = await input.store.listKeys(prefix);
       if (truncated) {
         console.log('page_delete_list_truncated', {
           slug: input.slug,
           ownerSub: input.ownerSub,
-          keyCount: pageKeys.length,
+          keyCount: keys.length,
         });
       }
-
-      if (pageKeys.length > 0) {
-        await input.store.deleteObjects(pageKeys);
-        deletedPageKeys.push(...pageKeys);
-      }
-
-      // meta/ を最後に消す。再実行時の所有者確認に使えるよう、pages/ より後に片付ける。
-      if (await input.store.exists(metaKey)) {
-        await input.store.deleteObjects([metaKey]);
-        metaDeleted = true;
-      }
-
-      console.log('page_deleted', {
-        slug: input.slug,
-        ownerSub: input.ownerSub,
-      });
-
-      return { ok: true, status: 204 };
-    } catch (error) {
-      console.log('page_delete_partial', {
-        slug: input.slug,
-        ownerSub: input.ownerSub,
-        deletedPageKeys,
-        metaDeleted,
-        indexDeleted,
-        errorCode: 'internal_error',
-      });
-      return {
-        ok: false,
-        status: 500,
-        body: {
-          error: {
-            code: 'internal_error',
-            message: 'ページの削除に失敗しました',
-          },
-        },
-      };
+      pageKeys.push(...keys);
     }
-  } catch {
-    console.log('page_delete_failed', {
-      errorCode: 'internal_error',
-      ownerSub: input.ownerSub,
+
+    if (pageKeys.length > 0) {
+      await input.store.deleteObjects(pageKeys);
+    }
+
+    if (await input.store.exists(indexKey)) {
+      await input.store.deleteObjects([indexKey]);
+    }
+
+    if (await input.store.exists(metaKey)) {
+      await input.store.deleteObjects([metaKey]);
+    }
+
+    if (visibility === null) {
+      await Promise.all([
+        input.aliasStore.delete(kvsKey('internal', input.slug)).catch(() => undefined),
+        input.aliasStore.delete(kvsKey('shared', input.slug)).catch(() => undefined),
+      ]);
+    } else {
+      await input.aliasStore.delete(kvsKey(visibility, input.slug));
+    }
+
+    console.log('page_deleted', {
       slug: input.slug,
+      ownerSub: input.ownerSub,
     });
-    return {
-      ok: false,
-      status: 500,
-      body: {
-        error: {
-          code: 'internal_error',
-          message: 'ページの削除に失敗しました',
-        },
-      },
-    };
+
+    return { ok: true, status: 204 };
+  } catch {
+    return internalError(input.ownerSub, input.slug);
   }
+}
+
+function internalError(ownerSub: string, slug: string): DeletePageResult {
+  console.log('page_delete_failed', {
+    errorCode: 'internal_error',
+    ownerSub,
+    slug,
+  });
+  return {
+    ok: false,
+    status: 500,
+    body: {
+      error: {
+        code: 'internal_error',
+        message: 'ページの削除に失敗しました',
+      },
+    },
+  };
 }

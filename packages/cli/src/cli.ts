@@ -19,9 +19,10 @@ const HELP_TEXT = `share-html — 社内向けHTML共有サービスのCLI
   share-html --version          バージョンを表示
 
 アップロード:
-  share-html <path> [--name <slug>] [--retention temporary|permanent] [--dry-run]
+  share-html <path> [--title <name>] [--shared] [--retention temporary|permanent] [--dry-run]
     <path>        単一ファイル (.html/.htm) またはディレクトリ
-    --name        ページの slug (省略時はサーバーが生成)
+    --title       ページの表示名 (省略時は index.html の <title>、なければディレクトリ/ファイル名)
+    --shared      URLを知っていれば誰でも閲覧可能にする (省略時は社内限定)
     --retention   保存期間 (省略時: temporary)
     --dry-run     ネットワークにアクセスせず送信内容だけ表示
 
@@ -70,7 +71,8 @@ export async function runCli(argv: string[]): Promise<CliResult> {
       options: {
         help: { type: 'boolean', short: 'h' },
         version: { type: 'boolean' },
-        name: { type: 'string' },
+        title: { type: 'string' },
+        shared: { type: 'boolean' },
         retention: { type: 'string' },
         'dry-run': { type: 'boolean' },
       },
@@ -143,11 +145,13 @@ export async function runCli(argv: string[]): Promise<CliResult> {
     return { exitCode: 1 };
   }
 
-  const name = typeof values.name === 'string' ? values.name : undefined;
+  const title = typeof values.title === 'string' ? values.title : undefined;
+  const shared = values.shared === true;
   const dryRun = values['dry-run'] === true;
 
   return runUpload(command, {
-    name,
+    title,
+    shared,
     retention: retention as 'temporary' | 'permanent' | undefined,
     dryRun,
   });

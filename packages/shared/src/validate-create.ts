@@ -1,27 +1,16 @@
-import type { ApiErrorBody, CreatePageRequest } from './api.js';
+import type { ApiErrorBody, CreatePageRequest, DeclaredFile } from './api.js';
 import { MAX_FILE_COUNT, MAX_FILE_SIZE, MAX_PAGE_SIZE } from './limits.js';
-import { isValidSlug } from './slug.js';
+import { validateTitle } from './title.js';
 import { validateUploadPath } from './upload-path.js';
 
 export type CreatePageValidationError = ApiErrorBody;
 
 const INDEX_HTML_PATH = 'index.html';
 
-/**
- * ページ作成リクエストの宣言内容を検証する。
- * 例外ではなくエラー配列を返し、API が 400 に詰めやすくする。
- */
-export function validateCreatePageRequest(input: CreatePageRequest): CreatePageValidationError[] {
+export function validateDeclaredFiles(files: DeclaredFile[]): CreatePageValidationError[] {
   const errors: CreatePageValidationError[] = [];
 
-  if (input.slug !== undefined && !isValidSlug(input.slug)) {
-    errors.push({
-      code: 'invalid_slug',
-      message: 'slug は英小文字・数字・ハイフンのみ、先頭は英数字、1〜64文字で指定してください',
-    });
-  }
-
-  if (input.files.length === 0) {
+  if (files.length === 0) {
     errors.push({
       code: 'files_required',
       message: 'アップロードするファイルを1件以上指定してください',
@@ -29,7 +18,7 @@ export function validateCreatePageRequest(input: CreatePageRequest): CreatePageV
     return errors;
   }
 
-  if (input.files.length > MAX_FILE_COUNT) {
+  if (files.length > MAX_FILE_COUNT) {
     errors.push({
       code: 'too_many_files',
       message: `ファイル数は最大 ${MAX_FILE_COUNT} 件までです`,
@@ -40,7 +29,7 @@ export function validateCreatePageRequest(input: CreatePageRequest): CreatePageV
   let totalSize = 0;
   let hasIndexHtml = false;
 
-  for (const file of input.files) {
+  for (const file of files) {
     const pathResult = validateUploadPath(file.path);
     if (!pathResult.ok) {
       errors.push({
@@ -93,5 +82,34 @@ export function validateCreatePageRequest(input: CreatePageRequest): CreatePageV
     });
   }
 
+  return errors;
+}
+
+/**
+ * ページ作成リクエストの宣言内容を検証する。
+ * 例外ではなくエラー配列を返し、API が 400 に詰めやすくする。
+ */
+export function validateCreatePageRequest(input: CreatePageRequest): CreatePageValidationError[] {
+  const errors: CreatePageValidationError[] = [];
+
+  if (input.title !== undefined) {
+    const titleError = validateTitle(input.title);
+    if (titleError) {
+      errors.push(titleError);
+    }
+  }
+
+  if (
+    input.visibility !== undefined &&
+    input.visibility !== 'internal' &&
+    input.visibility !== 'shared'
+  ) {
+    errors.push({
+      code: 'invalid_visibility',
+      message: 'visibility は internal または shared を指定してください',
+    });
+  }
+
+  errors.push(...validateDeclaredFiles(input.files));
   return errors;
 }

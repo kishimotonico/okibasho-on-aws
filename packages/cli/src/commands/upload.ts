@@ -4,16 +4,24 @@ import {
   DEFAULT_RETENTION,
   type CreatePageRequest,
   type Retention,
+  type Visibility,
   validateCreatePageRequest,
 } from '@page-share/shared';
 import { ConfigError, resolveConfig } from '../config.js';
 import { collectFiles, CollectFilesError, SingleFileNotHtmlError } from '../collect-files.js';
+import { resolveTitle } from '../resolve-title.js';
 import { ensureIdToken, TokenRefreshError } from '../token-refresh.js';
-import { createPage, type FetchFn, uploadFilesWithConcurrency } from '../upload-client.js';
+import {
+  completePage,
+  createPage,
+  type FetchFn,
+  uploadFilesWithConcurrency,
+} from '../upload-client.js';
 
 export interface UploadCommandOptions {
   path: string;
-  name?: string;
+  title?: string;
+  shared?: boolean;
   retention?: Retention;
   dryRun?: boolean;
 }
@@ -24,6 +32,7 @@ export interface UploadDeps {
   collectFiles: typeof collectFiles;
   ensureIdToken: typeof ensureIdToken;
   readFile: typeof readFile;
+  resolveTitle: typeof resolveTitle;
 }
 
 export const defaultUploadDeps: UploadDeps = {
@@ -32,6 +41,7 @@ export const defaultUploadDeps: UploadDeps = {
   collectFiles,
   ensureIdToken,
   readFile,
+  resolveTitle,
 };
 
 export interface UploadResult {
@@ -79,16 +89,22 @@ function printApiError(body: {
   }
 }
 
-function printDryRun(files: Array<{ path: string }>, options: UploadCommandOptions): void {
+function visibilityLabel(visibility: Visibility): string {
+  return visibility === 'shared' ? 'URLを知っていれば誰でも閲覧可' : '社内限定';
+}
+
+function printDryRun(
+  files: Array<{ path: string }>,
+  options: UploadCommandOptions,
+  title: string,
+  visibility: Visibility,
+): void {
   console.log(`Dry run: ${files.length} file(s) would be uploaded`);
   for (const file of files) {
     console.log(`  ${file.path} (${contentTypeFromPath(file.path)})`);
   }
-  if (options.name) {
-    console.log(`slug: ${options.name}`);
-  } else {
-    console.log('slug: (server-generated)');
-  }
+  console.log(`title: ${title}`);
+  console.log(`visibility: ${visibilityLabel(visibility)}`);
   console.log(`retention: ${options.retention ?? DEFAULT_RETENTION}`);
 }
 
@@ -115,10 +131,18 @@ export async function runUpload(
 
   printSkippedSummary(collected.skippedInvalidPath, collected.skippedSymlinks);
 
+  const visibility: Visibility = options.shared ? 'shared' : 'internal';
+  const title =
+    options.title !== undefined
+      ? options.title
+      : await deps.resolveTitle(path, collected.files, deps.readFile);
+
+  const declaredFiles = collected.files.map((file) => ({ path: file.path, size: file.size }));
   const request: CreatePageRequest = {
-    slug: options.name,
+    title,
+    visibility,
     retention: options.retention ?? DEFAULT_RETENTION,
-    files: collected.files.map((file) => ({ path: file.path, size: file.size })),
+    files: declaredFiles,
   };
 
   const validationErrors = validateCreatePageRequest(request);
@@ -128,7 +152,7 @@ export async function runUpload(
   }
 
   if (options.dryRun) {
-    printDryRun(collected.files, { path, ...options });
+    printDryRun(collected.files, { path, ...options }, title, visibility);
     return { exitCode: 0 };
   }
 
@@ -169,12 +193,21 @@ export async function runUpload(
     console.error(
       `アップロードに失敗しました: ${failure.path} (HTTP ${failure.error.status} ${failure.error.statusText})`,
     );
-    console.error(
-      'もう一度同じコマンドを実行しても、slug は既に確保されているため別の名前 (--name) が必要です。',
-    );
+    console.error('PUT が完了する前に終了した場合、もう一度同じコマンドを実行してください。');
     return { exitCode: 1 };
   }
 
-  console.log(body.viewUrl);
+  const completeResult = await completePage(deps.fetch, config.apiUrl, idToken, body.slug, {
+    versionId: body.versionId,
+    files: declaredFiles,
+    title,
+  });
+  if (!completeResult.ok) {
+    printApiError(completeResult.body);
+    return { exitCode: 1 };
+  }
+
+  console.log(completeResult.body.viewUrl);
+  console.log(visibilityLabel(visibility));
   return { exitCode: 0 };
 }

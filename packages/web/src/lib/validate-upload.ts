@@ -1,27 +1,54 @@
-import type { CreatePageRequest, Retention } from '@page-share/shared';
-import { validateCreatePageRequest } from '@page-share/shared';
+import type { CreatePageRequest, RedeclarePageRequest, Retention, Visibility } from '@page-share/shared';
+import { validateCreatePageRequest, validateDeclaredFiles } from '@page-share/shared';
 
 import type { UploadFileEntry } from './collect-upload-files.js';
 
+function mapDeclaredFiles(files: readonly UploadFileEntry[]) {
+  return files.map((file) => ({
+    path: file.path,
+    size: file.file.size,
+  }));
+}
+
 export function buildCreatePageRequest(
   files: readonly UploadFileEntry[],
-  slug: string,
-  retention: Retention,
+  options: {
+    title: string;
+    visibility: Visibility;
+    retention: Retention;
+  },
 ): CreatePageRequest {
+  const request: CreatePageRequest = {
+    retention: options.retention,
+    visibility: options.visibility,
+    files: mapDeclaredFiles(files),
+  };
+
+  const trimmedTitle = options.title.trim();
+  if (trimmedTitle) {
+    request.title = trimmedTitle;
+  }
+
+  return request;
+}
+
+export function buildRedeclarePageRequest(files: readonly UploadFileEntry[]): RedeclarePageRequest {
   return {
-    ...(slug.trim() ? { slug: slug.trim() } : {}),
-    retention,
-    files: files.map((file) => ({
-      path: file.path,
-      size: file.file.size,
-    })),
+    files: mapDeclaredFiles(files),
   };
 }
 
 export function validateUploadRequest(
   files: readonly UploadFileEntry[],
-  slug: string,
-  retention: Retention,
+  options: {
+    title: string;
+    visibility: Visibility;
+    retention: Retention;
+  },
 ) {
-  return validateCreatePageRequest(buildCreatePageRequest(files, slug, retention));
+  return validateCreatePageRequest(buildCreatePageRequest(files, options));
+}
+
+export function validateRedeclareRequest(files: readonly UploadFileEntry[]) {
+  return validateDeclaredFiles(buildRedeclarePageRequest(files).files);
 }

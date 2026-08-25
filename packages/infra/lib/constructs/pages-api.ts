@@ -5,6 +5,7 @@ import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import type { IUserPoolClient, UserPool } from 'aws-cdk-lib/aws-cognito';
+import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
@@ -13,8 +14,11 @@ import { Construct } from 'constructs';
 
 export interface PagesApiProps {
   readonly bucket: IBucket;
-  /** 閲覧URLのベース (例: https://d123.cloudfront.net) */
+  /** Internal Pages Distribution のベース URL */
   readonly pagesBaseUrl: string;
+  /** Shared Pages Distribution のベース URL */
+  readonly shareBaseUrl: string;
+  readonly keyValueStoreArn: string;
   readonly userPool: UserPool;
   readonly webClient: IUserPoolClient;
   readonly cliClient: IUserPoolClient;
@@ -36,13 +40,16 @@ export class PagesApi extends Construct {
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
       memorySize: 256,
-      timeout: Duration.seconds(10),
+      // complete の HeadObject 並列用
+      timeout: Duration.seconds(29),
       logGroup: new LogGroup(this, 'PagesHandlerLogGroup', {
         retention: RetentionDays.ONE_MONTH,
       }),
       environment: {
         PAGES_BUCKET: props.bucket.bucketName,
         PAGES_BASE_URL: props.pagesBaseUrl,
+        SHARE_BASE_URL: props.shareBaseUrl,
+        KVS_ARN: props.keyValueStoreArn,
       },
       bundling: {
         sourceMap: false,
@@ -53,6 +60,14 @@ export class PagesApi extends Construct {
     });
 
     props.bucket.grantReadWrite(handler);
+
+    handler.addToRolePolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['cloudfront-keyvaluestore:DescribeKeyValueStore', 'cloudfront-keyvaluestore:UpdateKeys'],
+        resources: [props.keyValueStoreArn],
+      }),
+    );
 
     // IDトークンを送る前提。アクセストークンには email クレームが無く、
     // Lambda が sub/email/email_verified を使う設計と噛み合わない。aud は App Client ID なので JWT Authorizer の audience と一致する。
@@ -75,7 +90,13 @@ export class PagesApi extends Construct {
 
     this.httpApi.addRoutes({
       path: '/api/pages/{slug}',
-      methods: [HttpMethod.GET, HttpMethod.PATCH, HttpMethod.DELETE],
+      methods: [HttpMethod.GET, HttpMethod.PATCH, HttpMethod.DELETE, HttpMethod.PUT],
+      integration,
+    });
+
+    this.httpApi.addRoutes({
+      path: '/api/pages/{slug}/complete',
+      methods: [HttpMethod.POST],
       integration,
     });
   }

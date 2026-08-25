@@ -1,4 +1,12 @@
-import type { ApiErrorResponse, CreatePageRequest, CreatePageResponse } from '@page-share/shared';
+import type {
+  ApiErrorResponse,
+  CompletePageRequest,
+  CompletePageResponse,
+  CreatePageRequest,
+  CreatePageResponse,
+  RedeclarePageRequest,
+  RedeclarePageResponse,
+} from '@page-share/shared';
 
 import { preparePresignedPutHeaders } from './presigned-headers.js';
 
@@ -16,6 +24,32 @@ export interface CreatePageError {
 }
 
 export type CreatePageResponseResult = CreatePageResult | CreatePageError;
+
+export interface RedeclarePageResult {
+  ok: true;
+  body: RedeclarePageResponse;
+}
+
+export interface RedeclarePageError {
+  ok: false;
+  status: number;
+  body: ApiErrorResponse;
+}
+
+export type RedeclarePageResponseResult = RedeclarePageResult | RedeclarePageError;
+
+export interface CompletePageResult {
+  ok: true;
+  body: CompletePageResponse;
+}
+
+export interface CompletePageError {
+  ok: false;
+  status: number;
+  body: ApiErrorResponse;
+}
+
+export type CompletePageResponseResult = CompletePageResult | CompletePageError;
 
 export interface PutFileResult {
   ok: true;
@@ -60,6 +94,68 @@ export async function createPage(
   return {
     ok: true,
     body: responseBody as CreatePageResponse,
+  };
+}
+
+export async function redeclarePage(
+  fetchFn: FetchFn,
+  apiBaseUrl: string,
+  idToken: string,
+  slug: string,
+  body: RedeclarePageRequest,
+): Promise<RedeclarePageResponseResult> {
+  const response = await fetchFn(`${normalizeApiUrl(apiBaseUrl)}/pages/${slug}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const responseBody: unknown = await response.json();
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      body: responseBody as ApiErrorResponse,
+    };
+  }
+
+  return {
+    ok: true,
+    body: responseBody as RedeclarePageResponse,
+  };
+}
+
+export async function completePage(
+  fetchFn: FetchFn,
+  apiBaseUrl: string,
+  idToken: string,
+  slug: string,
+  body: CompletePageRequest,
+): Promise<CompletePageResponseResult> {
+  const response = await fetchFn(`${normalizeApiUrl(apiBaseUrl)}/pages/${slug}/complete`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const responseBody: unknown = await response.json();
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      body: responseBody as ApiErrorResponse,
+    };
+  }
+
+  return {
+    ok: true,
+    body: responseBody as CompletePageResponse,
   };
 }
 

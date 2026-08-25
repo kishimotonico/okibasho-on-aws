@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { deletePage, listPages, updatePageRetention, type FetchFn } from '../src/lib/pages-client';
+import { deletePage, listPages, updatePageRetention, updatePageTitle, type FetchFn } from '../src/lib/pages-client';
 
 function createFetchMock(
   handler: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>,
@@ -50,6 +50,26 @@ describe('pages-client', () => {
       'demo-page',
       'permanent',
     );
+    expect(result.ok).toBe(true);
+  });
+
+  it('title 更新が PATCH で送られる', async () => {
+    const fetchFn = createFetchMock((url, init) => {
+      expect(String(url)).toBe('/api/pages/demo-page');
+      expect(init?.method).toBe('PATCH');
+      expect(init?.body).toBe(JSON.stringify({ title: 'New title' }));
+      return new Response(
+        JSON.stringify({
+          slug: 'demo-page',
+          title: 'New title',
+          retention: 'temporary',
+          expiresAt: '2026-09-01T00:00:00.000Z',
+        }),
+        { status: 200 },
+      );
+    });
+
+    const result = await updatePageTitle(fetchFn, '/api', 'patch-token', 'demo-page', 'New title');
     expect(result.ok).toBe(true);
   });
 

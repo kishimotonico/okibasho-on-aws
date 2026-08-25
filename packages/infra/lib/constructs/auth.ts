@@ -12,10 +12,10 @@ import { Construct } from 'constructs';
 
 /**
  * CLIのlocalhostコールバックで使うポート。
- * CognitoはコールバックURLをポートまで含めて完全一致で照合するため、
- * 1つだけだとそのポートが使用中のときログインできなくなる。フォールバック用に3つ許可する。
+ * CognitoはコールバックURLをポートまで含めて完全一致で照合する。
+ * 使用中なら CLI はフォールバックせず終了する。
  */
-export const CLI_CALLBACK_PORTS = [8976, 8977, 8978] as const;
+export const CLI_CALLBACK_PORTS = [8976] as const;
 
 const WEB_LOCAL_CALLBACK_URL = 'http://localhost:3000/auth/callback';
 const WEB_LOCAL_LOGOUT_URL = 'http://localhost:3000';

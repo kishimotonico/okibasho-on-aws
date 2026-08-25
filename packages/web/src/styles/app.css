@@ -315,3 +315,54 @@ a:hover {
   color: #0f7b3a;
   font-size: 0.85rem;
 }
+
+.field-hint {
+  margin: 0.25rem 0 0;
+  color: #5f6b7a;
+  font-size: 0.875rem;
+}
+
+.visibility-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.visibility-badge--internal {
+  background: #e8f0fe;
+  color: #0b5fff;
+}
+
+.visibility-badge--shared {
+  background: #fff4e5;
+  color: #8a6100;
+}
+
+.title-cell {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.title-placeholder {
+  color: #5f6b7a;
+}
+
+.title-edit {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.title-edit input[type='text'] {
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #c5ced8;
+  border-radius: 0.375rem;
+}
+
+.title-edit__actions {
+  display: flex;
+  gap: 0.5rem;
+}

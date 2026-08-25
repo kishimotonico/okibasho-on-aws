@@ -1,28 +1,34 @@
-/** slug の許可パターン（1〜64文字、先頭は英数字） */
-export const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+/** slug / versionId の許可パターン（ちょうど16文字、[a-z0-9] のみ） */
+export const ID_LENGTH = 16;
+export const ID_PATTERN = /^[a-z0-9]{16}$/;
+export const SLUG_PATTERN = ID_PATTERN;
 
-const SLUG_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
-const SLUG_LENGTH = 12;
+const ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 /** 剰余バイアスを避けるため、256 を文字集合サイズで割り切れる上限までしか採用しない */
-const SLUG_RANDOM_REJECTION = Math.floor(256 / SLUG_ALPHABET.length) * SLUG_ALPHABET.length;
+const ID_RANDOM_REJECTION = Math.floor(256 / ID_ALPHABET.length) * ID_ALPHABET.length;
 
 /**
- * slug は作成後に変更できない。大文字を小文字へ正規化すると
- * ユーザーが意図した別の slug（例: Report / report）が確定してしまうため、
- * 区別しない URL 空間と S3 key の不一致事故を防ぐ目的で invalid とする。
+ * slug と versionId は同じ形。ユーザーは指定できず、作成後も変更できない。
+ * 推測できないことが capability になるため、ハイフン付きの人が読める名前は使わない。
  */
-export function isValidSlug(value: string): boolean {
-  return SLUG_PATTERN.test(value);
+export function isValidId(value: string): boolean {
+  return ID_PATTERN.test(value);
 }
 
-/** [a-z0-9] から SLUG_LENGTH 文字を、Web Crypto で偏りなく生成する */
-export function generateSlug(): string {
-  let slug = '';
-  while (slug.length < SLUG_LENGTH) {
-    slug += randomSlugChar();
+export const isValidSlug = isValidId;
+export const isValidVersionId = isValidId;
+
+/** [a-z0-9] から ID_LENGTH 文字を、Web Crypto で偏りなく生成する */
+export function generateId(): string {
+  let id = '';
+  while (id.length < ID_LENGTH) {
+    id += randomIdChar();
   }
-  return slug;
+  return id;
 }
+
+export const generateSlug = generateId;
+export const generateVersionId = generateId;
 
 /**
  * Web Crypto はNode 20+ とブラウザの双方でグローバルにあるが、
@@ -35,13 +41,13 @@ const webCrypto = (
   globalThis as unknown as { crypto: { getRandomValues(a: Uint8Array): Uint8Array } }
 ).crypto;
 
-function randomSlugChar(): string {
+function randomIdChar(): string {
   const bytes = new Uint8Array(1);
   while (true) {
     webCrypto.getRandomValues(bytes);
     const byte = bytes[0]!;
-    if (byte < SLUG_RANDOM_REJECTION) {
-      return SLUG_ALPHABET[byte % SLUG_ALPHABET.length]!;
+    if (byte < ID_RANDOM_REJECTION) {
+      return ID_ALPHABET[byte % ID_ALPHABET.length]!;
     }
   }
 }

@@ -8,7 +8,7 @@ export type UploadPathValidationResult = { ok: true; path: string } | { ok: fals
 
 /**
  * ページ内相対パスを検証し、区切りを `/` に統一した形で返す。
- * 通過したパスだけが S3 key 組み立てに使われ、必ず pages/<slug>/ 配下に収まる。
+ * 通過したパスだけが S3 key 組み立てに使われ、必ず配信対象 prefix 配下に収まる。
  */
 export function validateUploadPath(raw: string): UploadPathValidationResult {
   if (raw === '') {

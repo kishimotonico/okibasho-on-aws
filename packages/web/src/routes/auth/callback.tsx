@@ -20,7 +20,7 @@ function AuthCallbackPage() {
       .then((returnTo) => {
         if (active) {
           if (returnTo === '/upload') {
-            void navigate({ to: '/upload' });
+            void navigate({ to: '/upload', search: {} });
           } else {
             void navigate({ to: '/' });
           }

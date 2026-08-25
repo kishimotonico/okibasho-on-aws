@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_FILE_COUNT, MAX_FILE_SIZE } from '../src/limits.js';
-import { validateCreatePageRequest } from '../src/validate-create.js';
+import { MAX_FILE_COUNT, MAX_FILE_SIZE, TITLE_MAX_LENGTH } from '../src/index.js';
+import { validateCreatePageRequest, validateDeclaredFiles } from '../src/validate-create.js';
 
 const validFiles = [{ path: 'index.html', size: 100 }];
 
@@ -9,9 +9,25 @@ describe('validateCreatePageRequest', () => {
     expect(validateCreatePageRequest({ files: validFiles })).toEqual([]);
   });
 
-  it('slug 指定が不正なら invalid_slug', () => {
-    const errors = validateCreatePageRequest({ slug: 'Bad-Slug', files: validFiles });
-    expect(errors.some((e) => e.code === 'invalid_slug')).toBe(true);
+  it('title の制御文字は invalid_title', () => {
+    const errors = validateCreatePageRequest({ title: 'a\nb', files: validFiles });
+    expect(errors.some((e) => e.code === 'invalid_title')).toBe(true);
+  });
+
+  it('title の長さ超過は invalid_title', () => {
+    const errors = validateCreatePageRequest({
+      title: 'あ'.repeat(TITLE_MAX_LENGTH + 1),
+      files: validFiles,
+    });
+    expect(errors.some((e) => e.code === 'invalid_title')).toBe(true);
+  });
+
+  it('visibility が不正なら invalid_visibility', () => {
+    const errors = validateCreatePageRequest({
+      visibility: 'public' as never,
+      files: validFiles,
+    });
+    expect(errors.some((e) => e.code === 'invalid_visibility')).toBe(true);
   });
 
   it('files が空なら files_required', () => {
@@ -82,5 +98,12 @@ describe('validateCreatePageRequest', () => {
       files: [{ path: 'index.html', size: -1 }],
     });
     expect(errors.some((e) => e.code === 'invalid_file_size')).toBe(true);
+  });
+});
+
+describe('validateDeclaredFiles', () => {
+  it('create と同じファイル検証を単体で使える', () => {
+    expect(validateDeclaredFiles(validFiles)).toEqual([]);
+    expect(validateDeclaredFiles([]).some((e) => e.code === 'files_required')).toBe(true);
   });
 });

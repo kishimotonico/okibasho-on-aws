@@ -1,4 +1,5 @@
 import { CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
+import { INTERNAL_PAGES_PREFIX, SHARED_PAGES_PREFIX } from '@page-share/shared';
 import type { Construct } from 'constructs';
 import { AppDelivery } from './constructs/app-delivery.js';
 import { Auth } from './constructs/auth.js';
@@ -10,7 +11,7 @@ import { config } from './config.js';
 /**
  * 構築するリソース:
  *   - S3 (private, Public Access Block)
- *   - CloudFront x2 (app / pages) + OAC
+ *   - CloudFront x3 (app / internal pages / shared pages) + OAC
  *   - Cognito User Pool (Google federation, Web/CLI の 2 App Client)
  *   - API Gateway HTTP API + JWT Authorizer
  *   - Lambda (NodejsFunction で packages/api をバンドル)
@@ -34,8 +35,13 @@ export class PageShareStack extends Stack {
     });
 
     new CfnOutput(this, 'PagesViewUrl', {
-      value: `https://${pagesDelivery.distribution.distributionDomainName}/p/`,
-      description: 'pages閲覧URLのベース',
+      value: `https://${pagesDelivery.internalDistribution.distributionDomainName}/`,
+      description: '社内限定 pages 閲覧URLのベース',
+    });
+
+    new CfnOutput(this, 'ShareViewUrl', {
+      value: `https://${pagesDelivery.sharedDistribution.distributionDomainName}/`,
+      description: 'URL共有 pages 閲覧URLのベース',
     });
 
     new CfnOutput(this, 'PagesBucketName', {
@@ -70,13 +76,24 @@ export class PageShareStack extends Stack {
 
     const pagesApi = new PagesApi(this, 'PagesApi', {
       bucket: pagesStorage.bucket,
-      pagesBaseUrl: `https://${pagesDelivery.distribution.distributionDomainName}`,
+      pagesBaseUrl: `https://${pagesDelivery.internalDistribution.distributionDomainName}`,
+      shareBaseUrl: `https://${pagesDelivery.sharedDistribution.distributionDomainName}`,
+      keyValueStoreArn: pagesDelivery.keyValueStore.keyValueStoreArn,
       userPool: auth.userPool,
       webClient: auth.webClient,
       cliClient: auth.cliClient,
     });
 
     appDelivery.addApiBehavior(pagesApi.httpApi);
+
+    pagesStorage.restrictDistributionRead(
+      pagesDelivery.internalDistribution.distributionArn,
+      INTERNAL_PAGES_PREFIX,
+    );
+    pagesStorage.restrictDistributionRead(
+      pagesDelivery.sharedDistribution.distributionArn,
+      SHARED_PAGES_PREFIX,
+    );
 
     // Web UIはpresigned URLでS3へ直接PUTするため、app originからのCORSを許可する。
     // localhost:3000 は開発サーバー用
@@ -86,8 +103,8 @@ export class PageShareStack extends Stack {
     ]);
 
     new CfnOutput(this, 'AppUrl', {
-      value: `https://${appDelivery.distribution.distributionDomainName}`,
-      description: '管理UIのURL',
+      value: `https://${appDelivery.distribution.distributionDomainName}/`,
+      description: '管理アプリURL',
     });
 
     new CfnOutput(this, 'AppBucketName', {

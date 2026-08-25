@@ -6,7 +6,7 @@ export class PortsInUseError extends Error {
 
   constructor(ports: readonly number[]) {
     super(
-      `コールバック用ポート ${ports.join(', ')} がすべて使用中です。\n` +
+      `コールバック用ポート ${ports.join(', ')} が使用中です。\n` +
         '該当ポートを使っているプロセスを停止してから、もう一度 login を実行してください。',
     );
     this.name = 'PortsInUseError';
@@ -50,7 +50,7 @@ export interface CallbackServer {
 }
 
 /**
- * Cognitoに登録済みのポートのうち、空いているものでリッスンする。
+ * Cognitoに登録済みのコールバックポートでリッスンする。使用中なら失敗する。
  */
 export async function createCallbackServer(
   ports: readonly number[] = CLI_CALLBACK_PORTS,

@@ -10,8 +10,8 @@ pnpm workspaces によるモノレポ。
 | ----------------- | ---------------------------------------- |
 | `packages/infra`  | AWS CDK。全 AWS リソースの定義           |
 | `packages/api`    | Lambda のハンドラ                        |
-| `packages/web`    | 管理アプリのフロントエンド（技術選定中） |
-| `packages/cli`    | アップロード用のコマンド（技術選定中）   |
+| `packages/web`    | 管理アプリ（TanStack Start、SPA）        |
+| `packages/cli`    | アップロード用 CLI（`npx share-html`）     |
 | `packages/shared` | 上記から共通で参照する型・定数           |
 
 CDK をリポジトリのルートに置かずひとつのパッケージとして扱っているのは、フロントエンドや CLI と

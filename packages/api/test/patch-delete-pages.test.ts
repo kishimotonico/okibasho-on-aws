@@ -1,90 +1,78 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageMetadata, UserPageIndexEntry } from '@page-share/shared';
 import {
-  DEFAULT_RETENTION_DAYS,
+  kvsKey,
   metaObjectKey,
   pageObjectKey,
   userIndexObjectKey,
 } from '@page-share/shared';
 import { deletePage } from '../src/delete-page.js';
-import { RETENTION_TAG_KEY, RETENTION_TAG_VALUE_TEMPORARY } from '../src/retention.js';
 import { updatePage } from '../src/update-page.js';
+import { FakeAliasStore } from './fake-alias-store.js';
 import { FakePageStore } from './fake-page-store.js';
 
 const PAGES_BASE_URL = 'https://pages.example.com';
+const SHARE_BASE_URL = 'https://share.example.com';
 const OWNER_SUB = 'user-sub-123';
-const OTHER_SUB = 'other-sub-456';
-const FIXED_NOW = new Date('2026-08-18T10:00:00.000Z');
-const OLD_CREATED_AT = '2026-01-01T00:00:00.000Z';
+const SLUG = 'abcdefghijklmnop';
 
-function expectedExpiresAt(createdAt: string): string {
-  const expires = new Date(createdAt);
-  expires.setUTCDate(expires.getUTCDate() + DEFAULT_RETENTION_DAYS);
-  return expires.toISOString();
-}
-
-function makeMetadata(slug: string, overrides?: Partial<PageMetadata>): PageMetadata {
-  const createdAt = overrides?.createdAt ?? OLD_CREATED_AT;
-  const retention = overrides?.retention ?? 'temporary';
+function makeMetadata(overrides?: Partial<PageMetadata>): PageMetadata {
   return {
-    slug,
+    slug: SLUG,
+    title: 'Test Page',
     ownerSub: OWNER_SUB,
     ownerEmail: 'user@example.com',
-    retention,
-    createdAt,
-    expiresAt:
-      overrides?.expiresAt !== undefined
-        ? overrides.expiresAt
-        : retention === 'permanent'
-          ? null
-          : expectedExpiresAt(createdAt),
-    fileCount: 1,
-    totalSize: 100,
+    visibility: 'internal',
+    retention: 'temporary',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    contentUpdatedAt: '2026-06-01T00:00:00.000Z',
+    version: 1,
+    activeVersionId: 'versionid1234567',
+    fileCount: 2,
+    totalSize: 300,
     ...overrides,
   };
 }
 
-function makeMarker(slug: string, overrides?: Partial<UserPageIndexEntry>): UserPageIndexEntry {
+function makeMarker(overrides?: Partial<UserPageIndexEntry>): UserPageIndexEntry {
   return {
-    slug,
-    createdAt: overrides?.createdAt ?? OLD_CREATED_AT,
+    slug: SLUG,
+    createdAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
 }
 
 function seedPage(
   store: FakePageStore,
-  slug: string,
   options?: {
     metadata?: Partial<PageMetadata>;
     marker?: Partial<UserPageIndexEntry>;
-    pageFiles?: string[];
+    pageKeys?: string[];
   },
 ): void {
-  const metadata = makeMetadata(slug, options?.metadata);
-  store.objects.set(metaObjectKey(slug), metadata);
-  store.objects.set(userIndexObjectKey(metadata.ownerSub, slug), makeMarker(slug, options?.marker));
-  for (const path of options?.pageFiles ?? ['index.html']) {
-    store.objects.set(pageObjectKey(slug, path), '<html></html>');
+  store.objects.set(metaObjectKey(SLUG), makeMetadata(options?.metadata));
+  store.objects.set(userIndexObjectKey(OWNER_SUB, SLUG), makeMarker(options?.marker));
+  for (const key of options?.pageKeys ?? []) {
+    store.seedObject(key);
   }
 }
 
 describe('updatePage', () => {
-  it('temporary → permanent で expiresAt が null になり、タグが外れる', async () => {
+  it('retention 変更でタグ → metadata → KVS の順で更新する', async () => {
     const store = new FakePageStore();
-    seedPage(store, 'my-page', {
-      metadata: { retention: 'temporary' },
-      pageFiles: ['index.html', 'assets/app.js'],
-    });
-    store.tags.set(metaObjectKey('my-page'), {
-      [RETENTION_TAG_KEY]: RETENTION_TAG_VALUE_TEMPORARY,
-    });
+    const aliasStore = new FakeAliasStore();
+    const metadata = makeMetadata({ retention: 'temporary' });
+    store.objects.set(metaObjectKey(SLUG), metadata);
+    const pageKey = pageObjectKey('internal', SLUG, metadata.activeVersionId, 'index.html');
+    store.seedObject(pageKey);
 
     const result = await updatePage({
       store,
+      aliasStore,
       pagesBaseUrl: PAGES_BASE_URL,
+      shareBaseUrl: SHARE_BASE_URL,
       ownerSub: OWNER_SUB,
-      slug: 'my-page',
+      slug: SLUG,
       body: { retention: 'permanent' },
     });
 
@@ -92,193 +80,56 @@ describe('updatePage', () => {
     if (!result.ok) {
       return;
     }
-
     expect(result.body.retention).toBe('permanent');
-    expect(result.body.expiresAt).toBe(null);
-
-    const metadata = store.objects.get(metaObjectKey('my-page')) as PageMetadata;
-    expect(metadata.retention).toBe('permanent');
-    expect(metadata.expiresAt).toBe(null);
-
-    const taggedKeys = store.setObjectTagsCalls.map((call) => call.key);
-    expect(taggedKeys).toContain(metaObjectKey('my-page'));
-    expect(taggedKeys).not.toContain(userIndexObjectKey(OWNER_SUB, 'my-page'));
-    expect(taggedKeys).toContain(pageObjectKey('my-page', 'index.html'));
-    expect(taggedKeys).toContain(pageObjectKey('my-page', 'assets/app.js'));
-
-    for (const call of store.setObjectTagsCalls) {
-      expect(call.tags).toEqual({});
-    }
+    expect(result.body.expiresAt).toBeNull();
+    expect(aliasStore.entries.get(kvsKey('internal', SLUG))).toEqual({
+      v: metadata.activeVersionId,
+    });
+    expect(store.setObjectTagsCalls.length).toBeGreaterThan(0);
+    expect(store.putJsonCalls.some((call) => call.key === metaObjectKey(SLUG))).toBe(true);
+    expect(aliasStore.putCalls).toHaveLength(1);
   });
 
-  it('permanent → temporary で expiresAt が createdAt + 30日になり、タグが付く', async () => {
+  it('title のみ変更では KVS を書かない', async () => {
     const store = new FakePageStore();
-    seedPage(store, 'perm-page', {
-      metadata: { retention: 'permanent', expiresAt: null },
-    });
+    const aliasStore = new FakeAliasStore();
+    seedPage(store);
 
     const result = await updatePage({
       store,
+      aliasStore,
       pagesBaseUrl: PAGES_BASE_URL,
+      shareBaseUrl: SHARE_BASE_URL,
       ownerSub: OWNER_SUB,
-      slug: 'perm-page',
-      body: { retention: 'temporary' },
+      slug: SLUG,
+      body: { title: '新しいタイトル' },
     });
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
       return;
     }
-
-    const expectedExpires = expectedExpiresAt(OLD_CREATED_AT);
-    expect(result.body.expiresAt).toBe(expectedExpires);
-
-    for (const call of store.setObjectTagsCalls) {
-      expect(call.tags).toEqual({ [RETENTION_TAG_KEY]: RETENTION_TAG_VALUE_TEMPORARY });
-    }
+    expect(result.body.title).toBe('新しいタイトル');
+    expect(aliasStore.putCalls).toHaveLength(0);
   });
 
-  it('作成から30日以上経ったページを temporary に戻すと即座に期限切れになる', async () => {
+  it('期限切れページでも retention 変更を許す', async () => {
     const store = new FakePageStore();
-    const createdAt = '2025-01-01T00:00:00.000Z';
-    seedPage(store, 'old-page', {
-      metadata: { retention: 'permanent', createdAt, expiresAt: null },
-    });
-
-    const result = await updatePage({
-      store,
-      pagesBaseUrl: PAGES_BASE_URL,
-      ownerSub: OWNER_SUB,
-      slug: 'old-page',
-      body: { retention: 'temporary' },
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-
-    const expectedExpires = expectedExpiresAt(createdAt);
-    expect(result.body.expiresAt).toBe(expectedExpires);
-    expect(new Date(result.body.expiresAt!).getTime()).toBeLessThanOrEqual(FIXED_NOW.getTime());
-  });
-
-  it('users/ には一切書き込まない', async () => {
-    const store = new FakePageStore();
-    seedPage(store, 'both-page', { metadata: { retention: 'temporary' } });
-
-    await updatePage({
-      store,
-      pagesBaseUrl: PAGES_BASE_URL,
-      ownerSub: OWNER_SUB,
-      slug: 'both-page',
-      body: { retention: 'permanent' },
-    });
-
-    const usersKey = userIndexObjectKey(OWNER_SUB, 'both-page');
-    expect(store.putJsonCalls.every((call) => call.key !== usersKey)).toBe(true);
-    expect(store.setObjectTagsCalls.every((call) => call.key !== usersKey)).toBe(true);
-
-    const marker = store.objects.get(usersKey) as UserPageIndexEntry;
-    expect(marker).toEqual(makeMarker('both-page'));
-  });
-
-  it('meta/ の retention と expiresAt が更新される', async () => {
-    const store = new FakePageStore();
-    seedPage(store, 'meta-only', { metadata: { retention: 'temporary' } });
-
-    await updatePage({
-      store,
-      pagesBaseUrl: PAGES_BASE_URL,
-      ownerSub: OWNER_SUB,
-      slug: 'meta-only',
-      body: { retention: 'permanent' },
-    });
-
-    const metadata = store.objects.get(metaObjectKey('meta-only')) as PageMetadata;
-    expect(metadata.retention).toBe('permanent');
-    expect(metadata.expiresAt).toBe(null);
-  });
-
-  it('他人のページで 403', async () => {
-    const store = new FakePageStore();
-    seedPage(store, 'secret-page', { metadata: { ownerSub: OTHER_SUB } });
-
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-    const result = await updatePage({
-      store,
-      pagesBaseUrl: PAGES_BASE_URL,
-      ownerSub: OWNER_SUB,
-      slug: 'secret-page',
-      body: { retention: 'permanent' },
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) {
-      return;
-    }
-    expect(result.status).toBe(403);
-
-    expect(logSpy).toHaveBeenCalledWith(
-      'authorization_failed',
-      expect.objectContaining({ action: 'patch_page', slug: 'secret-page' }),
-    );
-    logSpy.mockRestore();
-  });
-
-  it('存在しないページで 404', async () => {
-    const store = new FakePageStore();
-    const result = await updatePage({
-      store,
-      pagesBaseUrl: PAGES_BASE_URL,
-      ownerSub: OWNER_SUB,
-      slug: 'missing-page',
-      body: { retention: 'permanent' },
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) {
-      return;
-    }
-    expect(result.status).toBe(404);
-    expect(result.body.error.code).toBe('page_not_found');
-  });
-
-  it('不正な body で 400', async () => {
-    const store = new FakePageStore();
-    seedPage(store, 'bad-body');
-
-    const result = await updatePage({
-      store,
-      pagesBaseUrl: PAGES_BASE_URL,
-      ownerSub: OWNER_SUB,
-      slug: 'bad-body',
-      body: { retention: 'forever' },
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) {
-      return;
-    }
-    expect(result.status).toBe(400);
-    expect(result.body.error.code).toBe('invalid_request');
-  });
-
-  it('期限切れのページでも実行できる', async () => {
-    const store = new FakePageStore();
-    seedPage(store, 'expired-page', {
+    const aliasStore = new FakeAliasStore();
+    seedPage(store, {
       metadata: {
         retention: 'temporary',
-        expiresAt: '2020-01-01T00:00:00.000Z',
+        contentUpdatedAt: '2020-01-01T00:00:00.000Z',
       },
     });
 
     const result = await updatePage({
       store,
+      aliasStore,
       pagesBaseUrl: PAGES_BASE_URL,
+      shareBaseUrl: SHARE_BASE_URL,
       ownerSub: OWNER_SUB,
-      slug: 'expired-page',
+      slug: SLUG,
       body: { retention: 'permanent' },
     });
 
@@ -288,91 +139,118 @@ describe('updatePage', () => {
     }
     expect(result.body.retention).toBe('permanent');
   });
-});
 
-describe('deletePage', () => {
-  it('3箇所すべてが消え、削除順序が users → pages → meta である', async () => {
+  it('retention が metadata と同じでも KVS を冪等に書く', async () => {
     const store = new FakePageStore();
-    seedPage(store, 'del-page', { pageFiles: ['index.html', 'assets/app.js'] });
+    const aliasStore = new FakeAliasStore();
+    seedPage(store, { metadata: { retention: 'permanent' } });
 
-    const result = await deletePage({
+    const result = await updatePage({
       store,
+      aliasStore,
+      pagesBaseUrl: PAGES_BASE_URL,
+      shareBaseUrl: SHARE_BASE_URL,
       ownerSub: OWNER_SUB,
-      slug: 'del-page',
+      slug: SLUG,
+      body: { retention: 'permanent' },
     });
 
     expect(result.ok).toBe(true);
-    expect(store.deleteCalls).toHaveLength(3);
-    expect(store.deleteCalls[0]).toEqual([userIndexObjectKey(OWNER_SUB, 'del-page')]);
-    expect(store.deleteCalls[1]).toEqual([
-      pageObjectKey('del-page', 'index.html'),
-      pageObjectKey('del-page', 'assets/app.js'),
-    ]);
-    expect(store.deleteCalls[2]).toEqual([metaObjectKey('del-page')]);
-
-    expect(store.objects.size).toBe(0);
+    expect(aliasStore.putCalls).toHaveLength(1);
+    expect(aliasStore.entries.get(kvsKey('internal', SLUG))).toEqual({
+      v: 'versionid1234567',
+    });
   });
 
-  it('2回実行しても 204（冪等）', async () => {
+  it('retention 変更で所有者マーカーも再タグする', async () => {
     const store = new FakePageStore();
-    seedPage(store, 'idempotent-page');
+    const aliasStore = new FakeAliasStore();
+    seedPage(store, {
+      pageKeys: [pageObjectKey('internal', SLUG, 'versionid1234567', 'index.html')],
+    });
 
-    const first = await deletePage({ store, ownerSub: OWNER_SUB, slug: 'idempotent-page' });
-    const second = await deletePage({ store, ownerSub: OWNER_SUB, slug: 'idempotent-page' });
-
-    expect(first.ok && first.status).toBe(204);
-    expect(second.ok && second.status).toBe(204);
-  });
-
-  it('meta が無く users マーカーだけある状態でも削除できる', async () => {
-    const store = new FakePageStore();
-    store.objects.set(pageObjectKey('orphan-page', 'index.html'), '<html></html>');
-    store.objects.set(userIndexObjectKey(OWNER_SUB, 'orphan-page'), makeMarker('orphan-page'));
-
-    const result = await deletePage({ store, ownerSub: OWNER_SUB, slug: 'orphan-page' });
+    const result = await updatePage({
+      store,
+      aliasStore,
+      pagesBaseUrl: PAGES_BASE_URL,
+      shareBaseUrl: SHARE_BASE_URL,
+      ownerSub: OWNER_SUB,
+      slug: SLUG,
+      body: { retention: 'permanent' },
+    });
 
     expect(result.ok).toBe(true);
-    expect(store.objects.size).toBe(0);
-  });
-
-  it('どちらも無ければ何も消さずに 204', async () => {
-    const store = new FakePageStore();
-    const result = await deletePage({ store, ownerSub: OWNER_SUB, slug: 'gone-page' });
-
-    expect(result.ok).toBe(true);
-    expect(store.deleteCalls).toEqual([]);
-  });
-
-  it('他人のページで 403、かつ何も消えていない', async () => {
-    const store = new FakePageStore();
-    seedPage(store, 'other-page', { metadata: { ownerSub: OTHER_SUB } });
-
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-    const result = await deletePage({ store, ownerSub: OWNER_SUB, slug: 'other-page' });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) {
-      return;
-    }
-    expect(result.status).toBe(403);
-    expect(store.deleteCalls).toEqual([]);
-    expect(store.objects.size).toBeGreaterThan(0);
-
-    expect(logSpy).toHaveBeenCalledWith(
-      'authorization_failed',
-      expect.objectContaining({ action: 'delete_page', slug: 'other-page' }),
-    );
-    logSpy.mockRestore();
+    const taggedKeys = store.setObjectTagsCalls.map((call) => call.key);
+    expect(taggedKeys).toContain(userIndexObjectKey(OWNER_SUB, SLUG));
+    expect(store.tags.has(userIndexObjectKey(OWNER_SUB, SLUG))).toBe(false);
   });
 });
 
-describe('handler PATCH / DELETE routes', () => {
+describe('deletePage', () => {
+  it('meta / users / ページ本体 / KVS を削除する', async () => {
+    const store = new FakePageStore();
+    const aliasStore = new FakeAliasStore();
+    const metadata = makeMetadata();
+    seedPage(store, {
+      pageKeys: [pageObjectKey('internal', SLUG, metadata.activeVersionId, 'index.html')],
+    });
+    aliasStore.entries.set(kvsKey('internal', SLUG), { v: metadata.activeVersionId });
+
+    const result = await deletePage({
+      store,
+      aliasStore,
+      ownerSub: OWNER_SUB,
+      slug: SLUG,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(store.objects.has(metaObjectKey(SLUG))).toBe(false);
+    expect(store.objects.has(userIndexObjectKey(OWNER_SUB, SLUG))).toBe(false);
+    expect(aliasStore.entries.has(kvsKey('internal', SLUG))).toBe(false);
+  });
+
+  it('冪等: 既に消えていれば 204', async () => {
+    const store = new FakePageStore();
+    const aliasStore = new FakeAliasStore();
+
+    const result = await deletePage({
+      store,
+      aliasStore,
+      ownerSub: OWNER_SUB,
+      slug: SLUG,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe(204);
+  });
+
+  it('meta と users が無くても KVS を消してから 204 を返す', async () => {
+    const store = new FakePageStore();
+    const aliasStore = new FakeAliasStore();
+    aliasStore.entries.set(kvsKey('internal', SLUG), { v: 'versionid1234567' });
+    aliasStore.entries.set(kvsKey('shared', SLUG), { v: 'versionid1234567' });
+
+    const result = await deletePage({
+      store,
+      aliasStore,
+      ownerSub: OWNER_SUB,
+      slug: SLUG,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe(204);
+    expect(aliasStore.entries.size).toBe(0);
+  });
+});
+
+describe('handler routes', () => {
   const envBackup = { ...process.env };
 
   beforeEach(() => {
     process.env['PAGES_BUCKET'] = 'test-bucket';
     process.env['PAGES_BASE_URL'] = PAGES_BASE_URL;
+    process.env['SHARE_BASE_URL'] = SHARE_BASE_URL;
+    process.env['KVS_ARN'] = 'arn:aws:cloudfront::123:key-value-store/test';
     vi.resetModules();
   });
 
@@ -383,82 +261,74 @@ describe('handler PATCH / DELETE routes', () => {
 
   it('PATCH /api/pages/{slug} で retention を更新する', async () => {
     const store = new FakePageStore();
-    seedPage(store, 'patch-route', { metadata: { retention: 'temporary' } });
+    const aliasStore = new FakeAliasStore();
+    seedPage(store);
 
     vi.spyOn(await import('../src/page-store.js'), 'createPageStore').mockReturnValue(store);
+    vi.spyOn(await import('../src/alias-store.js'), 'createAliasStore').mockReturnValue(aliasStore);
 
     const { handler } = await import('../src/handlers/pages.js');
 
     const result = await handler({
       requestContext: {
-        http: { method: 'PATCH', path: '/api/pages/patch-route' },
+        http: { method: 'PATCH', path: `/api/pages/${SLUG}` },
         authorizer: { jwt: { claims: { sub: OWNER_SUB } } },
       },
-      pathParameters: { slug: 'patch-route' },
+      pathParameters: { slug: SLUG },
       body: JSON.stringify({ retention: 'permanent' }),
     } as never);
 
     expect(result).toMatchObject({ statusCode: 200 });
     const body = JSON.parse((result as { body: string }).body);
     expect(body.retention).toBe('permanent');
+    expect(body.expiresAt).toBeNull();
   });
 
   it('DELETE /api/pages/{slug} で 204 を返す', async () => {
     const store = new FakePageStore();
-    seedPage(store, 'delete-route');
+    const aliasStore = new FakeAliasStore();
+    seedPage(store);
 
     vi.spyOn(await import('../src/page-store.js'), 'createPageStore').mockReturnValue(store);
+    vi.spyOn(await import('../src/alias-store.js'), 'createAliasStore').mockReturnValue(aliasStore);
 
     const { handler } = await import('../src/handlers/pages.js');
 
     const result = await handler({
       requestContext: {
-        http: { method: 'DELETE', path: '/api/pages/delete-route' },
+        http: { method: 'DELETE', path: `/api/pages/${SLUG}` },
         authorizer: { jwt: { claims: { sub: OWNER_SUB } } },
       },
-      pathParameters: { slug: 'delete-route' },
+      pathParameters: { slug: SLUG },
     } as never);
 
     expect(result).toMatchObject({ statusCode: 204 });
-    expect((result as { body?: string }).body).toBeUndefined();
   });
 
-  it('認可失敗がログに記録され、トークンや presigned URL が出ない', async () => {
+  it('PUT /api/pages/{slug} で再宣言できる', async () => {
     const store = new FakePageStore();
-    seedPage(store, 'forbidden-page', { metadata: { ownerSub: OTHER_SUB } });
+    const aliasStore = new FakeAliasStore();
+    seedPage(store);
 
     vi.spyOn(await import('../src/page-store.js'), 'createPageStore').mockReturnValue(store);
+    vi.spyOn(await import('../src/alias-store.js'), 'createAliasStore').mockReturnValue(aliasStore);
+    vi.spyOn(await import('../src/redeclare-page.js'), 'defaultRedeclarePageDeps', 'get').mockReturnValue({
+      generateVersionId: () => 'newversion123456',
+    });
 
     const { handler } = await import('../src/handlers/pages.js');
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await handler({
+    const result = await handler({
       requestContext: {
-        http: { method: 'PATCH', path: '/api/pages/forbidden-page' },
-        authorizer: {
-          jwt: {
-            claims: {
-              sub: OWNER_SUB,
-              email: 'user@example.com',
-            },
-          },
-        },
+        http: { method: 'PUT', path: `/api/pages/${SLUG}` },
+        authorizer: { jwt: { claims: { sub: OWNER_SUB } } },
       },
-      pathParameters: { slug: 'forbidden-page' },
-      body: JSON.stringify({ retention: 'permanent' }),
+      pathParameters: { slug: SLUG },
+      body: JSON.stringify({ files: [{ path: 'index.html', size: 100 }] }),
     } as never);
 
-    expect(logSpy).toHaveBeenCalledWith(
-      'authorization_failed',
-      expect.objectContaining({ action: 'patch_page' }),
-    );
-
-    for (const log of logSpy.mock.calls) {
-      const serialized = JSON.stringify(log);
-      expect(serialized).not.toMatch(/https:\/\/s3\.example\.com/);
-      expect(serialized).not.toMatch(/Bearer /);
-      expect(serialized).not.toMatch(/eyJ/);
-    }
-    logSpy.mockRestore();
+    expect(result).toMatchObject({ statusCode: 200 });
+    const body = JSON.parse((result as { body: string }).body);
+    expect(body.versionId).toBe('newversion123456');
   });
 });

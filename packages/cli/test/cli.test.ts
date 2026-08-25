@@ -8,7 +8,9 @@ describe('runCli', () => {
     const result = await runCli(['--help']);
     expect(result.exitCode).toBe(0);
     expect(log.mock.calls[0]?.[0]).toContain('share-html login');
-    expect(log.mock.calls[0]?.[0]).toContain('SHARE_HTML_API_URL');
+    expect(log.mock.calls[0]?.[0]).toContain('--title');
+    expect(log.mock.calls[0]?.[0]).toContain('--shared');
+    expect(log.mock.calls[0]?.[0]).not.toContain('--name');
     log.mockRestore();
   });
 
@@ -53,7 +55,8 @@ describe('runCli', () => {
     const result = await runCli(['./index.html', '--dry-run']);
     expect(result.exitCode).toBe(0);
     expect(uploadSpy).toHaveBeenCalledWith('./index.html', {
-      name: undefined,
+      title: undefined,
+      shared: false,
       retention: undefined,
       dryRun: true,
     });

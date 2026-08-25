@@ -50,7 +50,10 @@ type DistributionResource = {
       CustomErrorResponses?: unknown;
       DefaultCacheBehavior?: {
         FunctionAssociations?: Array<{ EventType?: string }>;
+        ResponseHeadersPolicyId?: string;
+        OriginRequestPolicyId?: string;
       };
+      Origins?: Array<{ OriginPath?: string }>;
       CacheBehaviors?: Array<{
         PathPattern?: string;
         OriginRequestPolicyId?: string;
@@ -112,7 +115,7 @@ describe('PageShareStack', () => {
       });
     });
 
-    it('CloudFrontから読めるのは pages/ 配下だけに絞られている', () => {
+    it('CloudFrontから読めるのは internal-pages/ と shared-pages/ だけに絞られている', () => {
       const template = synth();
 
       const policies = Object.values(template.findResources('AWS::S3::BucketPolicy'));
@@ -120,17 +123,44 @@ describe('PageShareStack', () => {
         (p) => (p.Properties?.PolicyDocument?.Statement ?? []) as Array<Record<string, unknown>>,
       );
 
-      const denyGet = statements.find((st) => st.Sid === 'DenyCloudFrontGetOutsidePagesPrefix');
+      const denyGet = statements.find((st) => st.Sid === 'DenyCloudFrontGetOutsideDeliveryPrefixes');
       expect(denyGet?.Effect).toBe('Deny');
       expect(denyGet?.Action).toBe('s3:GetObject');
-      // NotResource で pages/ 以外を落とす。Resource側で許可を絞るとCDKの自動生成policyと噛み合わない
       expect(denyGet?.NotResource).toBeDefined();
       expect(denyGet?.Resource).toBeUndefined();
 
-      const denyList = statements.find((st) => st.Sid === 'DenyCloudFrontListOutsidePagesPrefix');
+      const denyList = statements.find(
+        (st) => st.Sid === 'DenyCloudFrontListOutsideDeliveryPrefixes',
+      );
       expect(denyList?.Effect).toBe('Deny');
-      // s3:prefix が無いリクエスト(存在しないkeyの404判定)まで巻き込まないための Null 条件
       expect(denyList?.Condition).toMatchObject({ Null: { 's3:prefix': 'false' } });
+    });
+
+    it('Distribution ごとに読める prefix がさらに制限される', () => {
+      const template = synth();
+
+      const policies = Object.values(template.findResources('AWS::S3::BucketPolicy'));
+      const statements = policies.flatMap(
+        (p) => (p.Properties?.PolicyDocument?.Statement ?? []) as Array<Record<string, unknown>>,
+      );
+
+      const internalGetDeny = statements.find(
+        (st) => st.Sid === 'DenyDistributionGetOutsideinternalpages',
+      );
+      const internalCondition = internalGetDeny?.['Condition'] as
+        | { StringEquals?: Record<string, unknown> }
+        | undefined;
+      expect(internalCondition?.StringEquals).toBeDefined();
+      expect(internalCondition?.StringEquals?.['AWS:SourceArn']).toBeDefined();
+
+      const sharedGetDeny = statements.find(
+        (st) => st.Sid === 'DenyDistributionGetOutsidesharedpages',
+      );
+      const sharedCondition = sharedGetDeny?.['Condition'] as
+        | { StringEquals?: Record<string, unknown> }
+        | undefined;
+      expect(sharedCondition?.StringEquals).toBeDefined();
+      expect(sharedCondition?.StringEquals?.['AWS:SourceArn']).toBeDefined();
     });
 
     it('temporaryタグの付いたオブジェクトだけをLifecycleで物理削除する', () => {
@@ -139,7 +169,6 @@ describe('PageShareStack', () => {
       const withLifecycle = Object.values(template.findResources('AWS::S3::Bucket')).filter(
         (bucket) => bucket.Properties?.LifecycleConfiguration !== undefined,
       );
-      // Lifecycleを持つのはユーザー成果物が入るpages bucketだけ
       expect(withLifecycle).toHaveLength(1);
 
       const rules = withLifecycle[0]?.Properties?.LifecycleConfiguration?.Rules as
@@ -153,9 +182,7 @@ describe('PageShareStack', () => {
       expect(rules).toHaveLength(1);
       expect(rules?.[0]?.Status).toBe('Enabled');
       expect(rules?.[0]?.TagFilters).toEqual([{ Key: 'retention', Value: 'temporary' }]);
-      // prefixで絞ると permanent に変えたページまで巻き込むので、絞りはタグだけ
       expect(rules?.[0]?.Prefix).toBeUndefined();
-      // 論理期限(30日)より後であること。猶予を潰すと期限切れページを救えなくなる
       expect(rules?.[0]?.ExpirationInDays).toBeGreaterThan(DEFAULT_RETENTION_DAYS);
     });
 
@@ -165,11 +192,11 @@ describe('PageShareStack', () => {
       const withCors = Object.values(template.findResources('AWS::S3::Bucket')).filter(
         (bucket) => bucket.Properties?.CorsConfiguration !== undefined,
       );
-      // CORSを許すのはアップロード先のpages bucketだけ。UI用bucketには要らない
       expect(withCors).toHaveLength(1);
 
       const rules = withCors[0]?.Properties?.CorsConfiguration?.CorsRules as
-        Array<{ AllowedMethods?: string[]; AllowedOrigins?: unknown[] }> | undefined;
+        | Array<{ AllowedMethods?: string[]; AllowedOrigins?: unknown[] }>
+        | undefined;
       expect(rules).toHaveLength(1);
       expect(rules?.[0]?.AllowedMethods).toEqual(['PUT']);
       expect(rules?.[0]?.AllowedOrigins).toContain('http://localhost:3000');
@@ -177,14 +204,52 @@ describe('PageShareStack', () => {
   });
 
   describe('PagesDelivery', () => {
-    it('CloudFront Distribution + OAC、ListBucket許可、viewer request関数が付く', () => {
+    it('Internal / Shared の2 Distribution + KeyValueStore + OAC + viewer request 関数', () => {
       const template = synth();
 
-      template.resourceCountIs('AWS::CloudFront::Distribution', 2);
-      template.resourceCountIs('AWS::CloudFront::OriginAccessControl', 2);
+      template.resourceCountIs('AWS::CloudFront::KeyValueStore', 1);
+      template.resourceCountIs('AWS::CloudFront::Distribution', 3);
+      template.resourceCountIs('AWS::CloudFront::OriginAccessControl', 3);
 
-      const pagesDistribution = findDistributionByComment(template, 'untrusted pages配信');
-      expect(pagesDistribution).toBeDefined();
+      const internalDistribution = findDistributionByComment(template, 'internal pages配信');
+      const sharedDistribution = findDistributionByComment(template, 'shared pages配信');
+      expect(internalDistribution).toBeDefined();
+      expect(sharedDistribution).toBeDefined();
+
+      expect(internalDistribution?.Properties?.DistributionConfig?.Origins?.[0]?.OriginPath).toBe(
+        '/internal-pages',
+      );
+      expect(sharedDistribution?.Properties?.DistributionConfig?.Origins?.[0]?.OriginPath).toBe(
+        '/shared-pages',
+      );
+
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: Match.objectLike({
+          Comment: 'internal pages配信',
+          DefaultCacheBehavior: Match.objectLike({
+            FunctionAssociations: Match.arrayWith([
+              Match.objectLike({
+                EventType: 'viewer-request',
+              }),
+            ]),
+            ResponseHeadersPolicyId: Match.anyValue(),
+          }),
+        }),
+      });
+
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: Match.objectLike({
+          Comment: 'shared pages配信',
+          DefaultCacheBehavior: Match.objectLike({
+            FunctionAssociations: Match.arrayWith([
+              Match.objectLike({
+                EventType: 'viewer-request',
+              }),
+            ]),
+            ResponseHeadersPolicyId: Match.anyValue(),
+          }),
+        }),
+      });
 
       template.hasResourceProperties('AWS::S3::BucketPolicy', {
         PolicyDocument: {
@@ -196,19 +261,42 @@ describe('PageShareStack', () => {
           ]),
         },
       });
+    });
 
-      template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: Match.objectLike({
-          Comment: 'untrusted pages配信',
-          DefaultCacheBehavior: Match.objectLike({
-            FunctionAssociations: Match.arrayWith([
-              Match.objectLike({
-                EventType: 'viewer-request',
-              }),
-            ]),
-          }),
+    it('Response Headers Policy が Internal / Shared で分かれている', () => {
+      const template = synth();
+
+      const policies = Object.values(template.findResources('AWS::CloudFront::ResponseHeadersPolicy'));
+      expect(policies.length).toBeGreaterThanOrEqual(2);
+
+      const internalPolicy = policies.find((policy) =>
+        policy.Properties?.ResponseHeadersPolicyConfig?.SecurityHeadersConfig?.ContentTypeOptions,
+      );
+      expect(internalPolicy?.Properties?.ResponseHeadersPolicyConfig?.CustomHeadersConfig).toEqual(
+        expect.objectContaining({
+          Items: expect.arrayContaining([
+            expect.objectContaining({
+              Header: 'Cross-Origin-Resource-Policy',
+              Value: 'same-origin',
+            }),
+          ]),
         }),
-      });
+      );
+
+      const sharedPolicy = policies.find(
+        (policy) =>
+          policy.Properties?.ResponseHeadersPolicyConfig?.SecurityHeadersConfig?.ReferrerPolicy,
+      );
+      expect(sharedPolicy?.Properties?.ResponseHeadersPolicyConfig?.CustomHeadersConfig).toEqual(
+        expect.objectContaining({
+          Items: expect.arrayContaining([
+            expect.objectContaining({
+              Header: 'X-Robots-Tag',
+              Value: 'noindex, nofollow',
+            }),
+          ]),
+        }),
+      );
     });
   });
 
@@ -251,7 +339,7 @@ describe('PageShareStack', () => {
   });
 
   describe('Auth', () => {
-    it('User Poolは管理者作成のみ、App Clientは2つ(secretなし)、CLIコールバックは3ポート、パスワード最低12文字', () => {
+    it('User Poolは管理者作成のみ、App Clientは2つ(secretなし)、CLIコールバックは1ポート、パスワード最低12文字', () => {
       const template = synth();
 
       template.resourceCountIs('AWS::Cognito::UserPool', 1);
@@ -277,13 +365,7 @@ describe('PageShareStack', () => {
       const cliClient = Object.values(template.findResources('AWS::Cognito::UserPoolClient')).find(
         (client) => client.Properties?.CallbackURLs?.includes('http://localhost:8976/callback'),
       );
-      expect(cliClient?.Properties?.CallbackURLs).toEqual(
-        expect.arrayContaining([
-          'http://localhost:8976/callback',
-          'http://localhost:8977/callback',
-          'http://localhost:8978/callback',
-        ]),
-      );
+      expect(cliClient?.Properties?.CallbackURLs).toEqual(['http://localhost:8976/callback']);
 
       const webClient = Object.values(template.findResources('AWS::Cognito::UserPoolClient')).find(
         (client) =>
@@ -309,7 +391,7 @@ describe('PageShareStack', () => {
   });
 
   describe('PagesApi', () => {
-    it('HTTP API + JWT Authorizer + POST /api/pages + Lambda環境変数とS3 Put権限', () => {
+    it('HTTP API + JWT Authorizer + pages ルート + Lambda環境変数とS3/KVS権限', () => {
       const template = synth();
 
       template.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
@@ -331,36 +413,29 @@ describe('PageShareStack', () => {
       const clientLogicalIds = Object.keys(template.findResources('AWS::Cognito::UserPoolClient'));
       expect(audience?.map((item) => item.Ref)).toEqual(expect.arrayContaining(clientLogicalIds));
 
-      template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
-        RouteKey: 'POST /api/pages',
-        AuthorizationType: 'JWT',
-      });
-
-      template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
-        RouteKey: 'GET /api/pages',
-        AuthorizationType: 'JWT',
-      });
-
-      template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
-        RouteKey: 'GET /api/pages/{slug}',
-        AuthorizationType: 'JWT',
-      });
-
-      template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
-        RouteKey: 'PATCH /api/pages/{slug}',
-        AuthorizationType: 'JWT',
-      });
-
-      template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
-        RouteKey: 'DELETE /api/pages/{slug}',
-        AuthorizationType: 'JWT',
-      });
+      for (const routeKey of [
+        'POST /api/pages',
+        'GET /api/pages',
+        'GET /api/pages/{slug}',
+        'PUT /api/pages/{slug}',
+        'PATCH /api/pages/{slug}',
+        'DELETE /api/pages/{slug}',
+        'POST /api/pages/{slug}/complete',
+      ]) {
+        template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+          RouteKey: routeKey,
+          AuthorizationType: 'JWT',
+        });
+      }
 
       template.hasResourceProperties('AWS::Lambda::Function', {
+        Timeout: 29,
         Environment: {
           Variables: Match.objectLike({
             PAGES_BUCKET: Match.anyValue(),
             PAGES_BASE_URL: Match.anyValue(),
+            SHARE_BASE_URL: Match.anyValue(),
+            KVS_ARN: Match.anyValue(),
           }),
         },
       });
@@ -374,6 +449,32 @@ describe('PageShareStack', () => {
           ]),
         },
       });
+
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: Match.arrayWith([
+                'cloudfront-keyvaluestore:DescribeKeyValueStore',
+                'cloudfront-keyvaluestore:UpdateKeys',
+              ]),
+            }),
+          ]),
+        },
+      });
+
+      const policies = Object.values(template.findResources('AWS::IAM::Policy'));
+      const actions = policies.flatMap((policy) =>
+        ((policy.Properties?.PolicyDocument?.Statement ?? []) as Array<{ Action?: unknown }>).flatMap(
+          (statement) =>
+            Array.isArray(statement.Action)
+              ? statement.Action
+              : statement.Action
+                ? [statement.Action]
+                : [],
+        ),
+      );
+      expect(actions).not.toContain('cloudfront:CreateInvalidation');
     });
   });
 });

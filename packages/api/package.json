@@ -7,9 +7,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "reconcile": "tsx scripts/reconcile-user-index.ts"
+    "reconcile": "tsx scripts/reconcile.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudfront-keyvaluestore": "^3.1116.0",
     "@aws-sdk/client-s3": "^3.888.0",
     "@aws-sdk/s3-request-presigner": "^3.888.0",
     "@page-share/shared": "workspace:*"
@@ -17,8 +18,8 @@
   "devDependencies": {
     "@types/aws-lambda": "^8.10.162",
     "@types/node": "^24.13.3",
-    "typescript": "^5.9.3",
     "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   }
 }

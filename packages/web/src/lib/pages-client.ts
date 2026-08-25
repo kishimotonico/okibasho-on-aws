@@ -76,28 +76,48 @@ export async function updatePageRetention(
   slug: string,
   retention: Retention,
 ): Promise<PagesResult<GetPageResponse>> {
+  return patchPage(fetchFn, apiBaseUrl, idToken, slug, { retention });
+}
+
+export async function updatePageTitle(
+  fetchFn: FetchFn,
+  apiBaseUrl: string,
+  idToken: string,
+  slug: string,
+  title: string,
+): Promise<PagesResult<GetPageResponse>> {
+  return patchPage(fetchFn, apiBaseUrl, idToken, slug, { title });
+}
+
+async function patchPage(
+  fetchFn: FetchFn,
+  apiBaseUrl: string,
+  idToken: string,
+  slug: string,
+  patchBody: { retention?: Retention; title?: string },
+): Promise<PagesResult<GetPageResponse>> {
   const response = await fetchFn(`${normalizeApiUrl(apiBaseUrl)}/pages/${slug}`, {
     method: 'PATCH',
     headers: {
       ...authHeaders(idToken),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ retention }),
+    body: JSON.stringify(patchBody),
   });
 
-  const body = await parseResponseBody(response);
+  const responseBody = await parseResponseBody(response);
   if (!response.ok) {
     return {
       ok: false,
       status: response.status,
-      body: body as ApiErrorResponse,
+      body: responseBody as ApiErrorResponse,
     };
   }
 
   return {
     ok: true,
     status: response.status,
-    body: body as GetPageResponse,
+    body: responseBody as GetPageResponse,
   };
 }
 

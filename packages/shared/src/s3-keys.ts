@@ -1,5 +1,10 @@
-/** pages Distribution から配信されるオブジェクトの prefix */
-export const PAGES_PREFIX = 'pages/';
+import type { Visibility } from './metadata.js';
+
+/** 社内限定ページの配信対象 prefix */
+export const INTERNAL_PAGES_PREFIX = 'internal-pages/';
+
+/** URL共有ページの配信対象 prefix */
+export const SHARED_PAGES_PREFIX = 'shared-pages/';
 
 /** metadata 正本の prefix */
 export const META_PREFIX = 'meta/';
@@ -7,14 +12,28 @@ export const META_PREFIX = 'meta/';
 /** 所有関係マーカーの prefix */
 export const USERS_PREFIX = 'users/';
 
-/** 配信対象オブジェクトの S3 key: pages/<slug>/<path> */
-export function pageObjectKey(slug: string, path: string): string {
-  return `${PAGES_PREFIX}${slug}/${path}`;
+export function pagesPrefix(visibility: Visibility): string {
+  return visibility === 'internal' ? INTERNAL_PAGES_PREFIX : SHARED_PAGES_PREFIX;
 }
 
-/** ページ配下の prefix（ListObjectsV2 や削除で使う） */
-export function pagePrefix(slug: string): string {
-  return `${PAGES_PREFIX}${slug}/`;
+/** 配信対象オブジェクトの S3 key: <prefix>/<slug>/<versionId>/<path> */
+export function pageObjectKey(
+  visibility: Visibility,
+  slug: string,
+  versionId: string,
+  path: string,
+): string {
+  return `${pagesPrefix(visibility)}${slug}/${versionId}/${path}`;
+}
+
+/** 1バージョン配下の prefix */
+export function versionPrefix(visibility: Visibility, slug: string, versionId: string): string {
+  return `${pagesPrefix(visibility)}${slug}/${versionId}/`;
+}
+
+/** ページ配下（全バージョン）の prefix。ListObjectsV2 や削除で使う */
+export function pagePrefix(visibility: Visibility, slug: string): string {
+  return `${pagesPrefix(visibility)}${slug}/`;
 }
 
 /** metadata 正本: meta/<slug>.json */
@@ -27,7 +46,7 @@ export function userIndexObjectKey(ownerSub: string, slug: string): string {
   return `${USERS_PREFIX}${ownerSub}/${slug}.json`;
 }
 
-/** 閲覧URLのパス。pages Distributionが配信するURL空間は /p/ だけ */
+/** 閲覧URLのパス。origin が公開範囲を表すのでパスは slug だけ */
 export function pageViewPath(slug: string): string {
-  return `/p/${slug}/`;
+  return `/${slug}/`;
 }

@@ -1,10 +1,12 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { CreatePageResponse } from '@page-share/shared';
+import type { CompletePageResponse, CreatePageResponse } from '@page-share/shared';
 import { ConfigError } from '../src/config.js';
 import { runUpload } from '../src/commands/upload.js';
+import { collectFiles } from '../src/collect-files.js';
+import { resolveTitle } from '../src/resolve-title.js';
 import type { FetchFn } from '../src/upload-client.js';
 import { TokenRefreshError } from '../src/token-refresh.js';
 
@@ -14,22 +16,29 @@ const TEST_CONFIG = {
   clientId: 'cli-client',
 };
 
+const TEST_SLUG = 'abcd1234efgh5678';
+const TEST_VERSION_ID = 'ijkl9012mnop3456';
+
 function createFetchMock(handlers: {
   createPage?: (init: RequestInit) => CreatePageResponse | { status: number; body: unknown };
+  completePage?: (
+    slug: string,
+    init: RequestInit,
+  ) => CompletePageResponse | { status: number; body: unknown };
   puts?: Map<string, { status: number; statusText?: string; receivedHeaders?: Headers }>;
 }): {
   fetch: FetchFn;
-  createPageCalls: number;
+  calls: { createPage: number; completePage: number };
   putCalls: Array<{ url: string; headers: Headers }>;
 } {
   const putCalls: Array<{ url: string; headers: Headers }> = [];
-  let createPageCalls = 0;
+  const calls = { createPage: 0, completePage: 0 };
 
   const fetchFn = (async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
 
     if (url.endsWith('/api/pages')) {
-      createPageCalls++;
+      calls.createPage++;
       const result = handlers.createPage?.(init ?? {});
       if (!result) {
         throw new Error('createPage handler not configured');
@@ -46,6 +55,26 @@ function createFetchMock(handlers: {
       });
     }
 
+    const completeMatch = url.match(/\/api\/pages\/([^/]+)\/complete$/);
+    if (completeMatch) {
+      calls.completePage++;
+      const slug = completeMatch[1] ?? '';
+      const result = handlers.completePage?.(slug, init ?? {});
+      if (!result) {
+        throw new Error('completePage handler not configured');
+      }
+      if ('status' in result) {
+        return new Response(JSON.stringify(result.body), {
+          status: result.status,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const putHandler = handlers.puts?.get(url);
     if (putHandler) {
       putCalls.push({ url, headers: new Headers(init?.headers) });
@@ -58,7 +87,7 @@ function createFetchMock(handlers: {
     throw new Error(`Unexpected fetch: ${url}`);
   }) as FetchFn;
 
-  return { fetch: fetchFn, createPageCalls, putCalls };
+  return { fetch: fetchFn, calls, putCalls };
 }
 
 async function createHtmlDir(): Promise<string> {
@@ -67,58 +96,47 @@ async function createHtmlDir(): Promise<string> {
   return dir;
 }
 
+function defaultUploadDeps(fetch: FetchFn) {
+  return {
+    fetch,
+    resolveConfig: async () => TEST_CONFIG,
+    collectFiles,
+    ensureIdToken: async () => 'id-token',
+    readFile,
+    resolveTitle,
+  };
+}
+
 describe('runUpload', () => {
   it('index.html が無いディレクトリは API を呼ばず検証エラーになる', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'share-html-upload-'));
     await writeFile(join(dir, 'page.html'), '<html></html>');
 
-    const { fetch, createPageCalls } = createFetchMock({});
+    const { fetch, calls } = createFetchMock({});
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const result = await runUpload(
-      dir,
-      {},
-      {
-        fetch,
-        resolveConfig: async () => TEST_CONFIG,
-        collectFiles: (await import('../src/collect-files.js')).collectFiles,
-        ensureIdToken: async () => 'token',
-        readFile: (await import('node:fs/promises')).readFile,
-      },
-    );
+    const result = await runUpload(dir, {}, defaultUploadDeps(fetch));
 
     expect(result.exitCode).toBe(1);
-    expect(createPageCalls).toBe(0);
+    expect(calls.createPage).toBe(0);
     expect(error.mock.calls.some((c) => String(c[0]).includes('index.html'))).toBe(true);
     error.mockRestore();
   });
 
   it('--dry-run ではネットワークを呼ばない', async () => {
     const dir = await createHtmlDir();
-    const { fetch, createPageCalls } = createFetchMock({});
+    const { fetch, calls } = createFetchMock({});
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const result = await runUpload(
-      dir,
-      { dryRun: true },
-      {
-        fetch,
-        resolveConfig: async () => TEST_CONFIG,
-        collectFiles: (await import('../src/collect-files.js')).collectFiles,
-        ensureIdToken: async () => {
-          throw new Error('ensureIdToken should not be called');
-        },
-        readFile: (await import('node:fs/promises')).readFile,
-      },
-    );
+    const result = await runUpload(dir, { dryRun: true }, defaultUploadDeps(fetch));
 
     expect(result.exitCode).toBe(0);
-    expect(createPageCalls).toBe(0);
+    expect(calls.createPage).toBe(0);
     expect(log.mock.calls.some((c) => String(c[0]).includes('Dry run'))).toBe(true);
     log.mockRestore();
   });
 
-  it('presigned PUT に API が返した headers をそのまま使う', async () => {
+  it('presigned PUT と complete を実行する', async () => {
     const dir = await createHtmlDir();
     const putUrl = 'https://s3.example.test/upload/index.html';
     const signedHeaders = {
@@ -127,35 +145,67 @@ describe('runUpload', () => {
       'x-amz-meta-custom': 'signed-value',
     };
 
-    const { fetch, putCalls } = createFetchMock({
+    const { fetch, putCalls, calls } = createFetchMock({
       createPage: () => ({
-        slug: 'test-page',
-        viewUrl: 'https://pages.example.test/p/test-page/',
-        expiresAt: null,
+        slug: TEST_SLUG,
+        versionId: TEST_VERSION_ID,
+        viewUrl: `https://pages.example.test/${TEST_SLUG}/`,
         uploads: [{ path: 'index.html', url: putUrl, headers: signedHeaders }],
+      }),
+      completePage: () => ({
+        slug: TEST_SLUG,
+        version: 1,
+        activeVersionId: TEST_VERSION_ID,
+        viewUrl: `https://pages.example.test/${TEST_SLUG}/`,
+        expiresAt: null,
       }),
       puts: new Map([[putUrl, { status: 200 }]]),
     });
 
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const result = await runUpload(
-      dir,
-      {},
-      {
-        fetch,
-        resolveConfig: async () => TEST_CONFIG,
-        collectFiles: (await import('../src/collect-files.js')).collectFiles,
-        ensureIdToken: async () => 'id-token',
-        readFile: (await import('node:fs/promises')).readFile,
-      },
-    );
+    const result = await runUpload(dir, {}, defaultUploadDeps(fetch));
 
     expect(result.exitCode).toBe(0);
     expect(putCalls).toHaveLength(1);
     expect(putCalls[0]?.headers.get('content-type')).toBe('text/html');
     expect(putCalls[0]?.headers.get('content-length')).toBe('13');
     expect(putCalls[0]?.headers.get('x-amz-meta-custom')).toBe('signed-value');
+    expect(calls.completePage).toBe(1);
+    expect(log.mock.calls.some((c) => String(c[0]).includes(`https://pages.example.test/${TEST_SLUG}/`))).toBe(
+      true,
+    );
+    expect(log.mock.calls.some((c) => String(c[0]).includes('社内限定'))).toBe(true);
+    log.mockRestore();
+  });
+
+  it('--shared では shared 向けの表示を出す', async () => {
+    const dir = await createHtmlDir();
+    const putUrl = 'https://s3.example.test/upload/index.html';
+
+    const { fetch } = createFetchMock({
+      createPage: () => ({
+        slug: TEST_SLUG,
+        versionId: TEST_VERSION_ID,
+        viewUrl: `https://share.example.test/${TEST_SLUG}/`,
+        uploads: [{ path: 'index.html', url: putUrl, headers: {} }],
+      }),
+      completePage: () => ({
+        slug: TEST_SLUG,
+        version: 1,
+        activeVersionId: TEST_VERSION_ID,
+        viewUrl: `https://share.example.test/${TEST_SLUG}/`,
+        expiresAt: null,
+      }),
+      puts: new Map([[putUrl, { status: 200 }]]),
+    });
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const result = await runUpload(dir, { shared: true }, defaultUploadDeps(fetch));
+
+    expect(result.exitCode).toBe(0);
+    expect(log.mock.calls.some((c) => String(c[0]).includes('URLを知っていれば誰でも閲覧可'))).toBe(true);
     log.mockRestore();
   });
 
@@ -180,17 +230,7 @@ describe('runUpload', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const result = await runUpload(
-      dir,
-      {},
-      {
-        fetch,
-        resolveConfig: async () => TEST_CONFIG,
-        collectFiles: (await import('../src/collect-files.js')).collectFiles,
-        ensureIdToken: async () => 'id-token',
-        readFile: (await import('node:fs/promises')).readFile,
-      },
-    );
+    const result = await runUpload(dir, {}, defaultUploadDeps(fetch));
 
     expect(result.exitCode).toBe(1);
     const messages = error.mock.calls.map((c) => String(c[0]));
@@ -210,13 +250,10 @@ describe('runUpload', () => {
       dir,
       {},
       {
-        fetch,
-        resolveConfig: async () => TEST_CONFIG,
-        collectFiles: (await import('../src/collect-files.js')).collectFiles,
+        ...(defaultUploadDeps(fetch)),
         ensureIdToken: async () => {
           throw new TokenRefreshError('先に `share-html login` を実行してください。');
         },
-        readFile: (await import('node:fs/promises')).readFile,
       },
     );
 
@@ -237,9 +274,10 @@ describe('runUpload', () => {
         resolveConfig: async () => {
           throw new ConfigError('CLIの接続先が未設定です。');
         },
-        collectFiles: (await import('../src/collect-files.js')).collectFiles,
+        collectFiles,
         ensureIdToken: async () => 'token',
-        readFile: (await import('node:fs/promises')).readFile,
+        readFile,
+        resolveTitle,
       },
     );
 

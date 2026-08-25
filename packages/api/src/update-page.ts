@@ -4,15 +4,27 @@ import type {
   PageMetadata,
   Retention,
 } from '@page-share/shared';
-import { isValidSlug, metaObjectKey, pagePrefix } from '@page-share/shared';
+import {
+  computeExpiresAt,
+  expiresAtEpochSeconds,
+  isValidSlug,
+  kvsKey,
+  metaObjectKey,
+  pagePrefix,
+  userIndexObjectKey,
+  validateTitle,
+} from '@page-share/shared';
+import type { AliasStore } from './alias-store.js';
 import { isPageMetadata } from './page-metadata.js';
 import type { PageStore } from './page-store.js';
-import { computeExpiresAt, retentionObjectTags } from './retention.js';
+import { retentionObjectTags } from './retention.js';
 import { buildViewUrl } from './view-url.js';
 
 export interface UpdatePageInput {
   store: PageStore;
+  aliasStore: AliasStore;
   pagesBaseUrl: string;
+  shareBaseUrl: string;
   ownerSub: string;
   slug: string;
   body: unknown;
@@ -22,7 +34,10 @@ export type UpdatePageResult =
   | { ok: true; status: 200; body: GetPageResponse }
   | { ok: false; status: 400 | 403 | 404 | 500; body: ApiErrorResponse };
 
-type ParsedPatchBody = { retention: Retention };
+type ParsedPatchBody = {
+  retention?: Retention;
+  title?: string;
+};
 
 export function parsePatchPageRequestBody(
   raw: unknown,
@@ -32,13 +47,34 @@ export function parsePatchPageRequestBody(
   }
 
   const record = raw as Record<string, unknown>;
-  const retention = record['retention'];
+  const body: ParsedPatchBody = {};
 
-  if (retention !== 'temporary' && retention !== 'permanent') {
-    return invalidRequest('retention は temporary または permanent を指定してください');
+  if (record['retention'] !== undefined) {
+    if (record['retention'] !== 'temporary' && record['retention'] !== 'permanent') {
+      return invalidRequest('retention は temporary または permanent を指定してください');
+    }
+    body.retention = record['retention'];
   }
 
-  return { ok: true, body: { retention } };
+  if (record['title'] !== undefined) {
+    if (typeof record['title'] !== 'string') {
+      return invalidRequest('title は文字列で指定してください');
+    }
+    const titleError = validateTitle(record['title']);
+    if (titleError) {
+      return {
+        ok: false,
+        body: { error: titleError },
+      };
+    }
+    body.title = record['title'];
+  }
+
+  if (body.retention === undefined && body.title === undefined) {
+    return invalidRequest('retention または title のいずれかを指定してください');
+  }
+
+  return { ok: true, body };
 }
 
 function invalidRequest(message: string): { ok: false; body: ApiErrorResponse } {
@@ -55,21 +91,20 @@ function invalidRequest(message: string): { ok: false; body: ApiErrorResponse } 
 
 async function applyRetentionTags(
   store: PageStore,
+  visibility: PageMetadata['visibility'],
   slug: string,
+  ownerSub: string,
   retention: Retention,
 ): Promise<void> {
   const tags = retentionObjectTags(retention);
-  const keysToTag: string[] = [metaObjectKey(slug)];
+  const keysToTag: string[] = [metaObjectKey(slug), userIndexObjectKey(ownerSub, slug)];
 
-  const { keys: pageKeys, truncated } = await store.listKeys(pagePrefix(slug));
+  const { keys: pageKeys, truncated } = await store.listKeys(pagePrefix(visibility, slug));
   if (truncated) {
-    // 1ページ200ファイル上限なので通常は収まるが、黙って切り捨てない
     console.log('page_update_tags_truncated', { slug, keyCount: pageKeys.length });
   }
   keysToTag.push(...pageKeys);
 
-  // users/ マーカーには Lifecycle 用タグを付けない。
-  // temporary ページが物理削除されたあとマーカーだけ残るが、一覧の lazy cleanup が掃除する。
   await Promise.all(keysToTag.map((key) => store.setObjectTags(key, tags)));
 }
 
@@ -108,11 +143,6 @@ export async function updatePage(input: UpdatePageInput): Promise<UpdatePageResu
 
     if (!result.ok) {
       if (result.reason === 'not_found') {
-        console.log('page_update_failed', {
-          errorCode: 'page_not_found',
-          ownerSub: input.ownerSub,
-          slug: input.slug,
-        });
         return {
           ok: false,
           status: 404,
@@ -124,40 +154,11 @@ export async function updatePage(input: UpdatePageInput): Promise<UpdatePageResu
           },
         };
       }
-
-      console.log('page_update_failed', {
-        errorCode: 'internal_error',
-        ownerSub: input.ownerSub,
-        slug: input.slug,
-      });
-      return {
-        ok: false,
-        status: 500,
-        body: {
-          error: {
-            code: 'internal_error',
-            message: 'ページの更新に失敗しました',
-          },
-        },
-      };
+      return internalError(input.ownerSub, input.slug);
     }
 
     if (!isPageMetadata(result.data)) {
-      console.log('page_update_failed', {
-        errorCode: 'internal_error',
-        ownerSub: input.ownerSub,
-        slug: input.slug,
-      });
-      return {
-        ok: false,
-        status: 500,
-        body: {
-          error: {
-            code: 'internal_error',
-            message: 'ページの更新に失敗しました',
-          },
-        },
-      };
+      return internalError(input.ownerSub, input.slug);
     }
 
     const metadata = result.data;
@@ -181,52 +182,78 @@ export async function updatePage(input: UpdatePageInput): Promise<UpdatePageResu
       };
     }
 
-    // 論理期限を過ぎていても retention 変更は許す。
-    // Lifecycle による物理削除までは猶予があり、その間に permanent へ変えて救える。
-    // ただし Lifecycle が既に走っていればファイルは戻らない。
-    const retention = parsed.body.retention;
-    const createdAt = new Date(metadata.createdAt);
-    const expiresAt = computeExpiresAt(retention, createdAt);
+    const retention = parsed.body.retention ?? metadata.retention;
+    const title = parsed.body.title ?? metadata.title;
+    const retentionRequested = parsed.body.retention !== undefined;
+    const retentionChanged = retentionRequested && retention !== metadata.retention;
+
+    if (retentionChanged) {
+      await applyRetentionTags(
+        input.store,
+        metadata.visibility,
+        input.slug,
+        input.ownerSub,
+        retention,
+      );
+    }
 
     const updatedMetadata: PageMetadata = {
       ...metadata,
       retention,
-      expiresAt,
+      title,
     };
-
-    // 可変データは meta/ だけを更新する。users/ マーカーは触らない。
     await input.store.putJson(metaKey, updatedMetadata);
-    await applyRetentionTags(input.store, input.slug, retention);
 
-    console.log('page_retention_updated', {
+    if (retentionRequested) {
+      const aliasValue = {
+        v: updatedMetadata.activeVersionId,
+        e: expiresAtEpochSeconds(retention, new Date(updatedMetadata.contentUpdatedAt)),
+      };
+      await input.aliasStore.put(kvsKey(metadata.visibility, input.slug), aliasValue);
+    }
+
+    console.log('page_updated', {
       slug: input.slug,
       ownerSub: input.ownerSub,
-      retention,
+      retentionChanged,
+      titleChanged: parsed.body.title !== undefined,
     });
+
+    const expiresAt = computeExpiresAt(retention, new Date(updatedMetadata.contentUpdatedAt));
 
     return {
       ok: true,
       status: 200,
       body: {
         ...updatedMetadata,
-        viewUrl: buildViewUrl(input.pagesBaseUrl, updatedMetadata.slug),
+        viewUrl: buildViewUrl(
+          input.pagesBaseUrl,
+          input.shareBaseUrl,
+          updatedMetadata.visibility,
+          updatedMetadata.slug,
+        ),
+        expiresAt,
       },
     };
   } catch {
-    console.log('page_update_failed', {
-      errorCode: 'internal_error',
-      ownerSub: input.ownerSub,
-      slug: input.slug,
-    });
-    return {
-      ok: false,
-      status: 500,
-      body: {
-        error: {
-          code: 'internal_error',
-          message: 'ページの更新に失敗しました',
-        },
-      },
-    };
+    return internalError(input.ownerSub, input.slug);
   }
+}
+
+function internalError(ownerSub: string, slug: string): UpdatePageResult {
+  console.log('page_update_failed', {
+    errorCode: 'internal_error',
+    ownerSub,
+    slug,
+  });
+  return {
+    ok: false,
+    status: 500,
+    body: {
+      error: {
+        code: 'internal_error',
+        message: 'ページの更新に失敗しました',
+      },
+    },
+  };
 }

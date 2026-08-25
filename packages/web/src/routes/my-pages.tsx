@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import type { ListPageItem, Retention } from '@page-share/shared';
+import type { ListPageItem, Retention, Visibility } from '@page-share/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
@@ -8,7 +8,12 @@ import { extractApiErrorMessages } from '~/lib/api-errors';
 import { getExpirationStatus } from '~/lib/expiration-status';
 import { formatBytes } from '~/lib/format-bytes';
 import { formatDateTime } from '~/lib/format-datetime';
-import { deletePage, listPages, updatePageRetention } from '~/lib/pages-client';
+import {
+  deletePage,
+  listPages,
+  updatePageRetention,
+  updatePageTitle,
+} from '~/lib/pages-client';
 import { shouldWarnImmediateExpiryOnTemporary } from '~/lib/retention-warning';
 
 export const Route = createFileRoute('/my-pages')({
@@ -17,6 +22,16 @@ export const Route = createFileRoute('/my-pages')({
 
 function retentionLabel(retention: Retention): string {
   return retention === 'temporary' ? '30日' : '無期限';
+}
+
+function visibilityLabel(visibility: Visibility): string {
+  return visibility === 'internal' ? '社内限定' : 'URL共有';
+}
+
+function visibilityBadgeClass(visibility: Visibility): string {
+  return visibility === 'internal'
+    ? 'visibility-badge visibility-badge--internal'
+    : 'visibility-badge visibility-badge--shared';
 }
 
 function resolveApiErrorMessage(
@@ -37,6 +52,8 @@ function MyPagesPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [copySlug, setCopySlug] = useState<string | null>(null);
   const [busySlug, setBusySlug] = useState<string | null>(null);
+  const [editingSlug, setEditingSlug] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   const loadPages = useCallback(async () => {
     if (!auth.idToken) {
@@ -119,12 +136,61 @@ function MyPagesPage() {
     );
   };
 
+  const startTitleEdit = (page: ListPageItem) => {
+    setEditingSlug(page.slug);
+    setEditingTitle(page.title);
+    setActionError(null);
+  };
+
+  const cancelTitleEdit = () => {
+    setEditingSlug(null);
+    setEditingTitle('');
+  };
+
+  const handleTitleSave = async (page: ListPageItem) => {
+    if (!auth.idToken || editingTitle === page.title) {
+      cancelTitleEdit();
+      return;
+    }
+
+    setActionError(null);
+    setBusySlug(page.slug);
+
+    const result = await updatePageTitle(
+      fetch,
+      getWebConfig().apiBaseUrl,
+      auth.idToken,
+      page.slug,
+      editingTitle,
+    );
+
+    setBusySlug(null);
+
+    if (!result.ok) {
+      setActionError(resolveApiErrorMessage(result.status, result.body));
+      return;
+    }
+
+    setPages((current) =>
+      current.map((item) =>
+        item.slug === page.slug
+          ? {
+              ...item,
+              title: result.body.title,
+            }
+          : item,
+      ),
+    );
+    cancelTitleEdit();
+  };
+
   const handleDelete = async (page: ListPageItem) => {
     if (!auth.idToken) {
       return;
     }
 
-    if (!window.confirm(`「${page.slug}」を削除しますか？この操作は取り消せません。`)) {
+    const label = page.title || page.slug;
+    if (!window.confirm(`「${label}」を削除しますか？この操作は取り消せません。`)) {
       return;
     }
 
@@ -194,7 +260,7 @@ function MyPagesPage() {
       {!isLoading && !loadError && pages.length === 0 ? (
         <section className="panel">
           <p>まだページがありません。</p>
-          <Link to="/upload" className="button-link">
+          <Link to="/upload" search={{}} className="button-link">
             アップロードへ
           </Link>
         </section>
@@ -205,7 +271,9 @@ function MyPagesPage() {
           <table className="page-table">
             <thead>
               <tr>
-                <th>slug</th>
+                <th>タイトル</th>
+                <th>公開範囲</th>
+                <th>バージョン</th>
                 <th>閲覧 URL</th>
                 <th>作成日時</th>
                 <th>保存期間</th>
@@ -218,6 +286,7 @@ function MyPagesPage() {
               {pages.map((page) => {
                 const expiration = getExpirationStatus(page.expiresAt);
                 const isBusy = busySlug === page.slug;
+                const isEditing = editingSlug === page.slug;
 
                 return (
                   <tr
@@ -225,8 +294,53 @@ function MyPagesPage() {
                     className={expiration.kind === 'expired' ? 'page-row--expired' : undefined}
                   >
                     <td>
-                      <code>{page.slug}</code>
+                      {isEditing ? (
+                        <div className="title-edit">
+                          <input
+                            type="text"
+                            value={editingTitle}
+                            onChange={(event) => setEditingTitle(event.target.value)}
+                            disabled={isBusy}
+                          />
+                          <div className="title-edit__actions">
+                            <button
+                              type="button"
+                              className="text-button"
+                              disabled={isBusy}
+                              onClick={() => void handleTitleSave(page)}
+                            >
+                              保存
+                            </button>
+                            <button
+                              type="button"
+                              className="text-button"
+                              disabled={isBusy}
+                              onClick={cancelTitleEdit}
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="title-cell">
+                          <div>{page.title || <span className="title-placeholder">（無題）</span>}</div>
+                          <button
+                            type="button"
+                            className="text-button"
+                            disabled={isBusy}
+                            onClick={() => startTitleEdit(page)}
+                          >
+                            タイトル編集
+                          </button>
+                        </div>
+                      )}
                     </td>
+                    <td>
+                      <span className={visibilityBadgeClass(page.visibility)}>
+                        {visibilityLabel(page.visibility)}
+                      </span>
+                    </td>
+                    <td>v{page.version}</td>
                     <td className="page-table__url">
                       <a href={page.viewUrl} target="_blank" rel="noreferrer">
                         {page.viewUrl}
@@ -242,7 +356,9 @@ function MyPagesPage() {
                             : 'expiration'
                         }
                       >
-                        {expiration.label}
+                        {page.expiresAt
+                          ? `削除予定: ${formatDateTime(page.expiresAt)}`
+                          : expiration.label}
                       </div>
                       <div className="retention-actions">
                         <button
@@ -267,6 +383,13 @@ function MyPagesPage() {
                     <td>{formatBytes(page.totalSize)}</td>
                     <td>
                       <div className="row-actions">
+                        <Link
+                          to="/upload"
+                          search={{ slug: page.slug }}
+                          className="button button--secondary"
+                        >
+                          再アップロード
+                        </Link>
                         <button
                           type="button"
                           className="button button--secondary"

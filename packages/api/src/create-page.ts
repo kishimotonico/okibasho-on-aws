@@ -3,22 +3,23 @@ import type {
   ApiErrorResponse,
   CreatePageRequest,
   CreatePageResponse,
-  PageMetadata,
+  DeclaredFile,
   PresignedUpload,
-  UserPageIndexEntry,
+  Visibility,
 } from '@page-share/shared';
 import {
   contentTypeFromPath,
   DEFAULT_RETENTION,
+  DEFAULT_VISIBILITY,
   generateSlug,
+  generateVersionId,
   metaObjectKey,
   pageObjectKey,
-  userIndexObjectKey,
   validateCreatePageRequest,
   validateUploadPath,
 } from '@page-share/shared';
 import type { PageStore } from './page-store.js';
-import { computeExpiresAt, retentionObjectTags, retentionTaggingHeader } from './retention.js';
+import { retentionTaggingHeader } from './retention.js';
 import { buildViewUrl } from './view-url.js';
 
 const SLUG_RESERVE_MAX_ATTEMPTS = 5;
@@ -26,19 +27,19 @@ const SLUG_RESERVE_MAX_ATTEMPTS = 5;
 export interface CreatePageInput {
   store: PageStore;
   pagesBaseUrl: string;
+  shareBaseUrl: string;
   ownerSub: string;
-  ownerEmail: string;
   body: unknown;
-  now: () => Date;
   generateSlug: () => string;
+  generateVersionId: () => string;
 }
 
 export type CreatePageResult =
   | { ok: true; status: 201; body: CreatePageResponse }
-  | { ok: false; status: 400 | 409 | 500; body: ApiErrorResponse };
+  | { ok: false; status: 400 | 500; body: ApiErrorResponse };
 
 type ParsedCreatePageRequest = CreatePageRequest & {
-  files: Array<{ path: string; size: number }>;
+  files: DeclaredFile[];
 };
 
 export function parseCreatePageRequestBody(
@@ -54,7 +55,7 @@ export function parseCreatePageRequestBody(
     return invalidRequest('files は配列で指定してください');
   }
 
-  const files: Array<{ path: string; size: number }> = [];
+  const files: DeclaredFile[] = [];
   for (const item of record['files']) {
     if (typeof item !== 'object' || item === null) {
       return invalidRequest('files の各要素はオブジェクトである必要があります');
@@ -70,11 +71,18 @@ export function parseCreatePageRequestBody(
 
   const body: ParsedCreatePageRequest = { files };
 
-  if (record['slug'] !== undefined) {
-    if (typeof record['slug'] !== 'string') {
-      return invalidRequest('slug は文字列で指定してください');
+  if (record['title'] !== undefined) {
+    if (typeof record['title'] !== 'string') {
+      return invalidRequest('title は文字列で指定してください');
     }
-    body.slug = record['slug'];
+    body.title = record['title'];
+  }
+
+  if (record['visibility'] !== undefined) {
+    if (record['visibility'] !== 'internal' && record['visibility'] !== 'shared') {
+      return invalidRequest('visibility は internal または shared を指定してください');
+    }
+    body.visibility = record['visibility'];
   }
 
   if (record['retention'] !== undefined) {
@@ -110,8 +118,38 @@ function validationErrorResponse(errors: ApiErrorBody[]): ApiErrorResponse {
   };
 }
 
-function sumFileSizes(files: Array<{ size: number }>): number {
-  return files.reduce((total, file) => total + file.size, 0);
+async function buildPresignedUploads(
+  store: PageStore,
+  visibility: Visibility,
+  slug: string,
+  versionId: string,
+  files: DeclaredFile[],
+  retention: typeof DEFAULT_RETENTION,
+): Promise<PresignedUpload[]> {
+  const tagging = retentionTaggingHeader(retention);
+  const uploads: PresignedUpload[] = [];
+
+  for (const file of files) {
+    const pathResult = validateUploadPath(file.path);
+    if (!pathResult.ok) {
+      throw new Error('検証済みでないパスが S3 キー組み立てに渡された');
+    }
+    const normalizedPath = pathResult.path;
+    const contentType = contentTypeFromPath(normalizedPath);
+    const key = pageObjectKey(visibility, slug, versionId, normalizedPath);
+    const url = await store.presignPut(key, contentType, file.size, tagging);
+    uploads.push({
+      path: normalizedPath,
+      url,
+      headers: {
+        'content-type': contentType,
+        'content-length': String(file.size),
+        ...(tagging ? { 'x-amz-tagging': tagging } : {}),
+      },
+    });
+  }
+
+  return uploads;
 }
 
 export async function createPage(input: CreatePageInput): Promise<CreatePageResult> {
@@ -137,61 +175,21 @@ export async function createPage(input: CreatePageInput): Promise<CreatePageResu
     };
   }
 
+  const visibility = parsed.body.visibility ?? DEFAULT_VISIBILITY;
   const retention = parsed.body.retention ?? DEFAULT_RETENTION;
-  const createdAt = input.now();
-  const createdAtIso = createdAt.toISOString();
-  const expiresAt = computeExpiresAt(retention, createdAt);
-  const fileCount = parsed.body.files.length;
-  const totalSize = sumFileSizes(parsed.body.files);
-  const slugWasSpecified = parsed.body.slug !== undefined;
+  const versionId = input.generateVersionId();
 
-  let slug = parsed.body.slug;
-  let reserved = false;
-
+  let slug: string | undefined;
   for (let attempt = 0; attempt < SLUG_RESERVE_MAX_ATTEMPTS; attempt++) {
-    if (slug === undefined) {
-      slug = input.generateSlug();
-    }
-
-    const metadata: PageMetadata = {
-      slug,
-      ownerSub: input.ownerSub,
-      ownerEmail: input.ownerEmail,
-      retention,
-      createdAt: createdAtIso,
-      expiresAt,
-      fileCount,
-      totalSize,
-    };
-
-    const reservedNow = await input.store.putJsonIfAbsent(metaObjectKey(slug), metadata);
-    if (reservedNow) {
-      reserved = true;
+    const candidate = input.generateSlug();
+    const taken = await input.store.exists(metaObjectKey(candidate));
+    if (!taken) {
+      slug = candidate;
       break;
     }
-
-    if (slugWasSpecified) {
-      console.log('page_create_failed', {
-        errorCode: 'slug_taken',
-        ownerSub: input.ownerSub,
-        slug,
-      });
-      return {
-        ok: false,
-        status: 409,
-        body: {
-          error: {
-            code: 'slug_taken',
-            message: `slug は既に使われています: ${slug}`,
-          },
-        },
-      };
-    }
-
-    slug = undefined;
   }
 
-  if (!reserved || slug === undefined) {
+  if (slug === undefined) {
     console.log('page_create_failed', {
       errorCode: 'internal_error',
       ownerSub: input.ownerSub,
@@ -209,50 +207,21 @@ export async function createPage(input: CreatePageInput): Promise<CreatePageResu
   }
 
   try {
-    // 所有関係だけを示すマーカー。可変データは meta/ に集約する。
-    const indexEntry: UserPageIndexEntry = {
+    const uploads = await buildPresignedUploads(
+      input.store,
+      visibility,
       slug,
-      createdAt: createdAtIso,
-    };
-    await input.store.putJson(userIndexObjectKey(input.ownerSub, slug), indexEntry);
+      versionId,
+      parsed.body.files,
+      retention,
+    );
 
-    const retentionTags = retentionObjectTags(retention);
-    await input.store.setObjectTags(metaObjectKey(slug), retentionTags);
-    // users/ マーカーには Lifecycle 用タグを付けない（一覧 lazy cleanup で孤立マーカーを掃除する）
-
-    const tagging = retentionTaggingHeader(retention);
-    const uploads: PresignedUpload[] = [];
-    for (const file of parsed.body.files) {
-      const pathResult = validateUploadPath(file.path);
-      if (!pathResult.ok) {
-        // validateCreatePageRequest を通っていればここには来ない。
-        // 万一来たら未検証のパスでS3キーを組み立てることになるので、握りつぶさず落とす
-        throw new Error('検証済みでないパスが S3 キー組み立てに渡された');
-      }
-      const normalizedPath = pathResult.path;
-      const contentType = contentTypeFromPath(normalizedPath);
-      const key = pageObjectKey(slug, normalizedPath);
-      // pages/<slug>/ 配下はクライアントが直接PUTするため、こちらから後でタグを
-      // 付けようとすると「アップロードが終わったこと」を知る必要が出てくる。
-      // 完了APIを作らないと決めているので、代わりにアップロードそのものに
-      // タグを付けさせる。x-amz-tagging も署名対象なので勝手に変えられない
-      const url = await input.store.presignPut(key, contentType, file.size, tagging);
-      uploads.push({
-        path: normalizedPath,
-        url,
-        headers: {
-          'content-type': contentType,
-          'content-length': String(file.size),
-          ...(tagging ? { 'x-amz-tagging': tagging } : {}),
-        },
-      });
-    }
-
-    console.log('page_created', {
+    console.log('page_declared', {
       slug,
       ownerSub: input.ownerSub,
-      fileCount,
-      totalSize,
+      visibility,
+      versionId,
+      fileCount: parsed.body.files.length,
     });
 
     return {
@@ -260,8 +229,8 @@ export async function createPage(input: CreatePageInput): Promise<CreatePageResu
       status: 201,
       body: {
         slug,
-        viewUrl: buildViewUrl(input.pagesBaseUrl, slug),
-        expiresAt,
+        versionId,
+        viewUrl: buildViewUrl(input.pagesBaseUrl, input.shareBaseUrl, visibility, slug),
         uploads,
       },
     };
@@ -287,4 +256,5 @@ export async function createPage(input: CreatePageInput): Promise<CreatePageResu
 /** ハンドラのデフォルト依存（テストでは差し替える） */
 export const defaultCreatePageDeps = {
   generateSlug,
+  generateVersionId,
 } as const;

@@ -1,6 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { DEFAULT_RETENTION, isValidSlug, type Retention } from '@page-share/shared';
-import { useCallback, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import {
+  DEFAULT_RETENTION,
+  DEFAULT_VISIBILITY,
+  isValidSlug,
+  type Retention,
+  type Visibility,
+} from '@page-share/shared';
+import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
 import { getWebConfig } from '~/config/env';
@@ -10,24 +16,41 @@ import {
   collectUploadFilesFromPathEntries,
   type UploadFileEntry,
 } from '~/lib/collect-upload-files';
+import { extractTitleFromHtml } from '~/lib/extract-title-from-html';
 import { collectFilesFromDataTransfer } from '~/lib/read-data-transfer';
-import { createPage, uploadFilesWithConcurrency } from '~/lib/upload-client';
-import { validateUploadRequest } from '~/lib/validate-upload';
+import {
+  completePage,
+  createPage,
+  redeclarePage,
+  uploadFilesWithConcurrency,
+} from '~/lib/upload-client';
+import { validateRedeclareRequest, validateUploadRequest } from '~/lib/validate-upload';
 
 export const Route = createFileRoute('/upload')({
+  validateSearch: (search: Record<string, unknown>): { slug?: string } => ({
+    slug:
+      typeof search.slug === 'string' && isValidSlug(search.slug) ? search.slug : undefined,
+  }),
   component: UploadPage,
 });
 
 type UploadPhase = 'idle' | 'uploading' | 'success' | 'error';
 
+function visibilityLabel(visibility: Visibility): string {
+  return visibility === 'internal' ? '社内限定' : 'URL共有';
+}
+
 function UploadPage() {
   const auth = useAuth();
+  const { slug: reuploadSlug } = Route.useSearch();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const directoryInputRef = useRef<HTMLInputElement>(null);
 
   const [files, setFiles] = useState<UploadFileEntry[]>([]);
   const [skippedInvalidPath, setSkippedInvalidPath] = useState(0);
-  const [slug, setSlug] = useState('');
+  const [title, setTitle] = useState('');
+  const [titleManuallyEdited, setTitleManuallyEdited] = useState(false);
+  const [visibility, setVisibility] = useState<Visibility>(DEFAULT_VISIBILITY);
   const [retention, setRetention] = useState<Retention>(DEFAULT_RETENTION);
   const [isDragging, setIsDragging] = useState(false);
   const [selectionError, setSelectionError] = useState<string | null>(null);
@@ -38,15 +61,17 @@ function UploadPage() {
   const [viewUrl, setViewUrl] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
 
-  const slugError = useMemo(() => {
-    if (!slug.trim()) {
-      return null;
+  const seedTitleFromFiles = useCallback(async (nextFiles: UploadFileEntry[]) => {
+    const indexFile = nextFiles.find((file) => file.path === 'index.html');
+    if (!indexFile) {
+      return;
     }
-    if (!isValidSlug(slug.trim())) {
-      return 'slug は英小文字・数字・ハイフンのみ、先頭は英数字、1〜64文字で指定してください';
+
+    const extracted = await extractTitleFromHtml(indexFile.file);
+    if (extracted) {
+      setTitle(extracted);
     }
-    return null;
-  }, [slug]);
+  }, []);
 
   const applyCollectedFiles = useCallback(
     (result: ReturnType<typeof collectUploadFilesFromFileList>) => {
@@ -64,8 +89,12 @@ function UploadPage() {
       setUploadError(null);
       setViewUrl(null);
       setPhase('idle');
+
+      if (!titleManuallyEdited) {
+        void seedTitleFromFiles(result.files);
+      }
     },
-    [],
+    [seedTitleFromFiles, titleManuallyEdited],
   );
 
   const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -83,14 +112,24 @@ function UploadPage() {
   };
 
   const handleSubmit = async () => {
-    const errors = validateUploadRequest(files, slug, retention).map((error) => error.message);
-    if (slugError) {
-      errors.unshift(slugError);
-    }
+    const declaredFiles = files.map((file) => ({ path: file.path, size: file.file.size }));
+    const errors = reuploadSlug
+      ? validateRedeclareRequest(files).map((error) => error.message)
+      : validateUploadRequest(files, { title, visibility, retention }).map((error) => error.message);
 
     if (errors.length > 0) {
       setValidationErrors(errors);
       return;
+    }
+
+    if (!reuploadSlug && visibility === 'shared') {
+      if (
+        !window.confirm(
+          'URLを知っている人なら誰でも閲覧できます。本当に「URL共有」で公開しますか？',
+        )
+      ) {
+        return;
+      }
     }
 
     if (!auth.idToken) {
@@ -103,20 +142,24 @@ function UploadPage() {
     setPhase('uploading');
     setProgress({ completed: 0, total: files.length });
 
-    const request = {
-      ...(slug.trim() ? { slug: slug.trim() } : {}),
-      retention,
-      files: files.map((file) => ({ path: file.path, size: file.file.size })),
-    };
+    const declareResult = reuploadSlug
+      ? await redeclarePage(fetch, getWebConfig().apiBaseUrl, auth.idToken, reuploadSlug, {
+          files: declaredFiles,
+        })
+      : await createPage(fetch, getWebConfig().apiBaseUrl, auth.idToken, {
+          title: title.trim() || undefined,
+          visibility,
+          retention,
+          files: declaredFiles,
+        });
 
-    const createResult = await createPage(fetch, getWebConfig().apiBaseUrl, auth.idToken, request);
-    if (!createResult.ok) {
+    if (!declareResult.ok) {
       setPhase('error');
-      setUploadError(extractApiErrorMessages(createResult.body).join('\n'));
+      setUploadError(extractApiErrorMessages(declareResult.body).join('\n'));
       return;
     }
 
-    const uploads = createResult.body.uploads.map((upload) => {
+    const uploads = declareResult.body.uploads.map((upload) => {
       const file = files.find((entry) => entry.path === upload.path);
       if (!file) {
         throw new Error(`アップロード対象が見つかりません: ${upload.path}`);
@@ -137,12 +180,30 @@ function UploadPage() {
       setPhase('error');
       setUploadError(
         `${failure.path} のアップロードに失敗しました (${failure.error.status} ${failure.error.statusText})。\n` +
-          '同じ名前では再実行できないため、別の slug でやり直してください。',
+          'もう一度最初からやり直してください。',
       );
       return;
     }
 
-    setViewUrl(createResult.body.viewUrl);
+    const completeResult = await completePage(
+      fetch,
+      getWebConfig().apiBaseUrl,
+      auth.idToken,
+      declareResult.body.slug,
+      {
+        versionId: declareResult.body.versionId,
+        files: declaredFiles,
+        ...(reuploadSlug ? {} : { title: title.trim() }),
+      },
+    );
+
+    if (!completeResult.ok) {
+      setPhase('error');
+      setUploadError(extractApiErrorMessages(completeResult.body).join('\n'));
+      return;
+    }
+
+    setViewUrl(completeResult.body.viewUrl);
     setPhase('success');
   };
 
@@ -170,7 +231,7 @@ function UploadPage() {
   if (!auth.isAuthenticated) {
     return (
       <div className="page">
-        <h1>アップロード</h1>
+        <h1>{reuploadSlug ? '再アップロード' : 'アップロード'}</h1>
         <p>アップロードするにはログインが必要です。</p>
         <button type="button" className="button" onClick={() => void auth.login('/upload')}>
           ログイン
@@ -181,7 +242,12 @@ function UploadPage() {
 
   return (
     <div className="page upload-page">
-      <h1>アップロード</h1>
+      <h1>{reuploadSlug ? '再アップロード' : 'アップロード'}</h1>
+      {reuploadSlug ? (
+        <p>
+          ページ <code>{reuploadSlug}</code> の内容を差し替えます。公開範囲とタイトルは変わりません。
+        </p>
+      ) : null}
 
       <div
         className={`drop-zone${isDragging ? ' drop-zone--active' : ''}`}
@@ -253,43 +319,71 @@ function UploadPage() {
         </section>
       ) : null}
 
-      <section className="panel">
-        <label className="field">
-          <span className="field-label">slug（任意）</span>
-          <input
-            type="text"
-            value={slug}
-            onChange={(event) => setSlug(event.target.value)}
-            placeholder="空欄なら自動生成"
-            autoComplete="off"
-          />
-        </label>
-        {slugError ? <p className="message message--error">{slugError}</p> : null}
+      {!reuploadSlug ? (
+        <section className="panel">
+          <label className="field">
+            <span className="field-label">タイトル</span>
+            <input
+              type="text"
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setTitleManuallyEdited(true);
+              }}
+              placeholder="空欄なら無題"
+              autoComplete="off"
+            />
+          </label>
 
-        <fieldset className="field">
-          <legend className="field-label">保存期間</legend>
-          <label className="radio">
-            <input
-              type="radio"
-              name="retention"
-              value="temporary"
-              checked={retention === 'temporary'}
-              onChange={() => setRetention('temporary')}
-            />
-            30日
-          </label>
-          <label className="radio">
-            <input
-              type="radio"
-              name="retention"
-              value="permanent"
-              checked={retention === 'permanent'}
-              onChange={() => setRetention('permanent')}
-            />
-            無期限
-          </label>
-        </fieldset>
-      </section>
+          <fieldset className="field">
+            <legend className="field-label">公開範囲</legend>
+            <label className="radio">
+              <input
+                type="radio"
+                name="visibility"
+                value="internal"
+                checked={visibility === 'internal'}
+                onChange={() => setVisibility('internal')}
+              />
+              {visibilityLabel('internal')}
+            </label>
+            <label className="radio">
+              <input
+                type="radio"
+                name="visibility"
+                value="shared"
+                checked={visibility === 'shared'}
+                onChange={() => setVisibility('shared')}
+              />
+              {visibilityLabel('shared')}
+            </label>
+          </fieldset>
+
+          <fieldset className="field">
+            <legend className="field-label">保存期間</legend>
+            <label className="radio">
+              <input
+                type="radio"
+                name="retention"
+                value="temporary"
+                checked={retention === 'temporary'}
+                onChange={() => setRetention('temporary')}
+              />
+              30日
+            </label>
+            <label className="radio">
+              <input
+                type="radio"
+                name="retention"
+                value="permanent"
+                checked={retention === 'permanent'}
+                onChange={() => setRetention('permanent')}
+              />
+              無期限
+            </label>
+          </fieldset>
+        </section>
+      ) : null}
 
       {validationErrors.length > 0 ? (
         <div className="message message--error">
@@ -312,7 +406,7 @@ function UploadPage() {
 
       {phase === 'success' && viewUrl ? (
         <section className="panel panel--success">
-          <h2>アップロード完了</h2>
+          <h2>{reuploadSlug ? '再アップロード完了' : 'アップロード完了'}</h2>
           <p>
             閲覧 URL: <a href={viewUrl}>{viewUrl}</a>
           </p>
@@ -329,8 +423,9 @@ function UploadPage() {
         disabled={files.length === 0 || phase === 'uploading'}
         onClick={() => void handleSubmit()}
       >
-        アップロード
+        {reuploadSlug ? '再アップロード' : 'アップロード'}
       </button>
     </div>
   );
 }
+

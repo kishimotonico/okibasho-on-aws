@@ -4,7 +4,7 @@ import type {
   ListPagesResponse,
   PageMetadata,
 } from '@page-share/shared';
-import { metaObjectKey, USERS_PREFIX } from '@page-share/shared';
+import { computeExpiresAt, metaObjectKey, USERS_PREFIX } from '@page-share/shared';
 import { isPageMetadata } from './page-metadata.js';
 import type { PageStore } from './page-store.js';
 import { buildViewUrl } from './view-url.js';
@@ -14,6 +14,7 @@ const INDEX_FETCH_CONCURRENCY = 10;
 export interface ListPagesInput {
   store: PageStore;
   pagesBaseUrl: string;
+  shareBaseUrl: string;
   ownerSub: string;
 }
 
@@ -30,39 +31,25 @@ function slugFromMarkerKey(ownerSub: string, key: string): string | null {
   return slug.length > 0 ? slug : null;
 }
 
-function metadataToListItem(metadata: PageMetadata, pagesBaseUrl: string): ListPageItem {
+function metadataToListItem(
+  metadata: PageMetadata,
+  pagesBaseUrl: string,
+  shareBaseUrl: string,
+): ListPageItem {
+  const expiresAt = computeExpiresAt(metadata.retention, new Date(metadata.contentUpdatedAt));
   return {
     slug: metadata.slug,
+    title: metadata.title,
+    visibility: metadata.visibility,
+    version: metadata.version,
     retention: metadata.retention,
     createdAt: metadata.createdAt,
-    expiresAt: metadata.expiresAt,
+    contentUpdatedAt: metadata.contentUpdatedAt,
     fileCount: metadata.fileCount,
     totalSize: metadata.totalSize,
-    viewUrl: buildViewUrl(pagesBaseUrl, metadata.slug),
+    viewUrl: buildViewUrl(pagesBaseUrl, shareBaseUrl, metadata.visibility, metadata.slug),
+    expiresAt,
   };
-}
-
-async function deleteOrphanMarker(
-  store: PageStore,
-  ownerSub: string,
-  markerKey: string,
-  slug: string,
-): Promise<void> {
-  try {
-    await store.deleteObjects([markerKey]);
-    console.log('page_list_orphan_marker_deleted', {
-      ownerSub,
-      slug,
-      markerKey,
-    });
-  } catch {
-    // 次回の一覧取得でまた直せる。全体を失敗させない
-    console.log('page_list_orphan_marker_delete_failed', {
-      ownerSub,
-      slug,
-      markerKey,
-    });
-  }
 }
 
 export async function listPages(input: ListPagesInput): Promise<ListPagesResult> {
@@ -70,16 +57,12 @@ export async function listPages(input: ListPagesInput): Promise<ListPagesResult>
     const { keys, truncated } = await input.store.listUserIndexKeys(input.ownerSub);
 
     if (truncated) {
-      // ListObjectsV2 の 1000 件上限に達した。ページネーションは実装しないが、
-      // 黙って切り捨てないよう運用で気付けるようにする。
       console.log('page_list_truncated', {
         ownerSub: input.ownerSub,
         keyCount: keys.length,
       });
     }
 
-    // マーカーは slug の列挙だけに使い、表示内容は meta/ から取る。
-    // 件数分の GetObject が要るので、少しずつ並列に取る。
     const pages: ListPageItem[] = [];
     for (let i = 0; i < keys.length; i += INDEX_FETCH_CONCURRENCY) {
       const chunk = keys.slice(i, i + INDEX_FETCH_CONCURRENCY);
@@ -101,8 +84,11 @@ export async function listPages(input: ListPagesInput): Promise<ListPagesResult>
 
         if (!metaResult.ok) {
           if (metaResult.reason === 'not_found') {
-            // meta が無いマーカーは一覧に出さず、その場で掃除する
-            await deleteOrphanMarker(input.store, input.ownerSub, markerKey, slug);
+            console.log('page_list_orphan_marker', {
+              ownerSub: input.ownerSub,
+              slug,
+              markerKey,
+            });
           } else {
             console.log('page_list_meta_skipped', {
               ownerSub: input.ownerSub,
@@ -125,7 +111,6 @@ export async function listPages(input: ListPagesInput): Promise<ListPagesResult>
         const metadata = metaResult.data;
 
         if (metadata.ownerSub !== input.ownerSub) {
-          // 他人の meta を誤って読んだとき、マーカーは消さない
           console.log('page_list_owner_mismatch', {
             ownerSub: input.ownerSub,
             slug,
@@ -135,12 +120,10 @@ export async function listPages(input: ListPagesInput): Promise<ListPagesResult>
           continue;
         }
 
-        pages.push(metadataToListItem(metadata, input.pagesBaseUrl));
+        pages.push(metadataToListItem(metadata, input.pagesBaseUrl, input.shareBaseUrl));
       }
     }
 
-    // 期限切れページも含める。物理削除は Lifecycle 任せで即時ではないため、
-    // 一覧から急に消えるより expiresAt を見て「期限切れ」と分かるほうが利用者にとって分かりやすい。
     pages.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
     console.log('page_listed', {

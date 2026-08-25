@@ -1,7 +1,11 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import {
+  DEFAULT_RETENTION_DAYS,
+  INTERNAL_PAGES_PREFIX,
+  SHARED_PAGES_PREFIX,
+} from '@page-share/shared';
 import { BlockPublicAccess, Bucket, BucketEncryption, HttpMethods } from 'aws-cdk-lib/aws-s3';
-import { DEFAULT_RETENTION_DAYS, PAGES_PREFIX } from '@page-share/shared';
 import { Construct } from 'constructs';
 
 /** Lifecycleの対象を選ぶObject Tag。APIが付ける値と一致している必要がある */
@@ -10,14 +14,14 @@ const RETENTION_TAG = { key: 'retention', value: 'temporary' };
 /**
  * 論理期限を過ぎてから物理削除するまでの猶予。
  *
- * 論理期限(createdAt + 30日)ちょうどで消すと、期限切れに気付いて permanent へ
+ * 論理期限(contentUpdatedAt + 30日)ちょうどで消すと、期限切れに気付いて permanent へ
  * 変えようとしたときには実体が無い、ということが起きる。1週間の猶予を置いて
  * 救える窓を作っておく。Lifecycle自体も即時ではなく最大で数十時間ずれる。
  */
 const PHYSICAL_DELETE_GRACE_DAYS = 7;
 
 /**
- * pages/ meta/ users/ を格納する S3 bucket。
+ * internal-pages/ shared-pages/ meta/ users/ を格納する S3 bucket。
  * 配信は CloudFront + OAC 経由に限定するため、公開アクセスはすべてブロックする。
  */
 export class PagesStorage extends Construct {
@@ -38,54 +42,98 @@ export class PagesStorage extends Construct {
           id: 'expire-temporary-pages',
           enabled: true,
           // prefixではなくタグで絞る。permanentに変えたページは
-          // 同じ pages/ 配下にいてもタグが外れるので対象から外れる
+          // 同じ配信 prefix 配下にいてもタグが外れるので対象から外れる
           tagFilters: { [RETENTION_TAG.key]: RETENTION_TAG.value },
           expiration: Duration.days(DEFAULT_RETENTION_DAYS + PHYSICAL_DELETE_GRACE_DAYS),
         },
       ],
     });
 
-    this.denyCloudFrontOutsidePagesPrefix();
+    this.denyCloudFrontOutsideDeliveryPrefixes();
   }
 
   /**
-   * CloudFront から読めるのを pages/ 配下だけに制限する。
+   * CloudFront から読めるのを internal-pages/ と shared-pages/ だけに制限する。
    *
-   * 「配信されるのは pages/ だけ」という不変条件は、これまで CloudFront Function の
-   * URL書き換え1枚だけが守っていた。関数のバグやCloudFront側のパス正規化の隙が
-   * そのまま meta/ の閲覧（ownerのメールアドレス）につながる形だったので、
-   * 同じ境界を bucket policy にも書いて2枚にする。
-   *
-   * Lambda はこの bucket policy の対象外（サービスプリンシパルが違う）ため、
-   * meta/ と users/ の読み書きには影響しない。
+   * meta/ users/ は Lambda 専用。CloudFront Function の URL 書き換えと
+   * 同じ境界を bucket policy にも書いて二重化する。
    */
-  private denyCloudFrontOutsidePagesPrefix(): void {
+  private denyCloudFrontOutsideDeliveryPrefixes(): void {
     const cloudFront = new ServicePrincipal('cloudfront.amazonaws.com');
+    const allowedObjectArns = [
+      this.bucket.arnForObjects(`${INTERNAL_PAGES_PREFIX}*`),
+      this.bucket.arnForObjects(`${SHARED_PAGES_PREFIX}*`),
+    ];
 
     this.bucket.addToResourcePolicy(
       new PolicyStatement({
-        sid: 'DenyCloudFrontGetOutsidePagesPrefix',
+        sid: 'DenyCloudFrontGetOutsideDeliveryPrefixes',
         effect: Effect.DENY,
         principals: [cloudFront],
         actions: ['s3:GetObject'],
-        notResources: [this.bucket.arnForObjects(`${PAGES_PREFIX}*`)],
+        notResources: allowedObjectArns,
       }),
     );
 
     this.bucket.addToResourcePolicy(
       new PolicyStatement({
-        sid: 'DenyCloudFrontListOutsidePagesPrefix',
+        sid: 'DenyCloudFrontListOutsideDeliveryPrefixes',
         effect: Effect.DENY,
         principals: [cloudFront],
         actions: ['s3:ListBucket'],
         resources: [this.bucket.bucketArn],
         conditions: {
-          StringNotLike: { 's3:prefix': [`${PAGES_PREFIX}*`] },
+          StringNotLike: {
+            's3:prefix': [`${INTERNAL_PAGES_PREFIX}*`, `${SHARED_PAGES_PREFIX}*`],
+          },
           // s3:prefix が付いているリクエストにだけ効かせる。
           // 存在しないkeyへのGETで S3 が 403 ではなく 404 を返すかの判定にも
           // ListBucket 権限が使われるが、そこには s3:prefix が無い。
           // この Null 条件が無いと、その判定まで Deny に巻き込んで
           // 「存在しないslugが404」という狙いが静かに壊れる
+          Null: { 's3:prefix': 'false' },
+        },
+      }),
+    );
+  }
+
+  /**
+   * 特定の Distribution が読める prefix をさらに絞る。
+   * Internal は internal-pages/ だけ、Shared は shared-pages/ だけ。
+   */
+  restrictDistributionRead(distributionArn: string, prefix: string): void {
+    const cloudFront = new ServicePrincipal('cloudfront.amazonaws.com');
+    const sidSuffix = prefix.replace(/\/$/, '').replace(/-/g, '');
+
+    this.bucket.addToResourcePolicy(
+      new PolicyStatement({
+        sid: `DenyDistributionGetOutside${sidSuffix}`,
+        effect: Effect.DENY,
+        principals: [cloudFront],
+        actions: ['s3:GetObject'],
+        notResources: [this.bucket.arnForObjects(`${prefix}*`)],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': distributionArn,
+          },
+        },
+      }),
+    );
+
+    this.bucket.addToResourcePolicy(
+      new PolicyStatement({
+        sid: `DenyDistributionListOutside${sidSuffix}`,
+        effect: Effect.DENY,
+        principals: [cloudFront],
+        actions: ['s3:ListBucket'],
+        resources: [this.bucket.bucketArn],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': distributionArn,
+          },
+          StringNotLike: {
+            's3:prefix': [`${prefix}*`],
+          },
           Null: { 's3:prefix': 'false' },
         },
       }),

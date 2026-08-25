@@ -1,5 +1,5 @@
 import type { ApiErrorResponse, GetPageResponse, PageMetadata } from '@page-share/shared';
-import { isValidSlug, metaObjectKey } from '@page-share/shared';
+import { computeExpiresAt, isValidSlug, metaObjectKey } from '@page-share/shared';
 import { isPageMetadata } from './page-metadata.js';
 import type { PageStore } from './page-store.js';
 import { buildViewUrl } from './view-url.js';
@@ -7,21 +7,14 @@ import { buildViewUrl } from './view-url.js';
 export interface GetPageInput {
   store: PageStore;
   pagesBaseUrl: string;
+  shareBaseUrl: string;
   ownerSub: string;
   slug: string;
-  now: () => Date;
 }
 
 export type GetPageResult =
   | { ok: true; status: 200; body: GetPageResponse }
-  | { ok: false; status: 400 | 403 | 404 | 410 | 500; body: ApiErrorResponse };
-
-function isExpired(expiresAt: string | null, now: Date): boolean {
-  if (expiresAt === null) {
-    return false;
-  }
-  return new Date(expiresAt).getTime() <= now.getTime();
-}
+  | { ok: false; status: 400 | 403 | 404 | 500; body: ApiErrorResponse };
 
 export async function getPage(input: GetPageInput): Promise<GetPageResult> {
   if (!isValidSlug(input.slug)) {
@@ -64,39 +57,11 @@ export async function getPage(input: GetPageInput): Promise<GetPageResult> {
         };
       }
 
-      console.log('page_get_failed', {
-        errorCode: 'internal_error',
-        ownerSub: input.ownerSub,
-        slug: input.slug,
-      });
-      return {
-        ok: false,
-        status: 500,
-        body: {
-          error: {
-            code: 'internal_error',
-            message: 'ページの取得に失敗しました',
-          },
-        },
-      };
+      return internalError(input.ownerSub, input.slug);
     }
 
     if (!isPageMetadata(result.data)) {
-      console.log('page_get_failed', {
-        errorCode: 'internal_error',
-        ownerSub: input.ownerSub,
-        slug: input.slug,
-      });
-      return {
-        ok: false,
-        status: 500,
-        body: {
-          error: {
-            code: 'internal_error',
-            message: 'ページの取得に失敗しました',
-          },
-        },
-      };
+      return internalError(input.ownerSub, input.slug);
     }
 
     const metadata = result.data;
@@ -120,23 +85,7 @@ export async function getPage(input: GetPageInput): Promise<GetPageResult> {
       };
     }
 
-    if (isExpired(metadata.expiresAt, input.now())) {
-      console.log('page_get_failed', {
-        errorCode: 'page_expired',
-        ownerSub: input.ownerSub,
-        slug: input.slug,
-      });
-      return {
-        ok: false,
-        status: 410,
-        body: {
-          error: {
-            code: 'page_expired',
-            message: 'ページの有効期限が切れています',
-          },
-        },
-      };
-    }
+    const expiresAt = computeExpiresAt(metadata.retention, new Date(metadata.contentUpdatedAt));
 
     console.log('page_retrieved', {
       slug: input.slug,
@@ -148,24 +97,34 @@ export async function getPage(input: GetPageInput): Promise<GetPageResult> {
       status: 200,
       body: {
         ...metadata,
-        viewUrl: buildViewUrl(input.pagesBaseUrl, metadata.slug),
+        viewUrl: buildViewUrl(
+          input.pagesBaseUrl,
+          input.shareBaseUrl,
+          metadata.visibility,
+          metadata.slug,
+        ),
+        expiresAt,
       },
     };
   } catch {
-    console.log('page_get_failed', {
-      errorCode: 'internal_error',
-      ownerSub: input.ownerSub,
-      slug: input.slug,
-    });
-    return {
-      ok: false,
-      status: 500,
-      body: {
-        error: {
-          code: 'internal_error',
-          message: 'ページの取得に失敗しました',
-        },
-      },
-    };
+    return internalError(input.ownerSub, input.slug);
   }
+}
+
+function internalError(ownerSub: string, slug: string): GetPageResult {
+  console.log('page_get_failed', {
+    errorCode: 'internal_error',
+    ownerSub,
+    slug,
+  });
+  return {
+    ok: false,
+    status: 500,
+    body: {
+      error: {
+        code: 'internal_error',
+        message: 'ページの取得に失敗しました',
+      },
+    },
+  };
 }

@@ -16,20 +16,23 @@ export interface Config {
   };
   /** 独自ドメイン設定。未設定ならデフォルトドメインで構築する */
   domains?: {
-    /** Route 53 hosted zoneのドメイン (例: share.example.jp)。Signed Cookieの発行スコープにもなる */
+    /** Route 53 hosted zoneのドメイン (例: example.com)。Signed Cookieの発行スコープにもなる */
     root: string;
-    /** 管理アプリ (例: app.share.example.jp) */
+    /** 管理アプリ (例: app.example.com) */
     app: string;
-    /** 閲覧ページ (例: pages.share.example.jp) */
+    /** 社内限定閲覧 (例: pages.example.com) */
     pages: string;
+    /** URL共有閲覧 (例: share.example.com) */
+    share: string;
   };
 }
 
 export const config: Config = {
   // env: { account: '123456789012', region: 'ap-northeast-1' },
   // domains: {
-  //   root: 'share.example.jp',
-  //   app: 'app.share.example.jp',
-  //   pages: 'pages.share.example.jp',
+  //   root: 'example.com',
+  //   app: 'app.example.com',
+  //   pages: 'pages.example.com',
+  //   share: 'share.example.com',
   // },
 };
