@@ -14,6 +14,8 @@ export interface Config {
     account: string;
     region: string;
   };
+  /** メールドメイン。S3 キーと CloudFront Function のドメイン補完に使う */
+  emailDomain: string;
   /** 独自ドメイン設定。未設定ならデフォルトドメインで構築する */
   domains?: {
     /** Route 53 hosted zoneのドメイン (例: example.com)。Signed Cookieの発行スコープにもなる */
@@ -22,17 +24,15 @@ export interface Config {
     app: string;
     /** 社内限定閲覧 (例: pages.example.com) */
     pages: string;
-    /** URL共有閲覧 (例: share.example.com) */
-    share: string;
   };
 }
 
 export const config: Config = {
+  emailDomain: 'example.jp',
   // env: { account: '123456789012', region: 'ap-northeast-1' },
   // domains: {
   //   root: 'example.com',
   //   app: 'app.example.com',
   //   pages: 'pages.example.com',
-  //   share: 'share.example.com',
   // },
 };

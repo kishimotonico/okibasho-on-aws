@@ -1,4 +1,4 @@
-import { validateUploadPath } from '@page-share/shared';
+import { validateUploadPath } from '@cli/page';
 
 export interface UploadFileEntry {
   path: string;

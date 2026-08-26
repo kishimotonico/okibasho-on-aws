@@ -7,10 +7,13 @@ describe('runCli', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     const result = await runCli(['--help']);
     expect(result.exitCode).toBe(0);
-    expect(log.mock.calls[0]?.[0]).toContain('share-html login');
-    expect(log.mock.calls[0]?.[0]).toContain('--title');
-    expect(log.mock.calls[0]?.[0]).toContain('--shared');
-    expect(log.mock.calls[0]?.[0]).not.toContain('--name');
+    const help = String(log.mock.calls[0]?.[0]);
+    expect(help).toContain('share-html login');
+    expect(help).toContain('share-html list');
+    expect(help).toContain('share-html rm');
+    expect(help).toContain('--name');
+    expect(help).toContain('--permanent');
+    expect(help).not.toContain('--shared');
     log.mockRestore();
   });
 
@@ -52,12 +55,11 @@ describe('runCli', () => {
   it('パス指定はアップロードに振り分ける', async () => {
     const uploadModule = await import('../src/commands/upload.js');
     const uploadSpy = vi.spyOn(uploadModule, 'runUpload').mockResolvedValue({ exitCode: 0 });
-    const result = await runCli(['./index.html', '--dry-run']);
+    const result = await runCli(['./index.html', '--dry-run', '--name', 'demo']);
     expect(result.exitCode).toBe(0);
     expect(uploadSpy).toHaveBeenCalledWith('./index.html', {
-      title: undefined,
-      shared: false,
-      retention: undefined,
+      name: 'demo',
+      permanent: false,
       dryRun: true,
     });
     uploadSpy.mockRestore();

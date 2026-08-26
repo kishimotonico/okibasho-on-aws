@@ -60,7 +60,7 @@ export async function runLogin(): Promise<void> {
   }
 
   const { port, server } = callbackServer;
-  const redirectUri = `http://localhost:${port}${CALLBACK_PATH}`;
+  const redirectUri = `http://127.0.0.1:${port}${CALLBACK_PATH}`;
   const codeVerifier = randomPKCECodeVerifier();
   const codeChallenge = await calculatePKCECodeChallenge(codeVerifier);
   const state = randomState();

@@ -1,20 +1,19 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import type { ListPageItem, Retention, Visibility } from '@page-share/shared';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
 import { getWebConfig } from '~/config/env';
-import { extractApiErrorMessages } from '~/lib/api-errors';
 import { getExpirationStatus } from '~/lib/expiration-status';
-import { formatBytes } from '~/lib/format-bytes';
 import { formatDateTime } from '~/lib/format-datetime';
 import {
   deletePage,
   listPages,
+  type ListedPage,
+  type Retention,
   updatePageRetention,
-  updatePageTitle,
-} from '~/lib/pages-client';
+} from '~/lib/pages-s3';
 import { shouldWarnImmediateExpiryOnTemporary } from '~/lib/retention-warning';
+import { createPagesS3Client } from '~/lib/s3-client';
 
 export const Route = createFileRoute('/my-pages')({
   component: MyPagesPage,
@@ -24,55 +23,35 @@ function retentionLabel(retention: Retention): string {
   return retention === 'temporary' ? '30日' : '無期限';
 }
 
-function visibilityLabel(visibility: Visibility): string {
-  return visibility === 'internal' ? '社内限定' : 'URL共有';
-}
-
-function visibilityBadgeClass(visibility: Visibility): string {
-  return visibility === 'internal'
-    ? 'visibility-badge visibility-badge--internal'
-    : 'visibility-badge visibility-badge--shared';
-}
-
-function resolveApiErrorMessage(
-  status: number,
-  body: Parameters<typeof extractApiErrorMessages>[0],
-): string {
-  if (status === 401) {
-    return 'ログインの有効期限が切れました。再度ログインしてください。';
-  }
-  return extractApiErrorMessages(body).join('\n');
-}
-
 function MyPagesPage() {
   const auth = useAuth();
-  const [pages, setPages] = useState<ListPageItem[]>([]);
+  const config = useMemo(() => getWebConfig(), []);
+  const [pages, setPages] = useState<ListedPage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [copySlug, setCopySlug] = useState<string | null>(null);
   const [busySlug, setBusySlug] = useState<string | null>(null);
-  const [editingSlug, setEditingSlug] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
 
   const loadPages = useCallback(async () => {
-    if (!auth.idToken) {
+    if (!auth.idToken || !auth.email) {
       return;
     }
 
     setIsLoading(true);
     setLoadError(null);
 
-    const result = await listPages(fetch, getWebConfig().apiBaseUrl, auth.idToken);
-    setIsLoading(false);
-
-    if (!result.ok) {
-      setLoadError(resolveApiErrorMessage(result.status, result.body));
-      return;
+    try {
+      const client = createPagesS3Client(config, auth.idToken);
+      const result = await listPages(client, config.pagesBucket, auth.email, config.pagesBaseUrl);
+      setPages(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '一覧の取得に失敗しました';
+      setLoadError(message);
+    } finally {
+      setIsLoading(false);
     }
-
-    setPages(result.body.pages);
-  }, [auth.idToken]);
+  }, [auth.email, auth.idToken, config]);
 
   useEffect(() => {
     if (auth.isAuthenticated && auth.idToken) {
@@ -80,7 +59,7 @@ function MyPagesPage() {
     }
   }, [auth.isAuthenticated, auth.idToken, loadPages]);
 
-  const handleCopyUrl = async (page: ListPageItem) => {
+  const handleCopyUrl = async (page: ListedPage) => {
     try {
       await navigator.clipboard.writeText(page.viewUrl);
       setCopySlug(page.slug);
@@ -90,8 +69,8 @@ function MyPagesPage() {
     }
   };
 
-  const handleRetentionChange = async (page: ListPageItem, nextRetention: Retention) => {
-    if (!auth.idToken || page.retention === nextRetention) {
+  const handleRetentionChange = async (page: ListedPage, nextRetention: Retention) => {
+    if (!auth.idToken || !auth.email || page.retention === nextRetention) {
       return;
     }
 
@@ -108,105 +87,57 @@ function MyPagesPage() {
     setActionError(null);
     setBusySlug(page.slug);
 
-    const result = await updatePageRetention(
-      fetch,
-      getWebConfig().apiBaseUrl,
-      auth.idToken,
-      page.slug,
-      nextRetention,
-    );
+    try {
+      const client = createPagesS3Client(config, auth.idToken);
+      const metadata = await updatePageRetention(
+        client,
+        config.pagesBucket,
+        auth.email,
+        page.slug,
+        nextRetention,
+      );
 
-    setBusySlug(null);
+      setPages((current) =>
+        current.map((item) =>
+          item.slug === page.slug
+            ? {
+                ...item,
+                expiresAt: metadata.expiresAt,
+                retention: metadata.expiresAt === null ? 'permanent' : 'temporary',
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '保存期間の変更に失敗しました';
+      setActionError(message);
+    } finally {
+      setBusySlug(null);
+    }
+  };
 
-    if (!result.ok) {
-      setActionError(resolveApiErrorMessage(result.status, result.body));
+  const handleDelete = async (page: ListedPage) => {
+    if (!auth.idToken || !auth.email) {
       return;
     }
 
-    setPages((current) =>
-      current.map((item) =>
-        item.slug === page.slug
-          ? {
-              ...item,
-              retention: result.body.retention,
-              expiresAt: result.body.expiresAt,
-            }
-          : item,
-      ),
-    );
-  };
-
-  const startTitleEdit = (page: ListPageItem) => {
-    setEditingSlug(page.slug);
-    setEditingTitle(page.title);
-    setActionError(null);
-  };
-
-  const cancelTitleEdit = () => {
-    setEditingSlug(null);
-    setEditingTitle('');
-  };
-
-  const handleTitleSave = async (page: ListPageItem) => {
-    if (!auth.idToken || editingTitle === page.title) {
-      cancelTitleEdit();
+    if (!window.confirm(`「${page.slug}」を削除しますか？この操作は取り消せません。`)) {
       return;
     }
 
     setActionError(null);
     setBusySlug(page.slug);
 
-    const result = await updatePageTitle(
-      fetch,
-      getWebConfig().apiBaseUrl,
-      auth.idToken,
-      page.slug,
-      editingTitle,
-    );
-
-    setBusySlug(null);
-
-    if (!result.ok) {
-      setActionError(resolveApiErrorMessage(result.status, result.body));
-      return;
+    try {
+      const client = createPagesS3Client(config, auth.idToken);
+      await deletePage(client, config.pagesBucket, auth.email, page.slug);
+      setPages((current) => current.filter((item) => item.slug !== page.slug));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '削除に失敗しました';
+      setActionError(message);
+    } finally {
+      setBusySlug(null);
     }
-
-    setPages((current) =>
-      current.map((item) =>
-        item.slug === page.slug
-          ? {
-              ...item,
-              title: result.body.title,
-            }
-          : item,
-      ),
-    );
-    cancelTitleEdit();
-  };
-
-  const handleDelete = async (page: ListPageItem) => {
-    if (!auth.idToken) {
-      return;
-    }
-
-    const label = page.title || page.slug;
-    if (!window.confirm(`「${label}」を削除しますか？この操作は取り消せません。`)) {
-      return;
-    }
-
-    setActionError(null);
-    setBusySlug(page.slug);
-
-    const result = await deletePage(fetch, getWebConfig().apiBaseUrl, auth.idToken, page.slug);
-
-    setBusySlug(null);
-
-    if (!result.ok) {
-      setActionError(resolveApiErrorMessage(result.status, result.body));
-      return;
-    }
-
-    setPages((current) => current.filter((item) => item.slug !== page.slug));
   };
 
   if (auth.isLoading) {
@@ -237,19 +168,13 @@ function MyPagesPage() {
       {loadError ? (
         <div className="message message--error">
           <p>{loadError}</p>
-          {loadError.includes('ログイン') ? (
-            <button type="button" className="button" onClick={() => void auth.login('/my-pages')}>
-              ログイン
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void loadPages()}
-            >
-              再読み込み
-            </button>
-          )}
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void loadPages()}
+          >
+            再読み込み
+          </button>
         </div>
       ) : null}
 
@@ -271,14 +196,10 @@ function MyPagesPage() {
           <table className="page-table">
             <thead>
               <tr>
-                <th>タイトル</th>
-                <th>公開範囲</th>
-                <th>バージョン</th>
+                <th>slug</th>
                 <th>閲覧 URL</th>
                 <th>作成日時</th>
                 <th>保存期間</th>
-                <th>ファイル数</th>
-                <th>合計サイズ</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -286,7 +207,6 @@ function MyPagesPage() {
               {pages.map((page) => {
                 const expiration = getExpirationStatus(page.expiresAt);
                 const isBusy = busySlug === page.slug;
-                const isEditing = editingSlug === page.slug;
 
                 return (
                   <tr
@@ -294,53 +214,8 @@ function MyPagesPage() {
                     className={expiration.kind === 'expired' ? 'page-row--expired' : undefined}
                   >
                     <td>
-                      {isEditing ? (
-                        <div className="title-edit">
-                          <input
-                            type="text"
-                            value={editingTitle}
-                            onChange={(event) => setEditingTitle(event.target.value)}
-                            disabled={isBusy}
-                          />
-                          <div className="title-edit__actions">
-                            <button
-                              type="button"
-                              className="text-button"
-                              disabled={isBusy}
-                              onClick={() => void handleTitleSave(page)}
-                            >
-                              保存
-                            </button>
-                            <button
-                              type="button"
-                              className="text-button"
-                              disabled={isBusy}
-                              onClick={cancelTitleEdit}
-                            >
-                              キャンセル
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="title-cell">
-                          <div>{page.title || <span className="title-placeholder">（無題）</span>}</div>
-                          <button
-                            type="button"
-                            className="text-button"
-                            disabled={isBusy}
-                            onClick={() => startTitleEdit(page)}
-                          >
-                            タイトル編集
-                          </button>
-                        </div>
-                      )}
+                      <code>{page.slug}</code>
                     </td>
-                    <td>
-                      <span className={visibilityBadgeClass(page.visibility)}>
-                        {visibilityLabel(page.visibility)}
-                      </span>
-                    </td>
-                    <td>v{page.version}</td>
                     <td className="page-table__url">
                       <a href={page.viewUrl} target="_blank" rel="noreferrer">
                         {page.viewUrl}
@@ -379,8 +254,6 @@ function MyPagesPage() {
                         </button>
                       </div>
                     </td>
-                    <td>{page.fileCount}</td>
-                    <td>{formatBytes(page.totalSize)}</td>
                     <td>
                       <div className="row-actions">
                         <Link

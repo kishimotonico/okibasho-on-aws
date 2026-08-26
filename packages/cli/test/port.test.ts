@@ -18,14 +18,14 @@ describe('createCallbackServer', () => {
     servers.length = 0;
   });
 
-  it('コールバックポート 8976 でリッスンする', async () => {
+  it('空いている最初のコールバックポートでリッスンする', async () => {
     const { port, server } = await createCallbackServer();
     servers.push(server);
+    expect(CLI_CALLBACK_PORTS).toContain(port);
     expect(port).toBe(8976);
-    expect(CLI_CALLBACK_PORTS).toEqual([8976]);
   });
 
-  it('ポートが塞がれていればエラー', async () => {
+  it('先頭ポートが塞がれていれば次の候補を使う', async () => {
     const blockedPort = CLI_CALLBACK_PORTS[0];
     const blocker = createServer();
     servers.push(blocker);
@@ -33,6 +33,20 @@ describe('createCallbackServer', () => {
     await new Promise<void>((resolve) => {
       blocker.listen(blockedPort, '127.0.0.1', () => resolve());
     });
+
+    const { port, server } = await createCallbackServer();
+    servers.push(server);
+    expect(port).toBe(CLI_CALLBACK_PORTS[1]);
+  });
+
+  it('全ポートが塞がれていればエラー', async () => {
+    for (const blockedPort of CLI_CALLBACK_PORTS) {
+      const blocker = createServer();
+      servers.push(blocker);
+      await new Promise<void>((resolve) => {
+        blocker.listen(blockedPort, '127.0.0.1', () => resolve());
+      });
+    }
 
     await expect(createCallbackServer()).rejects.toBeInstanceOf(PortsInUseError);
   });

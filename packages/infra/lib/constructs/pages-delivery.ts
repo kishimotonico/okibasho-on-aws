@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { RemovalPolicy } from 'aws-cdk-lib';
+import { Duration } from 'aws-cdk-lib';
 import {
   AccessLevel,
   CachePolicy,
@@ -10,8 +10,7 @@ import {
   FunctionCode,
   FunctionEventType,
   FunctionRuntime,
-  HeadersReferrerPolicy,
-  KeyValueStore,
+  GeoRestriction,
   PriceClass,
   ResponseHeadersPolicy,
   ViewerProtocolPolicy,
@@ -22,54 +21,49 @@ import { Construct } from 'constructs';
 
 export interface PagesDeliveryProps {
   readonly bucket: IBucket;
+  /** メールドメイン。CloudFront Function が user ローカル部を補完する */
+  readonly emailDomain: string;
 }
 
 /**
  * untrusted pages を CloudFront + OAC 経由で配信する Distribution。
- * 社内限定 (internal) と URL共有 (shared) を別 Distribution に分ける。
  */
 export class PagesDelivery extends Construct {
-  readonly internalDistribution: Distribution;
-  readonly sharedDistribution: Distribution;
-  readonly keyValueStore: KeyValueStore;
+  readonly distribution: Distribution;
 
   constructor(scope: Construct, id: string, props: PagesDeliveryProps) {
     super(scope, id);
 
-    this.keyValueStore = new KeyValueStore(this, 'KeyValueStore', {
-      comment: 'slug → active version alias',
-    });
-    this.keyValueStore.applyRemovalPolicy(RemovalPolicy.RETAIN);
-
     const routerSource = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), '../functions/pages-router.js'),
       'utf-8',
-    );
+    ).replaceAll('__EMAIL_DOMAIN__', props.emailDomain);
 
-    const internalRouterFunction = new Function(this, 'InternalRouterFunction', {
-      code: FunctionCode.fromInline(routerSource.replaceAll('__NAMESPACE__', 'internal')),
+    const routerFunction = new Function(this, 'RouterFunction', {
+      code: FunctionCode.fromInline(routerSource),
       runtime: FunctionRuntime.JS_2_0,
-      keyValueStore: this.keyValueStore,
-      comment: 'internal pages: URL rewrite + KVS alias',
+      comment: 'pages: /p/<user>/<slug>/... を S3 キーへ rewrite',
     });
 
-    const sharedRouterFunction = new Function(this, 'SharedRouterFunction', {
-      code: FunctionCode.fromInline(routerSource.replaceAll('__NAMESPACE__', 'shared')),
-      runtime: FunctionRuntime.JS_2_0,
-      keyValueStore: this.keyValueStore,
-      comment: 'shared pages: URL rewrite + KVS alias',
+    const cachePolicy = new CachePolicy(this, 'CachePolicy', {
+      comment: '同一キー上書きを早く反映するため defaultTtl を短くする',
+      defaultTtl: Duration.seconds(60),
+      minTtl: Duration.seconds(0),
+      maxTtl: Duration.days(365),
     });
 
-  // architecture.md の制約: すべての behavior に KVS 関連付け済み Function を付ける。
-  // Function 無しの behavior が1つでもあると、その経路だけ期限判定が抜ける。
-    const internalResponseHeaders = new ResponseHeadersPolicy(this, 'InternalResponseHeaders', {
+    const responseHeaders = new ResponseHeadersPolicy(this, 'ResponseHeaders', {
       securityHeadersBehavior: {
         contentTypeOptions: { override: true },
+        contentSecurityPolicy: {
+          contentSecurityPolicy: "frame-ancestors 'none'",
+          override: true,
+        },
       },
       customHeadersBehavior: {
         customHeaders: [
           {
-            header: 'Cross-Origin-Resource-Policy',
+            header: 'Cross-Origin-Opener-Policy',
             override: true,
             value: 'same-origin',
           },
@@ -77,64 +71,23 @@ export class PagesDelivery extends Construct {
       },
     });
 
-    const sharedResponseHeaders = new ResponseHeadersPolicy(this, 'SharedResponseHeaders', {
-      securityHeadersBehavior: {
-        contentTypeOptions: { override: true },
-        referrerPolicy: {
-          override: true,
-          referrerPolicy: HeadersReferrerPolicy.NO_REFERRER,
-        },
-      },
-      customHeadersBehavior: {
-        customHeaders: [
-          {
-            header: 'X-Robots-Tag',
-            override: true,
-            value: 'noindex, nofollow',
-          },
-        ],
-      },
-    });
-
-    const internalOrigin = S3BucketOrigin.withOriginAccessControl(props.bucket, {
-      originPath: '/internal-pages',
+    const origin = S3BucketOrigin.withOriginAccessControl(props.bucket, {
+      // 存在しないアセットに403ではなく404を返させる。Function が /pages/... へ rewrite するため originPath は付けない
       originAccessLevels: [AccessLevel.READ, AccessLevel.LIST],
     });
 
-    const sharedOrigin = S3BucketOrigin.withOriginAccessControl(props.bucket, {
-      originPath: '/shared-pages',
-      originAccessLevels: [AccessLevel.READ, AccessLevel.LIST],
-    });
-
-    this.internalDistribution = new Distribution(this, 'InternalDistribution', {
-      comment: 'internal pages配信',
+    this.distribution = new Distribution(this, 'Distribution', {
+      comment: 'pages配信',
       priceClass: PriceClass.PRICE_CLASS_200,
+      geoRestriction: GeoRestriction.allowlist('JP'),
       defaultBehavior: {
-        origin: internalOrigin,
+        origin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        // slug は KVS エイリアスで切り替わる。rewrite 後 URI がキャッシュキー
-        cachePolicy: CachePolicy.CACHING_OPTIMIZED,
-        responseHeadersPolicy: internalResponseHeaders,
+        cachePolicy,
+        responseHeadersPolicy: responseHeaders,
         functionAssociations: [
           {
-            function: internalRouterFunction,
-            eventType: FunctionEventType.VIEWER_REQUEST,
-          },
-        ],
-      },
-    });
-
-    this.sharedDistribution = new Distribution(this, 'SharedDistribution', {
-      comment: 'shared pages配信',
-      priceClass: PriceClass.PRICE_CLASS_200,
-      defaultBehavior: {
-        origin: sharedOrigin,
-        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: CachePolicy.CACHING_OPTIMIZED,
-        responseHeadersPolicy: sharedResponseHeaders,
-        functionAssociations: [
-          {
-            function: sharedRouterFunction,
+            function: routerFunction,
             eventType: FunctionEventType.VIEWER_REQUEST,
           },
         ],

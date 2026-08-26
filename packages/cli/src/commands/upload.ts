@@ -1,47 +1,47 @@
 import { readFile } from 'node:fs/promises';
+import type { S3Client } from '@aws-sdk/client-s3';
+import { ConfigError, resolveConfig, type ResolvedConfig } from '../config.js';
+import {
+  collectFiles,
+  CollectFilesError,
+  SingleFileNotHtmlError,
+  type CollectedFile,
+} from '../collect-files.js';
+import { emailFromIdToken } from '../id-token.js';
 import {
   contentTypeFromPath,
-  DEFAULT_RETENTION,
-  type CreatePageRequest,
-  type Retention,
-  type Visibility,
-  validateCreatePageRequest,
-} from '@page-share/shared';
-import { ConfigError, resolveConfig } from '../config.js';
-import { collectFiles, CollectFilesError, SingleFileNotHtmlError } from '../collect-files.js';
-import { resolveTitle } from '../resolve-title.js';
+  MAX_FILE_COUNT,
+  MAX_FILE_SIZE,
+  MAX_PAGE_SIZE,
+} from '../page/index.js';
+import { InvalidSlugError, resolveSlug } from '../resolve-slug.js';
 import { ensureIdToken, TokenRefreshError } from '../token-refresh.js';
-import {
-  completePage,
-  createPage,
-  type FetchFn,
-  uploadFilesWithConcurrency,
-} from '../upload-client.js';
+import { createS3Client, uploadPage } from '../upload-client.js';
 
 export interface UploadCommandOptions {
-  path: string;
-  title?: string;
-  shared?: boolean;
-  retention?: Retention;
+  name?: string;
+  permanent?: boolean;
   dryRun?: boolean;
 }
 
 export interface UploadDeps {
-  fetch: FetchFn;
   resolveConfig: typeof resolveConfig;
   collectFiles: typeof collectFiles;
   ensureIdToken: typeof ensureIdToken;
   readFile: typeof readFile;
-  resolveTitle: typeof resolveTitle;
+  resolveSlug: typeof resolveSlug;
+  createS3Client: (config: ResolvedConfig, idToken: string) => S3Client;
+  uploadPage: typeof uploadPage;
 }
 
 export const defaultUploadDeps: UploadDeps = {
-  fetch: globalThis.fetch.bind(globalThis),
   resolveConfig,
   collectFiles,
   ensureIdToken,
   readFile,
-  resolveTitle,
+  resolveSlug,
+  createS3Client,
+  uploadPage,
 };
 
 export interface UploadResult {
@@ -53,7 +53,8 @@ function formatUserMessage(err: unknown): string {
     err instanceof ConfigError ||
     err instanceof CollectFilesError ||
     err instanceof SingleFileNotHtmlError ||
-    err instanceof TokenRefreshError
+    err instanceof TokenRefreshError ||
+    err instanceof InvalidSlugError
   ) {
     return err.message;
   }
@@ -72,48 +73,47 @@ function printSkippedSummary(skippedInvalidPath: number, skippedSymlinks: number
   }
 }
 
-function printValidationErrors(errors: Array<{ message: string }>): void {
-  for (const error of errors) {
-    console.error(error.message);
-  }
-}
+function validateUploadFiles(files: CollectedFile[]): string[] {
+  const errors: string[] = [];
 
-function printApiError(body: {
-  error: { message: string; details?: Array<{ message: string }> };
-}): void {
-  console.error(body.error.message);
-  if (body.error.details) {
-    for (const detail of body.error.details) {
-      console.error(`  - ${detail.message}`);
+  if (!files.some((file) => file.path === 'index.html')) {
+    errors.push('index.html が必要です。');
+  }
+
+  if (files.length > MAX_FILE_COUNT) {
+    errors.push(`ファイル数が上限 (${MAX_FILE_COUNT}) を超えています: ${files.length}`);
+  }
+
+  let totalSize = 0;
+  for (const file of files) {
+    if (file.size > MAX_FILE_SIZE) {
+      errors.push(`ファイルサイズが上限 (${MAX_FILE_SIZE} bytes) を超えています: ${file.path}`);
     }
+    totalSize += file.size;
   }
+
+  if (totalSize > MAX_PAGE_SIZE) {
+    errors.push(`ページ全体のサイズが上限 (${MAX_PAGE_SIZE} bytes) を超えています。`);
+  }
+
+  return errors;
 }
 
-function visibilityLabel(visibility: Visibility): string {
-  return visibility === 'shared' ? 'URLを知っていれば誰でも閲覧可' : '社内限定';
-}
-
-function printDryRun(
-  files: Array<{ path: string }>,
-  options: UploadCommandOptions,
-  title: string,
-  visibility: Visibility,
-): void {
+function printDryRun(files: CollectedFile[], slug: string, permanent: boolean): void {
   console.log(`Dry run: ${files.length} file(s) would be uploaded`);
   for (const file of files) {
     console.log(`  ${file.path} (${contentTypeFromPath(file.path)})`);
   }
-  console.log(`title: ${title}`);
-  console.log(`visibility: ${visibilityLabel(visibility)}`);
-  console.log(`retention: ${options.retention ?? DEFAULT_RETENTION}`);
+  console.log(`slug: ${slug}`);
+  console.log(`permanent: ${permanent}`);
 }
 
 export async function runUpload(
   path: string,
-  options: Omit<UploadCommandOptions, 'path'> = {},
+  options: UploadCommandOptions = {},
   deps: UploadDeps = defaultUploadDeps,
 ): Promise<UploadResult> {
-  let config;
+  let config: ResolvedConfig;
   try {
     config = await deps.resolveConfig();
   } catch (err) {
@@ -131,28 +131,26 @@ export async function runUpload(
 
   printSkippedSummary(collected.skippedInvalidPath, collected.skippedSymlinks);
 
-  const visibility: Visibility = options.shared ? 'shared' : 'internal';
-  const title =
-    options.title !== undefined
-      ? options.title
-      : await deps.resolveTitle(path, collected.files, deps.readFile);
-
-  const declaredFiles = collected.files.map((file) => ({ path: file.path, size: file.size }));
-  const request: CreatePageRequest = {
-    title,
-    visibility,
-    retention: options.retention ?? DEFAULT_RETENTION,
-    files: declaredFiles,
-  };
-
-  const validationErrors = validateCreatePageRequest(request);
-  if (validationErrors.length > 0) {
-    printValidationErrors(validationErrors);
+  let slug: string;
+  try {
+    slug = await deps.resolveSlug(path, options.name);
+  } catch (err) {
+    console.error(formatUserMessage(err));
     return { exitCode: 1 };
   }
 
+  const validationErrors = validateUploadFiles(collected.files);
+  if (validationErrors.length > 0) {
+    for (const message of validationErrors) {
+      console.error(message);
+    }
+    return { exitCode: 1 };
+  }
+
+  const permanent = options.permanent === true;
+
   if (options.dryRun) {
-    printDryRun(collected.files, { path, ...options }, title, visibility);
+    printDryRun(collected.files, slug, permanent);
     return { exitCode: 0 };
   }
 
@@ -164,50 +162,35 @@ export async function runUpload(
     return { exitCode: 1 };
   }
 
-  const createResult = await createPage(deps.fetch, config.apiUrl, idToken, request);
-  if (!createResult.ok) {
-    printApiError(createResult.body);
+  let email: string;
+  try {
+    email = emailFromIdToken(idToken);
+  } catch (err) {
+    console.error(formatUserMessage(err));
     return { exitCode: 1 };
   }
 
-  const { body } = createResult;
-  console.log(`Uploading ${body.uploads.length} files...`);
-
-  const failure = await uploadFilesWithConcurrency(
-    deps.fetch,
-    body.uploads.map((upload) => {
-      const localFile = collected.files.find((file) => file.path === upload.path);
-      if (!localFile) {
-        throw new Error(`アップロード対象に含まれないパスが API から返されました: ${upload.path}`);
-      }
-      return {
-        path: upload.path,
-        url: upload.url,
-        headers: upload.headers,
-        readBody: () => deps.readFile(localFile.absolutePath),
-      };
-    }),
+  const files = await Promise.all(
+    collected.files.map(async (file) => ({
+      path: file.path,
+      body: await deps.readFile(file.absolutePath),
+      contentType: contentTypeFromPath(file.path),
+    })),
   );
 
-  if (failure) {
-    console.error(
-      `アップロードに失敗しました: ${failure.path} (HTTP ${failure.error.status} ${failure.error.statusText})`,
-    );
-    console.error('PUT が完了する前に終了した場合、もう一度同じコマンドを実行してください。');
+  try {
+    const s3 = deps.createS3Client(config, idToken);
+    console.log(`Uploading ${files.length} files...`);
+    const result = await deps.uploadPage(s3, config.bucket, config.pagesBaseUrl, {
+      email,
+      slug,
+      files,
+      permanent,
+    });
+    console.log(result.viewUrl);
+    return { exitCode: 0 };
+  } catch (err) {
+    console.error(formatUserMessage(err));
     return { exitCode: 1 };
   }
-
-  const completeResult = await completePage(deps.fetch, config.apiUrl, idToken, body.slug, {
-    versionId: body.versionId,
-    files: declaredFiles,
-    title,
-  });
-  if (!completeResult.ok) {
-    printApiError(completeResult.body);
-    return { exitCode: 1 };
-  }
-
-  console.log(completeResult.body.viewUrl);
-  console.log(visibilityLabel(visibility));
-  return { exitCode: 0 };
 }

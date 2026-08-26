@@ -27,9 +27,8 @@ function isAddrInUse(err: unknown): boolean {
  * 127.0.0.1 に限定して待ち受ける。0.0.0.0 にすると認可コードを受け取る口が
  * LANに開いてしまうため、ここを広げないこと。
  *
- * リダイレクト先が 127.0.0.1 ではなく localhost なのは、Cognitoが
- * コールバックURLにHTTPを許すのが localhost だけだから。localhost が ::1 に
- * 解決された場合はIPv6側の接続が即座に拒否され、ブラウザがIPv4へフォールバックする。
+ * Cognito は 127.0.0.1 の HTTP コールバックを許可する。listen も redirect も
+ * 127.0.0.1 を使う。
  */
 function tryListen(port: number, host = '127.0.0.1'): Promise<Server> {
   return new Promise((resolve, reject) => {

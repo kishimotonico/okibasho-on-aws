@@ -2,24 +2,26 @@ import { readFile } from 'node:fs/promises';
 import { getConfigFilePath, type PathEnv } from './paths.js';
 
 export interface ResolvedConfig {
-  apiUrl: string;
   issuer: string;
   clientId: string;
+  identityPoolId: string;
+  userPoolId: string;
+  region: string;
+  bucket: string;
+  pagesBaseUrl: string;
 }
 
 interface ConfigFile {
-  apiUrl?: string;
   issuer?: string;
   clientId?: string;
+  identityPoolId?: string;
+  userPoolId?: string;
+  region?: string;
+  bucket?: string;
+  pagesBaseUrl?: string;
 }
 
 const CONFIG_FIELDS = [
-  {
-    key: 'apiUrl' as const,
-    envVar: 'SHARE_HTML_API_URL',
-    cfnOutput: 'ApiEndpointUrl',
-    configKey: 'apiUrl' as const,
-  },
   {
     key: 'issuer' as const,
     envVar: 'SHARE_HTML_ISSUER',
@@ -31,6 +33,36 @@ const CONFIG_FIELDS = [
     envVar: 'SHARE_HTML_CLIENT_ID',
     cfnOutput: 'CliAppClientId',
     configKey: 'clientId' as const,
+  },
+  {
+    key: 'identityPoolId' as const,
+    envVar: 'SHARE_HTML_IDENTITY_POOL_ID',
+    cfnOutput: 'IdentityPoolId',
+    configKey: 'identityPoolId' as const,
+  },
+  {
+    key: 'userPoolId' as const,
+    envVar: 'SHARE_HTML_USER_POOL_ID',
+    cfnOutput: 'UserPoolId',
+    configKey: 'userPoolId' as const,
+  },
+  {
+    key: 'region' as const,
+    envVar: 'SHARE_HTML_REGION',
+    cfnOutput: 'Region',
+    configKey: 'region' as const,
+  },
+  {
+    key: 'bucket' as const,
+    envVar: 'SHARE_HTML_BUCKET',
+    cfnOutput: 'PagesBucketName',
+    configKey: 'bucket' as const,
+  },
+  {
+    key: 'pagesBaseUrl' as const,
+    envVar: 'SHARE_HTML_PAGES_BASE_URL',
+    cfnOutput: 'PagesBaseUrl',
+    configKey: 'pagesBaseUrl' as const,
   },
 ] as const;
 
@@ -109,9 +141,13 @@ export async function resolveConfig(options: ResolveConfigOptions = {}): Promise
       '',
       '例:',
       '{',
-      '  "apiUrl": "https://...",',
       '  "issuer": "https://cognito-idp....amazonaws.com/...",',
-      '  "clientId": "..."',
+      '  "clientId": "...",',
+      '  "identityPoolId": "...",',
+      '  "userPoolId": "...",',
+      '  "region": "ap-northeast-1",',
+      '  "bucket": "...",',
+      '  "pagesBaseUrl": "https://pages.share.example.jp"',
       '}',
     ];
     throw new ConfigError(lines.join('\n'));

@@ -2,7 +2,7 @@
 
 管理アプリ（app 側）のフロントエンド。
 
-TanStack Start（React）を使う。SPA モード + prerender で静的ファイルとしてビルドし、S3 origin から配信する。server functions / SSR は使わない。
+TanStack Start（React）を使う。SPA モード + prerender で静的ファイルとしてビルドし、S3 origin から配信する。server functions / SSR は使わない。ブラウザから Cognito Identity Pool の一時クレデンシャルで S3 を直接操作する。
 
 ## 開発
 
@@ -12,7 +12,16 @@ pnpm --filter @page-share/web dev
 
 接続先は `packages/web/.env.example` を `.env` にコピーして埋める（`cdk deploy` の CfnOutput に対応）。
 
-開発時に実 API へ接続する場合は `.env` に `VITE_API_BASE_URL` を設定する。Vite dev サーバーが `/api` をその URL の origin へプロキシするため、ブラウザからは常に同一 origin の `/api` を叩く。
+| 環境変数                  | CDK CfnOutput     |
+| ------------------------- | ----------------- |
+| `VITE_HOSTED_UI_BASE_URL` | `HostedUiBaseUrl` |
+| `VITE_OIDC_ISSUER`        | `OidcIssuerUrl`   |
+| `VITE_WEB_APP_CLIENT_ID`  | `WebAppClientId`  |
+| `VITE_IDENTITY_POOL_ID`   | `IdentityPoolId`  |
+| `VITE_USER_POOL_ID`       | `UserPoolId`      |
+| `VITE_REGION`             | `Region`          |
+| `VITE_PAGES_BUCKET`       | `PagesBucketName` |
+| `VITE_PAGES_BASE_URL`     | `PagesBaseUrl`    |
 
 ## ビルド
 

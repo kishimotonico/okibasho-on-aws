@@ -1,22 +1,19 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Fn, RemovalPolicy } from 'aws-cdk-lib';
-import type { HttpApi } from 'aws-cdk-lib/aws-apigatewayv2';
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import {
   AccessLevel,
-  AllowedMethods,
   CachePolicy,
   Distribution,
   Function,
   FunctionCode,
   FunctionEventType,
   FunctionRuntime,
-  OriginProtocolPolicy,
-  OriginRequestPolicy,
   PriceClass,
+  ResponseHeadersPolicy,
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
-import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
@@ -54,6 +51,20 @@ export class AppDelivery extends Construct {
       comment: 'SPAのディープリンクを _shell.html へ寄せる',
     });
 
+    const responseHeaders = new ResponseHeadersPolicy(this, 'ResponseHeaders', {
+      securityHeadersBehavior: {
+        strictTransportSecurity: {
+          accessControlMaxAge: Duration.days(365),
+          includeSubdomains: true,
+          override: true,
+        },
+        contentSecurityPolicy: {
+          contentSecurityPolicy: "default-src 'self'; frame-ancestors 'none'",
+          override: true,
+        },
+      },
+    });
+
     this.distribution = new Distribution(this, 'Distribution', {
       comment: 'trusted 管理UI配信',
       defaultRootObject: '_shell.html',
@@ -62,37 +73,13 @@ export class AppDelivery extends Construct {
         origin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: CachePolicy.CACHING_OPTIMIZED,
-        // CustomErrorResponseはDistribution全体に効いてしまい、/api/* の404まで
+        responseHeadersPolicy: responseHeaders,
+        // CustomErrorResponseはDistribution全体に効いてしまい、404まで
         // SPAシェル(200)に化ける。behaviorごとに掛けられる関数側で寄せる
         functionAssociations: [
           { function: routerFunction, eventType: FunctionEventType.VIEWER_REQUEST },
         ],
       },
     });
-  }
-
-  /**
-   * /api/* を API Gateway へ向ける behavior を追加する。
-   *
-   * Auth のコールバック URL にこの Distribution のドメインを登録する必要があるが、
-   * PagesApi は Auth を要し、Auth はドメイン名を要する。循環を避けるため UI origin だけ先に作り、
-   * API behavior は PagesApi 生成後に足す。
-   */
-  addApiBehavior(httpApi: HttpApi): void {
-    const apiDomain = Fn.select(2, Fn.split('/', httpApi.apiEndpoint));
-
-    this.distribution.addBehavior(
-      '/api/*',
-      new HttpOrigin(apiDomain, {
-        protocolPolicy: OriginProtocolPolicy.HTTPS_ONLY,
-      }),
-      {
-        allowedMethods: AllowedMethods.ALLOW_ALL,
-        cachePolicy: CachePolicy.CACHING_DISABLED,
-        // 既定では Authorization が origin に届かず JWT Authorizer が常に 401 になる。Host は API Gateway のドメインと一致させる必要があるため除外する
-        originRequestPolicy: OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-      },
-    );
   }
 }

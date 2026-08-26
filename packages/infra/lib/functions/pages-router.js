@@ -1,9 +1,6 @@
-import cf from 'cloudfront';
-const kvsHandle = cf.kvs();
-const NAMESPACE = '__NAMESPACE__';
-const SENTINEL_URI = '/__missing__/index.html';
+const EMAIL_DOMAIN = '__EMAIL_DOMAIN__';
 
-async function handler(event) {
+function handler(event) {
   var request = event.request;
   var uri = request.uri;
 
@@ -25,17 +22,21 @@ async function handler(event) {
     }
   }
 
-  if (parts.length < 2) {
+  var match = uri.match(/^\/p\/([^/]+)\/([^/]+)(\/.*)?$/);
+  if (!match) {
     return notFound();
   }
 
-  var slug = parts[1];
-  if (!slug || slug.length !== 16 || !/^[a-z0-9]{16}$/.test(slug)) {
+  var user = match[1];
+  if (user.indexOf('@') !== -1) {
     return notFound();
   }
 
-  if (parts.length === 2) {
-    var location = '/' + slug + '/';
+  var slug = match[2];
+  var rest = match[3];
+
+  if (rest === undefined) {
+    var location = '/p/' + user + '/' + slug + '/';
     var qs = buildQueryString(request.querystring);
     if (qs.length > 0) {
       location = location + qs;
@@ -49,45 +50,11 @@ async function handler(event) {
     };
   }
 
-  var rest = parts.slice(2).join('/');
-  var kvsKey = NAMESPACE + '/' + slug;
-
-  try {
-    var raw = await kvsHandle.get(kvsKey);
-    if (!raw) {
-      console.log('kvs missing key: ' + kvsKey);
-      return rewriteSentinel(request);
-    }
-
-    var alias = JSON.parse(raw);
-    var versionId = alias.v;
-    if (!versionId || typeof versionId !== 'string') {
-      console.log('kvs invalid value for key: ' + kvsKey);
-      return rewriteSentinel(request);
-    }
-
-    if (alias.e !== undefined && alias.e !== null) {
-      var now = Math.floor(Date.now() / 1000);
-      if (typeof alias.e === 'number' && alias.e <= now) {
-        console.log('kvs expired key: ' + kvsKey);
-        return rewriteSentinel(request);
-      }
-    }
-
-    var rewrittenUri = '/' + slug + '/' + versionId + '/' + rest;
-    if (rewrittenUri.endsWith('/')) {
-      rewrittenUri = rewrittenUri + 'index.html';
-    }
-    request.uri = rewrittenUri;
-    return request;
-  } catch (error) {
-    console.log('kvs error for key: ' + kvsKey + ' error: ' + error);
-    return rewriteSentinel(request);
+  if (rest.endsWith('/')) {
+    rest += 'index.html';
   }
-}
 
-function rewriteSentinel(request) {
-  request.uri = SENTINEL_URI;
+  request.uri = '/pages/' + user + '@' + EMAIL_DOMAIN + '/' + slug + rest;
   return request;
 }
 

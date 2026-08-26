@@ -1,4 +1,6 @@
-import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { Duration, Lazy, RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { CfnIdentityPoolPrincipalTag } from 'aws-cdk-lib/aws-cognito';
+import { IdentityPool, UserPoolAuthenticationProvider } from 'aws-cdk-lib/aws-cognito-identitypool';
 import {
   AccountRecovery,
   Mfa,
@@ -8,16 +10,18 @@ import {
   UserPoolClientIdentityProvider,
   UserPoolDomain,
 } from 'aws-cdk-lib/aws-cognito';
+import { Effect, FederatedPrincipal, PolicyStatement, Role } from 'aws-cdk-lib/aws-iam';
+import type { IBucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 /**
- * CLIのlocalhostコールバックで使うポート。
+ * CLIの127.0.0.1コールバックで使うポート。
  * CognitoはコールバックURLをポートまで含めて完全一致で照合する。
  * 使用中なら CLI はフォールバックせず終了する。
  */
-export const CLI_CALLBACK_PORTS = [8976] as const;
+export const CLI_CALLBACK_PORTS = [8976, 8977, 8978] as const;
 
-const WEB_LOCAL_CALLBACK_URL = 'http://localhost:3000/auth/callback';
+const WEB_LOCAL_CALLBACK_URL = 'http://localhost:3000/callback';
 const WEB_LOCAL_LOGOUT_URL = 'http://localhost:3000';
 
 export interface AuthProps {
@@ -25,10 +29,12 @@ export interface AuthProps {
   readonly appDomain?: string;
   /** 管理UI用 CloudFront のデフォルトドメイン。Hosted UI のコールバック登録に使う */
   readonly appDistributionDomain?: string;
+  /** pages bucket。authenticated role の S3 ポリシーに使う */
+  readonly pagesBucket: IBucket;
 }
 
 /**
- * Cognito User Pool + Hosted UI。
+ * Cognito User Pool + Identity Pool + Hosted UI。
  * 当面はローカルユーザー(管理者作成)で運用し、Google IdPは後付けする。
  */
 export class Auth extends Construct {
@@ -36,8 +42,12 @@ export class Auth extends Construct {
   readonly webClient: UserPoolClient;
   readonly cliClient: UserPoolClient;
   readonly hostedUiDomain: UserPoolDomain;
+  readonly identityPool: IdentityPool;
+  readonly authenticatedRole: Role;
+  /** Identity Pool の principal tag 設定に使う User Pool プロバイダ名 */
+  readonly identityProviderName: string;
 
-  constructor(scope: Construct, id: string, props: AuthProps = {}) {
+  constructor(scope: Construct, id: string, props: AuthProps) {
     super(scope, id);
 
     this.userPool = new UserPool(this, 'UserPool', {
@@ -71,11 +81,11 @@ export class Auth extends Construct {
     const webCallbackUrls = [WEB_LOCAL_CALLBACK_URL];
     const webLogoutUrls = [WEB_LOCAL_LOGOUT_URL];
     if (props.appDomain) {
-      webCallbackUrls.push(`https://${props.appDomain}/auth/callback`);
+      webCallbackUrls.push(`https://${props.appDomain}/callback`);
       webLogoutUrls.push(`https://${props.appDomain}`);
     }
     if (props.appDistributionDomain) {
-      webCallbackUrls.push(`https://${props.appDistributionDomain}/auth/callback`);
+      webCallbackUrls.push(`https://${props.appDistributionDomain}/callback`);
       webLogoutUrls.push(`https://${props.appDistributionDomain}`);
     }
 
@@ -94,7 +104,7 @@ export class Auth extends Construct {
       ...tokenValidity,
     });
 
-    const cliCallbackUrls = CLI_CALLBACK_PORTS.map((port) => `http://localhost:${port}/callback`);
+    const cliCallbackUrls = CLI_CALLBACK_PORTS.map((port) => `http://127.0.0.1:${port}/callback`);
 
     this.cliClient = this.userPool.addClient('CliClient', {
       generateSecret: false,
@@ -109,6 +119,110 @@ export class Auth extends Construct {
       },
       ...tokenValidity,
     });
+
+    const webPoolProvider = new UserPoolAuthenticationProvider({
+      userPool: this.userPool,
+      userPoolClient: this.webClient,
+    });
+    const cliPoolProvider = new UserPoolAuthenticationProvider({
+      userPool: this.userPool,
+      userPoolClient: this.cliClient,
+    });
+
+    let identityPoolId = '';
+
+    this.authenticatedRole = new Role(this, 'AuthenticatedRole', {
+      description: 'Identity Pool authenticated users',
+      assumedBy: new FederatedPrincipal(
+        'cognito-identity.amazonaws.com',
+        {
+          StringEquals: {
+            'cognito-identity.amazonaws.com:aud': Lazy.string({ produce: () => identityPoolId }),
+          },
+          'ForAnyValue:StringLike': {
+            'cognito-identity.amazonaws.com:amr': 'authenticated',
+          },
+        },
+        'sts:AssumeRoleWithWebIdentity',
+      ),
+    });
+    this.authenticatedRole.assumeRolePolicy?.addStatements(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        principals: [
+          new FederatedPrincipal(
+            'cognito-identity.amazonaws.com',
+            {
+              StringEquals: {
+                'cognito-identity.amazonaws.com:aud': Lazy.string({
+                  produce: () => identityPoolId,
+                }),
+              },
+              'ForAnyValue:StringLike': {
+                'cognito-identity.amazonaws.com:amr': 'authenticated',
+              },
+            },
+            'sts:TagSession',
+          ),
+        ],
+        actions: ['sts:TagSession'],
+      }),
+    );
+
+    this.identityPool = new IdentityPool(this, 'IdentityPool', {
+      allowUnauthenticatedIdentities: false,
+      authenticatedRole: this.authenticatedRole,
+      authenticationProviders: {
+        userPools: [webPoolProvider, cliPoolProvider],
+      },
+    });
+    identityPoolId = this.identityPool.identityPoolId;
+
+    this.authenticatedRole.addToPolicy(
+      new PolicyStatement({
+        sid: 'ListOwnPages',
+        effect: Effect.ALLOW,
+        actions: ['s3:ListBucket'],
+        resources: [props.pagesBucket.bucketArn],
+        conditions: {
+          StringLike: {
+            's3:prefix': ['pages/${aws:PrincipalTag/email}/*'],
+          },
+        },
+      }),
+    );
+    this.authenticatedRole.addToPolicy(
+      new PolicyStatement({
+        sid: 'ReadWriteOwnPages',
+        effect: Effect.ALLOW,
+        actions: ['s3:PutObject', 's3:GetObject', 's3:DeleteObject'],
+        resources: [props.pagesBucket.arnForObjects('pages/${aws:PrincipalTag/email}/*')],
+      }),
+    );
+
+    const webProviderConfig = webPoolProvider.bind(this, this.identityPool);
+    this.identityProviderName = webProviderConfig.providerName;
+
+    new CfnIdentityPoolPrincipalTag(this, 'PrincipalTag', {
+      identityPoolId: this.identityPool.identityPoolId,
+      identityProviderName: webProviderConfig.providerName,
+      principalTags: {
+        email: 'email',
+      },
+      useDefaults: false,
+    });
+
+    const cliProviderConfig = cliPoolProvider.bind(this, this.identityPool);
+    if (cliProviderConfig.providerName !== webProviderConfig.providerName) {
+      new CfnIdentityPoolPrincipalTag(this, 'CliPrincipalTag', {
+        identityPoolId: this.identityPool.identityPoolId,
+        identityProviderName: cliProviderConfig.providerName,
+        principalTags: {
+          email: 'email',
+        },
+        useDefaults: false,
+      });
+    }
 
     // prefixはAWS全体で一意。アカウントIDを混ぜて他環境との衝突を避ける
     const domainPrefix = `page-share-${Stack.of(this).account}`;

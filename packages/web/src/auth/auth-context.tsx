@@ -122,7 +122,8 @@ function ClientAuthProvider({ children }: { children: ReactNode }) {
       isLoading: userManager === null || isLoading,
       isAuthenticated: user !== null && !user.expired,
       user,
-      email: typeof user?.profile.email === 'string' ? user.profile.email : null,
+      email:
+        typeof user?.profile.email === 'string' ? user.profile.email.trim().toLowerCase() : null,
       idToken: user?.id_token ?? null,
       login,
       logout,

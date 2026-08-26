@@ -1,9 +1,12 @@
 import { parseArgs } from 'node:util';
 import { createRequire } from 'node:module';
+import { runList } from './commands/list.js';
 import { runLogin } from './commands/login.js';
 import { runLogout } from './commands/logout.js';
+import { runRm } from './commands/rm.js';
 import { runUpload } from './commands/upload.js';
 import { ConfigError } from './config.js';
+import { isValidSlug } from './page/slug.js';
 import { PortsInUseError } from './port.js';
 
 const require = createRequire(import.meta.url);
@@ -14,22 +17,27 @@ const HELP_TEXT = `share-html — 社内向けHTML共有サービスのCLI
 使い方:
   share-html login              ブラウザでログイン (OAuth PKCE)
   share-html logout             保存したトークンを削除
+  share-html list               アップロード済みページ一覧
+  share-html rm <slug>          ページを削除
   share-html <path>             HTMLをアップロード
   share-html --help, -h         このヘルプを表示
   share-html --version          バージョンを表示
 
 アップロード:
-  share-html <path> [--title <name>] [--shared] [--retention temporary|permanent] [--dry-run]
+  share-html <path> [--name <slug>] [--permanent] [--dry-run]
     <path>        単一ファイル (.html/.htm) またはディレクトリ
-    --title       ページの表示名 (省略時は index.html の <title>、なければディレクトリ/ファイル名)
-    --shared      URLを知っていれば誰でも閲覧可能にする (省略時は社内限定)
-    --retention   保存期間 (省略時: temporary)
+    --name        ページ slug (省略時はディレクトリ/ファイル名から生成)
+    --permanent   無期限保存 (省略時は 30 日)
     --dry-run     ネットワークにアクセスせず送信内容だけ表示
 
 接続先の設定 (環境変数は設定ファイルより優先):
-  SHARE_HTML_API_URL            APIエンドポイント (CfnOutput: ApiEndpointUrl)
   SHARE_HTML_ISSUER             OIDC issuer URL (CfnOutput: OidcIssuerUrl)
   SHARE_HTML_CLIENT_ID          CLI用 App Client ID (CfnOutput: CliAppClientId)
+  SHARE_HTML_IDENTITY_POOL_ID   Identity Pool ID (CfnOutput: IdentityPoolId)
+  SHARE_HTML_USER_POOL_ID       User Pool ID (CfnOutput: UserPoolId)
+  SHARE_HTML_REGION             AWS リージョン (CfnOutput: Region)
+  SHARE_HTML_BUCKET             pages バケット名 (CfnOutput: PagesBucketName)
+  SHARE_HTML_PAGES_BASE_URL     公開 URL のベース (CfnOutput: PagesBaseUrl)
 
 設定ファイル: ~/.config/share-html/config.json
   (XDG_CONFIG_HOME が設定されていれば $XDG_CONFIG_HOME/share-html/config.json)
@@ -71,9 +79,8 @@ export async function runCli(argv: string[]): Promise<CliResult> {
       options: {
         help: { type: 'boolean', short: 'h' },
         version: { type: 'boolean' },
-        title: { type: 'string' },
-        shared: { type: 'boolean' },
-        retention: { type: 'string' },
+        name: { type: 'string' },
+        permanent: { type: 'boolean' },
         'dry-run': { type: 'boolean' },
       },
       allowPositionals: true,
@@ -128,6 +135,27 @@ export async function runCli(argv: string[]): Promise<CliResult> {
     }
   }
 
+  if (command === 'list') {
+    if (rest.length > 0) {
+      console.error('list サブコマンドに余分な引数は指定できません。');
+      return { exitCode: 1 };
+    }
+    return runList();
+  }
+
+  if (command === 'rm') {
+    const slug = rest[0];
+    if (!slug || rest.length > 1) {
+      console.error('share-html rm <slug>');
+      return { exitCode: 1 };
+    }
+    if (!isValidSlug(slug)) {
+      console.error(`無効な slug です: ${slug}`);
+      return { exitCode: 1 };
+    }
+    return runRm(slug);
+  }
+
   // それ以外の先頭引数はアップロード対象のパスとみなす
   if (rest.length > 0) {
     console.error('不明なサブコマンドです。share-html --help で使い方を確認できます。');
@@ -139,20 +167,13 @@ export async function runCli(argv: string[]): Promise<CliResult> {
     return { exitCode: 1 };
   }
 
-  const retention = values.retention;
-  if (retention !== undefined && retention !== 'temporary' && retention !== 'permanent') {
-    console.error('retention は temporary または permanent を指定してください。');
-    return { exitCode: 1 };
-  }
-
-  const title = typeof values.title === 'string' ? values.title : undefined;
-  const shared = values.shared === true;
+  const name = typeof values.name === 'string' ? values.name : undefined;
+  const permanent = values.permanent === true;
   const dryRun = values['dry-run'] === true;
 
   return runUpload(command, {
-    title,
-    shared,
-    retention: retention as 'temporary' | 'permanent' | undefined,
+    name,
+    permanent,
     dryRun,
   });
 }

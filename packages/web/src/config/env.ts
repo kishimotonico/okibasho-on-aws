@@ -3,15 +3,22 @@ export interface WebConfig {
   /** OIDC issuer。Cognitoのdiscovery documentはHosted UIドメインではなくこちらにある */
   oidcIssuer: string;
   webAppClientId: string;
-  /** 常に同一 origin の /api。開発時は Vite proxy が転送する */
-  apiBaseUrl: '/api';
+  identityPoolId: string;
+  userPoolId: string;
+  region: string;
+  pagesBucket: string;
+  pagesBaseUrl: string;
 }
 
 export interface WebConfigEnv {
   readonly VITE_HOSTED_UI_BASE_URL?: string;
   readonly VITE_OIDC_ISSUER?: string;
   readonly VITE_WEB_APP_CLIENT_ID?: string;
-  readonly VITE_API_BASE_URL?: string;
+  readonly VITE_IDENTITY_POOL_ID?: string;
+  readonly VITE_USER_POOL_ID?: string;
+  readonly VITE_REGION?: string;
+  readonly VITE_PAGES_BUCKET?: string;
+  readonly VITE_PAGES_BASE_URL?: string;
 }
 
 export class WebConfigError extends Error {
@@ -36,6 +43,31 @@ const REQUIRED_FIELDS = [
     key: 'webAppClientId' as const,
     envVar: 'VITE_WEB_APP_CLIENT_ID',
     cfnOutput: 'WebAppClientId',
+  },
+  {
+    key: 'identityPoolId' as const,
+    envVar: 'VITE_IDENTITY_POOL_ID',
+    cfnOutput: 'IdentityPoolId',
+  },
+  {
+    key: 'userPoolId' as const,
+    envVar: 'VITE_USER_POOL_ID',
+    cfnOutput: 'UserPoolId',
+  },
+  {
+    key: 'region' as const,
+    envVar: 'VITE_REGION',
+    cfnOutput: 'Region',
+  },
+  {
+    key: 'pagesBucket' as const,
+    envVar: 'VITE_PAGES_BUCKET',
+    cfnOutput: 'PagesBucketName',
+  },
+  {
+    key: 'pagesBaseUrl' as const,
+    envVar: 'VITE_PAGES_BASE_URL',
+    cfnOutput: 'PagesBaseUrl',
   },
 ] as const;
 
@@ -70,9 +102,11 @@ export function resolveWebConfig(env: WebConfigEnv): WebConfig {
     hostedUiBaseUrl: values.hostedUiBaseUrl!,
     oidcIssuer: values.oidcIssuer!,
     webAppClientId: values.webAppClientId!,
-    // 本番・開発ともブラウザからは同一 origin の /api を叩く。
-    // 開発時の実 API 先は vite.config.ts の proxy が VITE_API_BASE_URL へ転送する。
-    apiBaseUrl: '/api',
+    identityPoolId: values.identityPoolId!,
+    userPoolId: values.userPoolId!,
+    region: values.region!,
+    pagesBucket: values.pagesBucket!,
+    pagesBaseUrl: values.pagesBaseUrl!,
   };
 }
 

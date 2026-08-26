@@ -1,56 +1,40 @@
+import { isValidSlug } from '@cli/page';
 import { createFileRoute } from '@tanstack/react-router';
-import {
-  DEFAULT_RETENTION,
-  DEFAULT_VISIBILITY,
-  isValidSlug,
-  type Retention,
-  type Visibility,
-} from '@page-share/shared';
-import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
 import { getWebConfig } from '~/config/env';
-import { extractApiErrorMessages } from '~/lib/api-errors';
 import {
   collectUploadFilesFromFileList,
   collectUploadFilesFromPathEntries,
   type UploadFileEntry,
 } from '~/lib/collect-upload-files';
-import { extractTitleFromHtml } from '~/lib/extract-title-from-html';
+import { buildViewUrl, getPageMetadata, type Retention, uploadPage } from '~/lib/pages-s3';
 import { collectFilesFromDataTransfer } from '~/lib/read-data-transfer';
-import {
-  completePage,
-  createPage,
-  redeclarePage,
-  uploadFilesWithConcurrency,
-} from '~/lib/upload-client';
-import { validateRedeclareRequest, validateUploadRequest } from '~/lib/validate-upload';
+import { createPagesS3Client } from '~/lib/s3-client';
+import { validateUploadFiles } from '~/lib/validate-upload';
 
 export const Route = createFileRoute('/upload')({
   validateSearch: (search: Record<string, unknown>): { slug?: string } => ({
-    slug:
-      typeof search.slug === 'string' && isValidSlug(search.slug) ? search.slug : undefined,
+    slug: typeof search.slug === 'string' && isValidSlug(search.slug) ? search.slug : undefined,
   }),
   component: UploadPage,
 });
 
 type UploadPhase = 'idle' | 'uploading' | 'success' | 'error';
 
-function visibilityLabel(visibility: Visibility): string {
-  return visibility === 'internal' ? '社内限定' : 'URL共有';
-}
+const DEFAULT_RETENTION: Retention = 'temporary';
 
 function UploadPage() {
   const auth = useAuth();
+  const config = useMemo(() => getWebConfig(), []);
   const { slug: reuploadSlug } = Route.useSearch();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const directoryInputRef = useRef<HTMLInputElement>(null);
 
+  const [slug, setSlug] = useState('');
   const [files, setFiles] = useState<UploadFileEntry[]>([]);
   const [skippedInvalidPath, setSkippedInvalidPath] = useState(0);
-  const [title, setTitle] = useState('');
-  const [titleManuallyEdited, setTitleManuallyEdited] = useState(false);
-  const [visibility, setVisibility] = useState<Visibility>(DEFAULT_VISIBILITY);
   const [retention, setRetention] = useState<Retention>(DEFAULT_RETENTION);
   const [isDragging, setIsDragging] = useState(false);
   const [selectionError, setSelectionError] = useState<string | null>(null);
@@ -61,22 +45,10 @@ function UploadPage() {
   const [viewUrl, setViewUrl] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
 
-  const seedTitleFromFiles = useCallback(async (nextFiles: UploadFileEntry[]) => {
-    const indexFile = nextFiles.find((file) => file.path === 'index.html');
-    if (!indexFile) {
-      return;
-    }
-
-    const extracted = await extractTitleFromHtml(indexFile.file);
-    if (extracted) {
-      setTitle(extracted);
-    }
-  }, []);
-
   const applyCollectedFiles = useCallback(
     (result: ReturnType<typeof collectUploadFilesFromFileList>) => {
       if (result.singleFileNotHtml) {
-        setSelectionError('単一ファイルをアップロードする場合は .html / .htm を指定してください');
+        setSelectionError('単一ファイル選択では HTML ファイルのみアップロードできます');
         setFiles([]);
         setSkippedInvalidPath(0);
         return;
@@ -87,14 +59,11 @@ function UploadPage() {
       setSkippedInvalidPath(result.skippedInvalidPath);
       setValidationErrors([]);
       setUploadError(null);
-      setViewUrl(null);
       setPhase('idle');
-
-      if (!titleManuallyEdited) {
-        void seedTitleFromFiles(result.files);
-      }
+      setViewUrl(null);
+      setCopyMessage(null);
     },
-    [seedTitleFromFiles, titleManuallyEdited],
+    [],
   );
 
   const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -112,27 +81,23 @@ function UploadPage() {
   };
 
   const handleSubmit = async () => {
-    const declaredFiles = files.map((file) => ({ path: file.path, size: file.file.size }));
-    const errors = reuploadSlug
-      ? validateRedeclareRequest(files).map((error) => error.message)
-      : validateUploadRequest(files, { title, visibility, retention }).map((error) => error.message);
+    const targetSlug = reuploadSlug ?? slug.trim();
+    const errors = validateUploadFiles(files).map((error) => error.message);
+
+    if (!reuploadSlug) {
+      if (!targetSlug) {
+        errors.push('slug を入力してください');
+      } else if (!isValidSlug(targetSlug)) {
+        errors.push('slug は小文字英数字・ハイフン・アンダースコアのみ使用できます');
+      }
+    }
 
     if (errors.length > 0) {
       setValidationErrors(errors);
       return;
     }
 
-    if (!reuploadSlug && visibility === 'shared') {
-      if (
-        !window.confirm(
-          'URLを知っている人なら誰でも閲覧できます。本当に「URL共有」で公開しますか？',
-        )
-      ) {
-        return;
-      }
-    }
-
-    if (!auth.idToken) {
+    if (!auth.idToken || !auth.email) {
       setValidationErrors(['ログインが必要です']);
       return;
     }
@@ -140,71 +105,37 @@ function UploadPage() {
     setValidationErrors([]);
     setUploadError(null);
     setPhase('uploading');
-    setProgress({ completed: 0, total: files.length });
+    setProgress({ completed: 0, total: files.length + 1 });
 
-    const declareResult = reuploadSlug
-      ? await redeclarePage(fetch, getWebConfig().apiBaseUrl, auth.idToken, reuploadSlug, {
-          files: declaredFiles,
-        })
-      : await createPage(fetch, getWebConfig().apiBaseUrl, auth.idToken, {
-          title: title.trim() || undefined,
-          visibility,
-          retention,
-          files: declaredFiles,
-        });
+    try {
+      const client = createPagesS3Client(config, auth.idToken);
+      const existingMetadata = reuploadSlug
+        ? await getPageMetadata(client, config.pagesBucket, auth.email, reuploadSlug)
+        : null;
 
-    if (!declareResult.ok) {
-      setPhase('error');
-      setUploadError(extractApiErrorMessages(declareResult.body).join('\n'));
-      return;
-    }
-
-    const uploads = declareResult.body.uploads.map((upload) => {
-      const file = files.find((entry) => entry.path === upload.path);
-      if (!file) {
-        throw new Error(`アップロード対象が見つかりません: ${upload.path}`);
+      if (reuploadSlug && !existingMetadata) {
+        throw new Error(`ページが見つかりません: ${reuploadSlug}`);
       }
-      return {
-        path: upload.path,
-        url: upload.url,
-        headers: upload.headers,
-        file: file.file,
-      };
-    });
 
-    const failure = await uploadFilesWithConcurrency(fetch, uploads, {
-      onProgress: setProgress,
-    });
-
-    if (failure) {
-      setPhase('error');
-      setUploadError(
-        `${failure.path} のアップロードに失敗しました (${failure.error.status} ${failure.error.statusText})。\n` +
-          'もう一度最初からやり直してください。',
+      await uploadPage(
+        client,
+        config.pagesBucket,
+        auth.email,
+        targetSlug,
+        files,
+        {
+          retention,
+          existingMetadata,
+        },
+        (completed, total) => setProgress({ completed, total }),
       );
-      return;
-    }
 
-    const completeResult = await completePage(
-      fetch,
-      getWebConfig().apiBaseUrl,
-      auth.idToken,
-      declareResult.body.slug,
-      {
-        versionId: declareResult.body.versionId,
-        files: declaredFiles,
-        ...(reuploadSlug ? {} : { title: title.trim() }),
-      },
-    );
-
-    if (!completeResult.ok) {
+      setViewUrl(buildViewUrl(config.pagesBaseUrl, auth.email, targetSlug));
+      setPhase('success');
+    } catch (error) {
       setPhase('error');
-      setUploadError(extractApiErrorMessages(completeResult.body).join('\n'));
-      return;
+      setUploadError(error instanceof Error ? error.message : 'アップロードに失敗しました');
     }
-
-    setViewUrl(completeResult.body.viewUrl);
-    setPhase('success');
   };
 
   const handleCopyUrl = async () => {
@@ -245,7 +176,7 @@ function UploadPage() {
       <h1>{reuploadSlug ? '再アップロード' : 'アップロード'}</h1>
       {reuploadSlug ? (
         <p>
-          ページ <code>{reuploadSlug}</code> の内容を差し替えます。公開範囲とタイトルは変わりません。
+          ページ <code>{reuploadSlug}</code> の内容を差し替えます。保存期間は変わりません。
         </p>
       ) : null}
 
@@ -322,42 +253,16 @@ function UploadPage() {
       {!reuploadSlug ? (
         <section className="panel">
           <label className="field">
-            <span className="field-label">タイトル</span>
+            <span className="field-label">slug</span>
             <input
               type="text"
-              value={title}
-              onChange={(event) => {
-                setTitle(event.target.value);
-                setTitleManuallyEdited(true);
-              }}
-              placeholder="空欄なら無題"
+              value={slug}
+              onChange={(event) => setSlug(event.target.value)}
+              placeholder="例: q3-report"
               autoComplete="off"
+              spellCheck={false}
             />
           </label>
-
-          <fieldset className="field">
-            <legend className="field-label">公開範囲</legend>
-            <label className="radio">
-              <input
-                type="radio"
-                name="visibility"
-                value="internal"
-                checked={visibility === 'internal'}
-                onChange={() => setVisibility('internal')}
-              />
-              {visibilityLabel('internal')}
-            </label>
-            <label className="radio">
-              <input
-                type="radio"
-                name="visibility"
-                value="shared"
-                checked={visibility === 'shared'}
-                onChange={() => setVisibility('shared')}
-              />
-              {visibilityLabel('shared')}
-            </label>
-          </fieldset>
 
           <fieldset className="field">
             <legend className="field-label">保存期間</legend>
@@ -428,4 +333,3 @@ function UploadPage() {
     </div>
   );
 }
-

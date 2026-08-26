@@ -1,179 +1,234 @@
-import type {
-  ApiErrorResponse,
-  CompletePageRequest,
-  CompletePageResponse,
-  CreatePageRequest,
-  CreatePageResponse,
-} from '@page-share/shared';
+import {
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
+import type { ResolvedConfig } from './config.js';
+import { DEFAULT_RETENTION_DAYS, isPageMetadata, type PageMetadata } from './page/metadata.js';
+import {
+  emailLocalPart,
+  metadataObjectKey,
+  ownerPrefix,
+  pageObjectKey,
+  pagePrefix,
+  pageViewPath,
+} from './page/s3-keys.js';
 
-export type FetchFn = typeof fetch;
-
-export interface CreatePageResult {
-  ok: true;
-  body: CreatePageResponse;
-}
-
-export interface CreatePageError {
-  ok: false;
-  status: number;
-  body: ApiErrorResponse;
-}
-
-export type CreatePageResponseResult = CreatePageResult | CreatePageError;
-
-export interface CompletePageResult {
-  ok: true;
-  body: CompletePageResponse;
-}
-
-export interface CompletePageError {
-  ok: false;
-  status: number;
-  body: ApiErrorResponse;
-}
-
-export type CompletePageResponseResult = CompletePageResult | CompletePageError;
-
-export interface PutFileResult {
-  ok: true;
-}
-
-export interface PutFileError {
-  ok: false;
-  status: number;
-  statusText: string;
-}
-
-export type PutFileResponseResult = PutFileResult | PutFileError;
-
-function normalizeApiUrl(apiUrl: string): string {
-  return apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
-}
-
-export async function createPage(
-  fetchFn: FetchFn,
-  apiUrl: string,
-  idToken: string,
-  body: CreatePageRequest,
-): Promise<CreatePageResponseResult> {
-  const response = await fetchFn(`${normalizeApiUrl(apiUrl)}/api/pages`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
+export function createS3Client(config: ResolvedConfig, idToken: string): S3Client {
+  return new S3Client({
+    region: config.region,
+    credentials: fromCognitoIdentityPool({
+      clientConfig: { region: config.region },
+      identityPoolId: config.identityPoolId,
+      logins: {
+        [`cognito-idp.${config.region}.amazonaws.com/${config.userPoolId}`]: idToken,
+      },
+    }),
   });
+}
 
-  const responseBody: unknown = await response.json();
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      body: responseBody as ApiErrorResponse,
-    };
+export interface PageFileUpload {
+  path: string;
+  body: Buffer;
+  contentType: string;
+}
+
+export interface UploadPageInput {
+  email: string;
+  slug: string;
+  files: PageFileUpload[];
+  permanent: boolean;
+}
+
+export function buildViewUrl(pagesBaseUrl: string, email: string, slug: string): string {
+  const base = pagesBaseUrl.endsWith('/') ? pagesBaseUrl.slice(0, -1) : pagesBaseUrl;
+  return `${base}${pageViewPath(emailLocalPart(email), slug)}`;
+}
+
+async function readObjectBody(s3: S3Client, bucket: string, key: string): Promise<Buffer | null> {
+  try {
+    const response = await s3.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      }),
+    );
+    if (!response.Body) {
+      return null;
+    }
+    const bytes = await response.Body.transformToByteArray();
+    return Buffer.from(bytes);
+  } catch (err) {
+    const name = (err as { name?: string }).name;
+    if (name === 'NoSuchKey' || name === 'NotFound') {
+      return null;
+    }
+    throw err;
+  }
+}
+
+async function listAllKeys(s3: S3Client, bucket: string, prefix: string): Promise<string[]> {
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const response = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      }),
+    );
+    for (const item of response.Contents ?? []) {
+      if (item.Key) {
+        keys.push(item.Key);
+      }
+    }
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return keys;
+}
+
+async function deleteKeys(s3: S3Client, bucket: string, keys: string[]): Promise<void> {
+  if (keys.length === 0) {
+    return;
   }
 
-  return {
-    ok: true,
-    body: responseBody as CreatePageResponse,
-  };
-}
-
-export async function completePage(
-  fetchFn: FetchFn,
-  apiUrl: string,
-  idToken: string,
-  slug: string,
-  body: CompletePageRequest,
-): Promise<CompletePageResponseResult> {
-  const response = await fetchFn(`${normalizeApiUrl(apiUrl)}/api/pages/${slug}/complete`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  const responseBody: unknown = await response.json();
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      body: responseBody as ApiErrorResponse,
-    };
+  for (let offset = 0; offset < keys.length; offset += 1000) {
+    const chunk = keys.slice(offset, offset + 1000);
+    await s3.send(
+      new DeleteObjectsCommand({
+        Bucket: bucket,
+        Delete: {
+          Objects: chunk.map((Key) => ({ Key })),
+          Quiet: true,
+        },
+      }),
+    );
   }
-
-  return {
-    ok: true,
-    body: responseBody as CompletePageResponse,
-  };
 }
 
-export async function putFile(
-  fetchFn: FetchFn,
-  url: string,
-  headers: Record<string, string>,
-  body: Buffer,
-): Promise<PutFileResponseResult> {
-  // presigned PUT の署名に content-type / content-length が含まれるため、
-  // API が返した headers をそのまま送らないと S3 が拒否する
-  const response = await fetchFn(url, {
-    method: 'PUT',
-    headers,
-    body,
-  });
-
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      statusText: response.statusText,
-    };
+function computeExpiresAt(permanent: boolean): string | null {
+  if (permanent) {
+    return null;
   }
-
-  return { ok: true };
+  return new Date(Date.now() + DEFAULT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
-const DEFAULT_UPLOAD_CONCURRENCY = 4;
+export async function uploadPage(
+  s3: S3Client,
+  bucket: string,
+  pagesBaseUrl: string,
+  input: UploadPageInput,
+): Promise<{ viewUrl: string; metadata: PageMetadata }> {
+  const prefix = pagePrefix(input.email, input.slug);
+  const metadataKey = metadataObjectKey(input.email, input.slug);
+  const uploadKeys = new Set(
+    input.files.map((file) => pageObjectKey(input.email, input.slug, file.path)),
+  );
 
-export async function uploadFilesWithConcurrency(
-  fetchFn: FetchFn,
-  uploads: Array<{
-    path: string;
-    url: string;
-    headers: Record<string, string>;
-    readBody: () => Promise<Buffer>;
-  }>,
-  concurrency = DEFAULT_UPLOAD_CONCURRENCY,
-): Promise<{ path: string; error: PutFileError } | null> {
-  let nextIndex = 0;
-  let failure: { path: string; error: PutFileError } | null = null;
-
-  async function worker(): Promise<void> {
-    while (nextIndex < uploads.length) {
-      if (failure) {
-        return;
+  let createdAt = new Date().toISOString();
+  const existingMetadataBody = await readObjectBody(s3, bucket, metadataKey);
+  if (existingMetadataBody) {
+    try {
+      const parsed: unknown = JSON.parse(existingMetadataBody.toString('utf8'));
+      if (isPageMetadata(parsed)) {
+        createdAt = parsed.createdAt;
       }
-
-      const currentIndex = nextIndex++;
-      const upload = uploads[currentIndex];
-      if (!upload) {
-        return;
-      }
-
-      const fileBody = await upload.readBody();
-      const result = await putFile(fetchFn, upload.url, upload.headers, fileBody);
-      if (!result.ok) {
-        failure = { path: upload.path, error: result };
-        return;
-      }
+    } catch {
+      // 壊れた metadata は上書きする
     }
   }
 
-  const workerCount = Math.min(concurrency, uploads.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  for (const file of input.files) {
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: pageObjectKey(input.email, input.slug, file.path),
+        Body: file.body,
+        ContentType: file.contentType,
+      }),
+    );
+  }
 
-  return failure;
+  const existingKeys = await listAllKeys(s3, bucket, prefix);
+  const staleKeys = existingKeys.filter((key) => !uploadKeys.has(key) && key !== metadataKey);
+  await deleteKeys(s3, bucket, staleKeys);
+
+  const metadata: PageMetadata = {
+    slug: input.slug,
+    owner: input.email,
+    createdAt,
+    expiresAt: computeExpiresAt(input.permanent),
+  };
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: metadataKey,
+      Body: JSON.stringify(metadata),
+      ContentType: 'application/json',
+    }),
+  );
+
+  return {
+    viewUrl: buildViewUrl(pagesBaseUrl, input.email, input.slug),
+    metadata,
+  };
+}
+
+export async function listPages(
+  s3: S3Client,
+  bucket: string,
+  email: string,
+): Promise<PageMetadata[]> {
+  const prefix = ownerPrefix(email);
+  const response = await s3.send(
+    new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      Delimiter: '/',
+    }),
+  );
+
+  const slugs = (response.CommonPrefixes ?? [])
+    .map((entry) => entry.Prefix)
+    .filter((entry): entry is string => Boolean(entry))
+    .map((entry) => entry.slice(prefix.length).replace(/\/$/, ''))
+    .filter((slug) => slug.length > 0);
+
+  const pages: PageMetadata[] = [];
+  for (const slug of slugs) {
+    const metadataKey = metadataObjectKey(email, slug);
+    const body = await readObjectBody(s3, bucket, metadataKey);
+    if (!body) {
+      continue;
+    }
+    try {
+      const parsed: unknown = JSON.parse(body.toString('utf8'));
+      if (isPageMetadata(parsed)) {
+        pages.push(parsed);
+      }
+    } catch {
+      // 壊れた metadata は一覧から除外
+    }
+  }
+
+  pages.sort((a, b) => a.slug.localeCompare(b.slug));
+  return pages;
+}
+
+export async function removePage(
+  s3: S3Client,
+  bucket: string,
+  email: string,
+  slug: string,
+): Promise<void> {
+  const prefix = pagePrefix(email, slug);
+  const keys = await listAllKeys(s3, bucket, prefix);
+  await deleteKeys(s3, bucket, keys);
 }

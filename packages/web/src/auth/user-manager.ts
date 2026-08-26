@@ -42,7 +42,7 @@ export function createUserManager(): UserManager {
     authority: config.oidcIssuer,
     metadata: buildMetadata(config.hostedUiBaseUrl, config.oidcIssuer),
     client_id: config.webAppClientId,
-    redirect_uri: `${window.location.origin}/auth/callback`,
+    redirect_uri: `${window.location.origin}/callback`,
     post_logout_redirect_uri: window.location.origin,
     response_type: 'code',
     scope: 'openid email profile',

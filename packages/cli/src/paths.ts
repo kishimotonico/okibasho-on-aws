@@ -5,9 +5,13 @@ export interface PathEnv {
   readonly XDG_CONFIG_HOME?: string;
   readonly XDG_STATE_HOME?: string;
   readonly HOME?: string;
-  readonly SHARE_HTML_API_URL?: string;
   readonly SHARE_HTML_ISSUER?: string;
   readonly SHARE_HTML_CLIENT_ID?: string;
+  readonly SHARE_HTML_IDENTITY_POOL_ID?: string;
+  readonly SHARE_HTML_USER_POOL_ID?: string;
+  readonly SHARE_HTML_REGION?: string;
+  readonly SHARE_HTML_BUCKET?: string;
+  readonly SHARE_HTML_PAGES_BASE_URL?: string;
 }
 
 function homeDir(env: PathEnv): string {

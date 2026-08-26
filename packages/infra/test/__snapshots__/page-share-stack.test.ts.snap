@@ -3,15 +3,6 @@
 exports[`PageShareStack > テンプレートが意図せず変化していない 1`] = `
 {
   "Outputs": {
-    "ApiEndpointUrl": {
-      "Description": "API Gateway HTTP APIのエンドポイントURL（CLI設定用）",
-      "Value": {
-        "Fn::GetAtt": [
-          "PagesApiHttpApiB532950D",
-          "ApiEndpoint",
-        ],
-      },
-    },
     "AppBucketName": {
       "Description": "UI用bucket名（ビルド成果物のアップロード先）",
       "Value": {
@@ -61,12 +52,57 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
         ],
       },
     },
+    "IdentityPoolId": {
+      "Description": "Cognito Identity Pool ID",
+      "Value": {
+        "Ref": "AuthIdentityPool659E7F64",
+      },
+    },
+    "IdentityPoolProviderName": {
+      "Description": "Identity Pool の User Pool プロバイダ名（Logins キー用）",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "cognito-idp.",
+            {
+              "Ref": "AWS::Region",
+            },
+            ".",
+            {
+              "Ref": "AWS::URLSuffix",
+            },
+            "/",
+            {
+              "Ref": "AuthUserPool8115E87F",
+            },
+          ],
+        ],
+      },
+    },
     "OidcIssuerUrl": {
-      "Description": "OIDC issuer URL (JWT Authorizer用)",
+      "Description": "OIDC issuer URL",
       "Value": {
         "Fn::GetAtt": [
           "AuthUserPool8115E87F",
           "ProviderURL",
+        ],
+      },
+    },
+    "PagesBaseUrl": {
+      "Description": "pages 閲覧URLのベース（CLI / Web 設定用）",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Fn::GetAtt": [
+                "PagesDeliveryDistribution52AA7C1B",
+                "DomainName",
+              ],
+            },
+          ],
         ],
       },
     },
@@ -76,40 +112,10 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
         "Ref": "PagesStorageBucketDFEB6C7C",
       },
     },
-    "PagesViewUrl": {
-      "Description": "社内限定 pages 閲覧URLのベース",
+    "Region": {
+      "Description": "デプロイ先 AWS リージョン",
       "Value": {
-        "Fn::Join": [
-          "",
-          [
-            "https://",
-            {
-              "Fn::GetAtt": [
-                "PagesDeliveryInternalDistribution6EEF4D92",
-                "DomainName",
-              ],
-            },
-            "/",
-          ],
-        ],
-      },
-    },
-    "ShareViewUrl": {
-      "Description": "URL共有 pages 閲覧URLのベース",
-      "Value": {
-        "Fn::Join": [
-          "",
-          [
-            "https://",
-            {
-              "Fn::GetAtt": [
-                "PagesDeliverySharedDistribution5E588CCA",
-                "DomainName",
-              ],
-            },
-            "/",
-          ],
-        ],
+        "Ref": "AWS::Region",
       },
     },
     "UserPoolId": {
@@ -324,25 +330,6 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
     "AppDeliveryDistribution02142691": {
       "Properties": {
         "DistributionConfig": {
-          "CacheBehaviors": [
-            {
-              "AllowedMethods": [
-                "GET",
-                "HEAD",
-                "OPTIONS",
-                "PUT",
-                "PATCH",
-                "POST",
-                "DELETE",
-              ],
-              "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
-              "Compress": true,
-              "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
-              "PathPattern": "/api/*",
-              "TargetOriginId": "PageShareAppDeliveryDistributionOrigin22033F960",
-              "ViewerProtocolPolicy": "redirect-to-https",
-            },
-          ],
           "Comment": "trusted 管理UI配信",
           "DefaultCacheBehavior": {
             "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
@@ -358,6 +345,9 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
                 },
               },
             ],
+            "ResponseHeadersPolicyId": {
+              "Ref": "AppDeliveryResponseHeadersC3C12CC1",
+            },
             "TargetOriginId": "PageShareAppDeliveryDistributionOrigin16E502F17",
             "ViewerProtocolPolicy": "redirect-to-https",
           },
@@ -384,31 +374,6 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
                 "OriginAccessIdentity": "",
               },
             },
-            {
-              "CustomOriginConfig": {
-                "OriginProtocolPolicy": "https-only",
-                "OriginSSLProtocols": [
-                  "TLSv1.2",
-                ],
-              },
-              "DomainName": {
-                "Fn::Select": [
-                  2,
-                  {
-                    "Fn::Split": [
-                      "/",
-                      {
-                        "Fn::GetAtt": [
-                          "PagesApiHttpApiB532950D",
-                          "ApiEndpoint",
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-              "Id": "PageShareAppDeliveryDistributionOrigin22033F960",
-            },
           ],
           "PriceClass": "PriceClass_200",
         },
@@ -425,6 +390,25 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
         },
       },
       "Type": "AWS::CloudFront::OriginAccessControl",
+    },
+    "AppDeliveryResponseHeadersC3C12CC1": {
+      "Properties": {
+        "ResponseHeadersPolicyConfig": {
+          "Name": "PageShareAppDeliveryResponseHeaders8B128815",
+          "SecurityHeadersConfig": {
+            "ContentSecurityPolicy": {
+              "ContentSecurityPolicy": "default-src 'self'; frame-ancestors 'none'",
+              "Override": true,
+            },
+            "StrictTransportSecurity": {
+              "AccessControlMaxAgeSec": 31536000,
+              "IncludeSubdomains": true,
+              "Override": true,
+            },
+          },
+        },
+      },
+      "Type": "AWS::CloudFront::ResponseHeadersPolicy",
     },
     "AppDeliveryRouterFunction43E4024D": {
       "Properties": {
@@ -471,6 +455,278 @@ function handler(event) {
         },
       },
       "Type": "AWS::CloudFront::Function",
+    },
+    "AuthAuthenticatedRole5FDCA01E": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRoleWithWebIdentity",
+              "Condition": {
+                "ForAnyValue:StringLike": {
+                  "cognito-identity.amazonaws.com:amr": "authenticated",
+                },
+                "StringEquals": {
+                  "cognito-identity.amazonaws.com:aud": {
+                    "Ref": "AuthIdentityPool659E7F64",
+                  },
+                },
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Federated": "cognito-identity.amazonaws.com",
+              },
+            },
+            {
+              "Action": "sts:TagSession",
+              "Condition": {
+                "ForAnyValue:StringLike": {
+                  "cognito-identity.amazonaws.com:amr": "authenticated",
+                },
+                "StringEquals": {
+                  "cognito-identity.amazonaws.com:aud": {
+                    "Ref": "AuthIdentityPool659E7F64",
+                  },
+                },
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Federated": "cognito-identity.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Description": "Identity Pool authenticated users",
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "AuthAuthenticatedRoleDefaultPolicy860A36EF": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:ListBucket",
+              "Condition": {
+                "StringLike": {
+                  "s3:prefix": [
+                    "pages/\${aws:PrincipalTag/email}/*",
+                  ],
+                },
+              },
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "PagesStorageBucketDFEB6C7C",
+                  "Arn",
+                ],
+              },
+              "Sid": "ListOwnPages",
+            },
+            {
+              "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "PagesStorageBucketDFEB6C7C",
+                        "Arn",
+                      ],
+                    },
+                    "/pages/\${aws:PrincipalTag/email}/*",
+                  ],
+                ],
+              },
+              "Sid": "ReadWriteOwnPages",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "AuthAuthenticatedRoleDefaultPolicy860A36EF",
+        "Roles": [
+          {
+            "Ref": "AuthAuthenticatedRole5FDCA01E",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "AuthIdentityPool659E7F64": {
+      "DependsOn": [
+        "AuthUserPoolCliClient8F1EE527",
+        "AuthUserPoolHostedUiDomain786A45EE",
+        "AuthUserPool8115E87F",
+        "AuthUserPoolWebClient147E4E38",
+      ],
+      "Properties": {
+        "AllowUnauthenticatedIdentities": false,
+        "CognitoIdentityProviders": [
+          {
+            "ClientId": {
+              "Ref": "AuthUserPoolWebClient147E4E38",
+            },
+            "ProviderName": {
+              "Fn::Join": [
+                "",
+                [
+                  "cognito-idp.",
+                  {
+                    "Ref": "AWS::Region",
+                  },
+                  ".",
+                  {
+                    "Ref": "AWS::URLSuffix",
+                  },
+                  "/",
+                  {
+                    "Ref": "AuthUserPool8115E87F",
+                  },
+                ],
+              ],
+            },
+            "ServerSideTokenCheck": true,
+          },
+          {
+            "ClientId": {
+              "Ref": "AuthUserPoolCliClient8F1EE527",
+            },
+            "ProviderName": {
+              "Fn::Join": [
+                "",
+                [
+                  "cognito-idp.",
+                  {
+                    "Ref": "AWS::Region",
+                  },
+                  ".",
+                  {
+                    "Ref": "AWS::URLSuffix",
+                  },
+                  "/",
+                  {
+                    "Ref": "AuthUserPool8115E87F",
+                  },
+                ],
+              ],
+            },
+            "ServerSideTokenCheck": true,
+          },
+        ],
+      },
+      "Type": "AWS::Cognito::IdentityPool",
+    },
+    "AuthIdentityPoolDefaultRoleAttachmentA62DEBB8": {
+      "DependsOn": [
+        "AuthUserPoolCliClient8F1EE527",
+        "AuthUserPoolHostedUiDomain786A45EE",
+        "AuthUserPool8115E87F",
+        "AuthUserPoolWebClient147E4E38",
+      ],
+      "Properties": {
+        "IdentityPoolId": {
+          "Ref": "AuthIdentityPool659E7F64",
+        },
+        "Roles": {
+          "authenticated": {
+            "Fn::GetAtt": [
+              "AuthAuthenticatedRole5FDCA01E",
+              "Arn",
+            ],
+          },
+          "unauthenticated": {
+            "Fn::GetAtt": [
+              "AuthIdentityPoolUnauthenticatedRoleA421F307",
+              "Arn",
+            ],
+          },
+        },
+      },
+      "Type": "AWS::Cognito::IdentityPoolRoleAttachment",
+    },
+    "AuthIdentityPoolUnauthenticatedRoleA421F307": {
+      "DependsOn": [
+        "AuthUserPoolCliClient8F1EE527",
+        "AuthUserPoolHostedUiDomain786A45EE",
+        "AuthUserPool8115E87F",
+        "AuthUserPoolWebClient147E4E38",
+      ],
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRoleWithWebIdentity",
+              "Condition": {
+                "ForAnyValue:StringLike": {
+                  "cognito-identity.amazonaws.com:amr": "unauthenticated",
+                },
+                "StringEquals": {
+                  "cognito-identity.amazonaws.com:aud": {
+                    "Ref": "AuthIdentityPool659E7F64",
+                  },
+                },
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Federated": "cognito-identity.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Default Unauthenticated Role for Identity Pool ",
+              {
+                "Fn::GetAtt": [
+                  "AuthIdentityPool659E7F64",
+                  "Name",
+                ],
+              },
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "AuthPrincipalTag0B210463": {
+      "Properties": {
+        "IdentityPoolId": {
+          "Ref": "AuthIdentityPool659E7F64",
+        },
+        "IdentityProviderName": {
+          "Fn::Join": [
+            "",
+            [
+              "cognito-idp.",
+              {
+                "Ref": "AWS::Region",
+              },
+              ".",
+              {
+                "Ref": "AWS::URLSuffix",
+              },
+              "/",
+              {
+                "Ref": "AuthUserPool8115E87F",
+              },
+            ],
+          ],
+        },
+        "PrincipalTags": {
+          "email": "email",
+        },
+        "UseDefaults": false,
+      },
+      "Type": "AWS::Cognito::IdentityPoolPrincipalTag",
     },
     "AuthUserPool8115E87F": {
       "DeletionPolicy": "Retain",
@@ -535,7 +791,9 @@ function handler(event) {
           "profile",
         ],
         "CallbackURLs": [
-          "http://localhost:8976/callback",
+          "http://127.0.0.1:8976/callback",
+          "http://127.0.0.1:8977/callback",
+          "http://127.0.0.1:8978/callback",
         ],
         "GenerateSecret": false,
         "IdTokenValidity": 60,
@@ -586,7 +844,7 @@ function handler(event) {
           "profile",
         ],
         "CallbackURLs": [
-          "http://localhost:3000/auth/callback",
+          "http://localhost:3000/callback",
           {
             "Fn::Join": [
               "",
@@ -598,7 +856,7 @@ function handler(event) {
                     "DomainName",
                   ],
                 },
-                "/auth/callback",
+                "/callback",
               ],
             ],
           },
@@ -646,7 +904,7 @@ function handler(event) {
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "ASSET_HASH_PLACEHOLDER.zip",
+          "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip",
         },
         "Description": {
           "Fn::Join": [
@@ -695,696 +953,65 @@ function handler(event) {
       },
       "Type": "AWS::IAM::Role",
     },
-    "PagesApiHttpApiB532950D": {
+    "PagesDeliveryCachePolicy7BBA6710": {
       "Properties": {
-        "Name": "HttpApi",
-        "ProtocolType": "HTTP",
-      },
-      "Type": "AWS::ApiGatewayV2::Api",
-    },
-    "PagesApiHttpApiDELETEapipagesslugC3BFD7AB": {
-      "Properties": {
-        "ApiId": {
-          "Ref": "PagesApiHttpApiB532950D",
-        },
-        "AuthorizationType": "JWT",
-        "AuthorizerId": {
-          "Ref": "PagesApiHttpApiJwtAuthorizerBEA63326",
-        },
-        "RouteKey": "DELETE /api/pages/{slug}",
-        "Target": {
-          "Fn::Join": [
-            "",
-            [
-              "integrations/",
-              {
-                "Ref": "PagesApiHttpApiPOSTapipagesPagesIntegrationD2AE35E8",
-              },
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::ApiGatewayV2::Route",
-    },
-    "PagesApiHttpApiDELETEapipagesslugPagesIntegrationPermission612CE464": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "PagesApiPagesHandler945894AC",
-            "Arn",
-          ],
-        },
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Join": [
-            "",
-            [
-              "arn:",
-              {
-                "Ref": "AWS::Partition",
-              },
-              ":execute-api:",
-              {
-                "Ref": "AWS::Region",
-              },
-              ":",
-              {
-                "Ref": "AWS::AccountId",
-              },
-              ":",
-              {
-                "Ref": "PagesApiHttpApiB532950D",
-              },
-              "/*/*/api/pages/{slug}",
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "PagesApiHttpApiDefaultStage64261924": {
-      "Properties": {
-        "ApiId": {
-          "Ref": "PagesApiHttpApiB532950D",
-        },
-        "AutoDeploy": true,
-        "StageName": "$default",
-      },
-      "Type": "AWS::ApiGatewayV2::Stage",
-    },
-    "PagesApiHttpApiGETapipagesF68E504E": {
-      "Properties": {
-        "ApiId": {
-          "Ref": "PagesApiHttpApiB532950D",
-        },
-        "AuthorizationType": "JWT",
-        "AuthorizerId": {
-          "Ref": "PagesApiHttpApiJwtAuthorizerBEA63326",
-        },
-        "RouteKey": "GET /api/pages",
-        "Target": {
-          "Fn::Join": [
-            "",
-            [
-              "integrations/",
-              {
-                "Ref": "PagesApiHttpApiPOSTapipagesPagesIntegrationD2AE35E8",
-              },
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::ApiGatewayV2::Route",
-    },
-    "PagesApiHttpApiGETapipagesPagesIntegrationPermission633A1B10": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "PagesApiPagesHandler945894AC",
-            "Arn",
-          ],
-        },
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Join": [
-            "",
-            [
-              "arn:",
-              {
-                "Ref": "AWS::Partition",
-              },
-              ":execute-api:",
-              {
-                "Ref": "AWS::Region",
-              },
-              ":",
-              {
-                "Ref": "AWS::AccountId",
-              },
-              ":",
-              {
-                "Ref": "PagesApiHttpApiB532950D",
-              },
-              "/*/*/api/pages",
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "PagesApiHttpApiGETapipagesslug9CA89F0A": {
-      "Properties": {
-        "ApiId": {
-          "Ref": "PagesApiHttpApiB532950D",
-        },
-        "AuthorizationType": "JWT",
-        "AuthorizerId": {
-          "Ref": "PagesApiHttpApiJwtAuthorizerBEA63326",
-        },
-        "RouteKey": "GET /api/pages/{slug}",
-        "Target": {
-          "Fn::Join": [
-            "",
-            [
-              "integrations/",
-              {
-                "Ref": "PagesApiHttpApiPOSTapipagesPagesIntegrationD2AE35E8",
-              },
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::ApiGatewayV2::Route",
-    },
-    "PagesApiHttpApiGETapipagesslugPagesIntegrationPermissionBD38C5C0": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "PagesApiPagesHandler945894AC",
-            "Arn",
-          ],
-        },
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Join": [
-            "",
-            [
-              "arn:",
-              {
-                "Ref": "AWS::Partition",
-              },
-              ":execute-api:",
-              {
-                "Ref": "AWS::Region",
-              },
-              ":",
-              {
-                "Ref": "AWS::AccountId",
-              },
-              ":",
-              {
-                "Ref": "PagesApiHttpApiB532950D",
-              },
-              "/*/*/api/pages/{slug}",
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "PagesApiHttpApiJwtAuthorizerBEA63326": {
-      "Properties": {
-        "ApiId": {
-          "Ref": "PagesApiHttpApiB532950D",
-        },
-        "AuthorizerType": "JWT",
-        "IdentitySource": [
-          "$request.header.Authorization",
-        ],
-        "JwtConfiguration": {
-          "Audience": [
-            {
-              "Ref": "AuthUserPoolWebClient147E4E38",
-            },
-            {
-              "Ref": "AuthUserPoolCliClient8F1EE527",
-            },
-          ],
-          "Issuer": {
-            "Fn::GetAtt": [
-              "AuthUserPool8115E87F",
-              "ProviderURL",
-            ],
-          },
-        },
-        "Name": "JwtAuthorizer",
-      },
-      "Type": "AWS::ApiGatewayV2::Authorizer",
-    },
-    "PagesApiHttpApiPATCHapipagesslugB274914C": {
-      "Properties": {
-        "ApiId": {
-          "Ref": "PagesApiHttpApiB532950D",
-        },
-        "AuthorizationType": "JWT",
-        "AuthorizerId": {
-          "Ref": "PagesApiHttpApiJwtAuthorizerBEA63326",
-        },
-        "RouteKey": "PATCH /api/pages/{slug}",
-        "Target": {
-          "Fn::Join": [
-            "",
-            [
-              "integrations/",
-              {
-                "Ref": "PagesApiHttpApiPOSTapipagesPagesIntegrationD2AE35E8",
-              },
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::ApiGatewayV2::Route",
-    },
-    "PagesApiHttpApiPATCHapipagesslugPagesIntegrationPermissionF16F2DFC": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "PagesApiPagesHandler945894AC",
-            "Arn",
-          ],
-        },
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Join": [
-            "",
-            [
-              "arn:",
-              {
-                "Ref": "AWS::Partition",
-              },
-              ":execute-api:",
-              {
-                "Ref": "AWS::Region",
-              },
-              ":",
-              {
-                "Ref": "AWS::AccountId",
-              },
-              ":",
-              {
-                "Ref": "PagesApiHttpApiB532950D",
-              },
-              "/*/*/api/pages/{slug}",
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "PagesApiHttpApiPOSTapipagesBDE29B97": {
-      "Properties": {
-        "ApiId": {
-          "Ref": "PagesApiHttpApiB532950D",
-        },
-        "AuthorizationType": "JWT",
-        "AuthorizerId": {
-          "Ref": "PagesApiHttpApiJwtAuthorizerBEA63326",
-        },
-        "RouteKey": "POST /api/pages",
-        "Target": {
-          "Fn::Join": [
-            "",
-            [
-              "integrations/",
-              {
-                "Ref": "PagesApiHttpApiPOSTapipagesPagesIntegrationD2AE35E8",
-              },
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::ApiGatewayV2::Route",
-    },
-    "PagesApiHttpApiPOSTapipagesPagesIntegrationD2AE35E8": {
-      "Properties": {
-        "ApiId": {
-          "Ref": "PagesApiHttpApiB532950D",
-        },
-        "IntegrationType": "AWS_PROXY",
-        "IntegrationUri": {
-          "Fn::GetAtt": [
-            "PagesApiPagesHandler945894AC",
-            "Arn",
-          ],
-        },
-        "PayloadFormatVersion": "2.0",
-      },
-      "Type": "AWS::ApiGatewayV2::Integration",
-    },
-    "PagesApiHttpApiPOSTapipagesPagesIntegrationPermissionAC3216A6": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "PagesApiPagesHandler945894AC",
-            "Arn",
-          ],
-        },
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Join": [
-            "",
-            [
-              "arn:",
-              {
-                "Ref": "AWS::Partition",
-              },
-              ":execute-api:",
-              {
-                "Ref": "AWS::Region",
-              },
-              ":",
-              {
-                "Ref": "AWS::AccountId",
-              },
-              ":",
-              {
-                "Ref": "PagesApiHttpApiB532950D",
-              },
-              "/*/*/api/pages",
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "PagesApiHttpApiPOSTapipagesslugcomplete33212490": {
-      "Properties": {
-        "ApiId": {
-          "Ref": "PagesApiHttpApiB532950D",
-        },
-        "AuthorizationType": "JWT",
-        "AuthorizerId": {
-          "Ref": "PagesApiHttpApiJwtAuthorizerBEA63326",
-        },
-        "RouteKey": "POST /api/pages/{slug}/complete",
-        "Target": {
-          "Fn::Join": [
-            "",
-            [
-              "integrations/",
-              {
-                "Ref": "PagesApiHttpApiPOSTapipagesPagesIntegrationD2AE35E8",
-              },
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::ApiGatewayV2::Route",
-    },
-    "PagesApiHttpApiPOSTapipagesslugcompletePagesIntegrationPermissionBE3D2E0C": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "PagesApiPagesHandler945894AC",
-            "Arn",
-          ],
-        },
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Join": [
-            "",
-            [
-              "arn:",
-              {
-                "Ref": "AWS::Partition",
-              },
-              ":execute-api:",
-              {
-                "Ref": "AWS::Region",
-              },
-              ":",
-              {
-                "Ref": "AWS::AccountId",
-              },
-              ":",
-              {
-                "Ref": "PagesApiHttpApiB532950D",
-              },
-              "/*/*/api/pages/{slug}/complete",
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "PagesApiHttpApiPUTapipagesslug915812BF": {
-      "Properties": {
-        "ApiId": {
-          "Ref": "PagesApiHttpApiB532950D",
-        },
-        "AuthorizationType": "JWT",
-        "AuthorizerId": {
-          "Ref": "PagesApiHttpApiJwtAuthorizerBEA63326",
-        },
-        "RouteKey": "PUT /api/pages/{slug}",
-        "Target": {
-          "Fn::Join": [
-            "",
-            [
-              "integrations/",
-              {
-                "Ref": "PagesApiHttpApiPOSTapipagesPagesIntegrationD2AE35E8",
-              },
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::ApiGatewayV2::Route",
-    },
-    "PagesApiHttpApiPUTapipagesslugPagesIntegrationPermissionB78D8DBF": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "PagesApiPagesHandler945894AC",
-            "Arn",
-          ],
-        },
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Join": [
-            "",
-            [
-              "arn:",
-              {
-                "Ref": "AWS::Partition",
-              },
-              ":execute-api:",
-              {
-                "Ref": "AWS::Region",
-              },
-              ":",
-              {
-                "Ref": "AWS::AccountId",
-              },
-              ":",
-              {
-                "Ref": "PagesApiHttpApiB532950D",
-              },
-              "/*/*/api/pages/{slug}",
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "PagesApiPagesHandler945894AC": {
-      "DependsOn": [
-        "PagesApiPagesHandlerServiceRoleDefaultPolicyCFE3011F",
-        "PagesApiPagesHandlerServiceRoleB20FB24C",
-      ],
-      "Properties": {
-        "Architectures": [
-          "arm64",
-        ],
-        "Code": {
-          "S3Bucket": {
-            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
-          },
-          "S3Key": "ASSET_HASH_PLACEHOLDER.zip",
-        },
-        "Environment": {
-          "Variables": {
-            "KVS_ARN": {
-              "Fn::GetAtt": [
-                "PagesDeliveryKeyValueStore33A55EE4",
-                "Arn",
-              ],
-            },
-            "PAGES_BASE_URL": {
-              "Fn::Join": [
-                "",
-                [
-                  "https://",
-                  {
-                    "Fn::GetAtt": [
-                      "PagesDeliveryInternalDistribution6EEF4D92",
-                      "DomainName",
-                    ],
-                  },
-                ],
-              ],
-            },
-            "PAGES_BUCKET": {
-              "Ref": "PagesStorageBucketDFEB6C7C",
-            },
-            "SHARE_BASE_URL": {
-              "Fn::Join": [
-                "",
-                [
-                  "https://",
-                  {
-                    "Fn::GetAtt": [
-                      "PagesDeliverySharedDistribution5E588CCA",
-                      "DomainName",
-                    ],
-                  },
-                ],
-              ],
-            },
-          },
-        },
-        "Handler": "index.handler",
-        "LoggingConfig": {
-          "LogGroup": {
-            "Ref": "PagesApiPagesHandlerLogGroup723A7CD8",
-          },
-        },
-        "MemorySize": 256,
-        "Role": {
-          "Fn::GetAtt": [
-            "PagesApiPagesHandlerServiceRoleB20FB24C",
-            "Arn",
-          ],
-        },
-        "Runtime": "nodejs22.x",
-        "Timeout": 29,
-      },
-      "Type": "AWS::Lambda::Function",
-    },
-    "PagesApiPagesHandlerLogGroup723A7CD8": {
-      "DeletionPolicy": "Retain",
-      "Properties": {
-        "RetentionInDays": 30,
-      },
-      "Type": "AWS::Logs::LogGroup",
-      "UpdateReplacePolicy": "Retain",
-    },
-    "PagesApiPagesHandlerServiceRoleB20FB24C": {
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Statement": [
-            {
-              "Action": "sts:AssumeRole",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "lambda.amazonaws.com",
-              },
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-        "ManagedPolicyArns": [
-          {
+        "CachePolicyConfig": {
+          "Comment": "同一キー上書きを早く反映するため defaultTtl を短くする",
+          "DefaultTTL": 60,
+          "MaxTTL": 31536000,
+          "MinTTL": 0,
+          "Name": {
             "Fn::Join": [
               "",
               [
-                "arn:",
+                "PageSharePagesDeliveryCachePolicyE257D5B4-",
                 {
-                  "Ref": "AWS::Partition",
+                  "Ref": "AWS::Region",
                 },
-                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
               ],
             ],
           },
-        ],
-      },
-      "Type": "AWS::IAM::Role",
-    },
-    "PagesApiPagesHandlerServiceRoleDefaultPolicyCFE3011F": {
-      "Properties": {
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Action": [
-                "s3:GetObject*",
-                "s3:GetBucket*",
-                "s3:List*",
-                "s3:DeleteObject*",
-                "s3:PutObject",
-                "s3:PutObjectLegalHold",
-                "s3:PutObjectRetention",
-                "s3:PutObjectTagging",
-                "s3:PutObjectVersionTagging",
-                "s3:Abort*",
-              ],
-              "Effect": "Allow",
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "PagesStorageBucketDFEB6C7C",
-                    "Arn",
-                  ],
-                },
-                {
-                  "Fn::Join": [
-                    "",
-                    [
-                      {
-                        "Fn::GetAtt": [
-                          "PagesStorageBucketDFEB6C7C",
-                          "Arn",
-                        ],
-                      },
-                      "/*",
-                    ],
-                  ],
-                },
-              ],
+          "ParametersInCacheKeyAndForwardedToOrigin": {
+            "CookiesConfig": {
+              "CookieBehavior": "none",
             },
-            {
-              "Action": [
-                "cloudfront-keyvaluestore:DescribeKeyValueStore",
-                "cloudfront-keyvaluestore:UpdateKeys",
-              ],
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "PagesDeliveryKeyValueStore33A55EE4",
-                  "Arn",
-                ],
-              },
+            "EnableAcceptEncodingBrotli": false,
+            "EnableAcceptEncodingGzip": false,
+            "HeadersConfig": {
+              "HeaderBehavior": "none",
             },
-          ],
-          "Version": "2012-10-17",
-        },
-        "PolicyName": "PagesApiPagesHandlerServiceRoleDefaultPolicyCFE3011F",
-        "Roles": [
-          {
-            "Ref": "PagesApiPagesHandlerServiceRoleB20FB24C",
+            "QueryStringsConfig": {
+              "QueryStringBehavior": "none",
+            },
           },
-        ],
+        },
       },
-      "Type": "AWS::IAM::Policy",
+      "Type": "AWS::CloudFront::CachePolicy",
     },
-    "PagesDeliveryInternalDistribution6EEF4D92": {
+    "PagesDeliveryDistribution52AA7C1B": {
       "Properties": {
         "DistributionConfig": {
-          "Comment": "internal pages配信",
+          "Comment": "pages配信",
           "DefaultCacheBehavior": {
-            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+            "CachePolicyId": {
+              "Ref": "PagesDeliveryCachePolicy7BBA6710",
+            },
             "Compress": true,
             "FunctionAssociations": [
               {
                 "EventType": "viewer-request",
                 "FunctionARN": {
                   "Fn::GetAtt": [
-                    "PagesDeliveryInternalRouterFunctionB66B1D09",
+                    "PagesDeliveryRouterFunction4867F05B",
                     "FunctionARN",
                   ],
                 },
               },
             ],
             "ResponseHeadersPolicyId": {
-              "Ref": "PagesDeliveryInternalResponseHeaders8544076A",
+              "Ref": "PagesDeliveryResponseHeaders847FFCC2",
             },
-            "TargetOriginId": "PageSharePagesDeliveryInternalDistributionOrigin1C0D50D61",
+            "TargetOriginId": "PageSharePagesDeliveryDistributionOrigin1AE901BBD",
             "ViewerProtocolPolicy": "redirect-to-https",
           },
           "Enabled": true,
@@ -1398,28 +1025,35 @@ function handler(event) {
                   "RegionalDomainName",
                 ],
               },
-              "Id": "PageSharePagesDeliveryInternalDistributionOrigin1C0D50D61",
+              "Id": "PageSharePagesDeliveryDistributionOrigin1AE901BBD",
               "OriginAccessControlId": {
                 "Fn::GetAtt": [
-                  "PagesDeliveryInternalDistributionOrigin1S3OriginAccessControl0F911243",
+                  "PagesDeliveryDistributionOrigin1S3OriginAccessControlF49D3697",
                   "Id",
                 ],
               },
-              "OriginPath": "/internal-pages",
               "S3OriginConfig": {
                 "OriginAccessIdentity": "",
               },
             },
           ],
           "PriceClass": "PriceClass_200",
+          "Restrictions": {
+            "GeoRestriction": {
+              "Locations": [
+                "JP",
+              ],
+              "RestrictionType": "whitelist",
+            },
+          },
         },
       },
       "Type": "AWS::CloudFront::Distribution",
     },
-    "PagesDeliveryInternalDistributionOrigin1S3OriginAccessControl0F911243": {
+    "PagesDeliveryDistributionOrigin1S3OriginAccessControlF49D3697": {
       "Properties": {
         "OriginAccessControlConfig": {
-          "Name": "PageSharePagesDeliveryInternOrigin1S3OriginAccessControlB81A17EC",
+          "Name": "PageSharePagesDeliveryDistriOrigin1S3OriginAccessControlA89B9C0E",
           "OriginAccessControlOriginType": "s3",
           "SigningBehavior": "always",
           "SigningProtocol": "sigv4",
@@ -1427,20 +1061,24 @@ function handler(event) {
       },
       "Type": "AWS::CloudFront::OriginAccessControl",
     },
-    "PagesDeliveryInternalResponseHeaders8544076A": {
+    "PagesDeliveryResponseHeaders847FFCC2": {
       "Properties": {
         "ResponseHeadersPolicyConfig": {
           "CustomHeadersConfig": {
             "Items": [
               {
-                "Header": "Cross-Origin-Resource-Policy",
+                "Header": "Cross-Origin-Opener-Policy",
                 "Override": true,
                 "Value": "same-origin",
               },
             ],
           },
-          "Name": "PageSharePagesDeliveryInternalResponseHeaders76F24457",
+          "Name": "PageSharePagesDeliveryResponseHeaders866E4726",
           "SecurityHeadersConfig": {
+            "ContentSecurityPolicy": {
+              "ContentSecurityPolicy": "frame-ancestors 'none'",
+              "Override": true,
+            },
             "ContentTypeOptions": {
               "Override": true,
             },
@@ -1449,15 +1087,12 @@ function handler(event) {
       },
       "Type": "AWS::CloudFront::ResponseHeadersPolicy",
     },
-    "PagesDeliveryInternalRouterFunctionB66B1D09": {
+    "PagesDeliveryRouterFunction4867F05B": {
       "Properties": {
         "AutoPublish": true,
-        "FunctionCode": "import cf from 'cloudfront';
-const kvsHandle = cf.kvs();
-const NAMESPACE = 'internal';
-const SENTINEL_URI = '/__missing__/index.html';
+        "FunctionCode": "const EMAIL_DOMAIN = 'example.jp';
 
-async function handler(event) {
+function handler(event) {
   var request = event.request;
   var uri = request.uri;
 
@@ -1479,17 +1114,21 @@ async function handler(event) {
     }
   }
 
-  if (parts.length < 2) {
+  var match = uri.match(/^\\/p\\/([^/]+)\\/([^/]+)(\\/.*)?$/);
+  if (!match) {
     return notFound();
   }
 
-  var slug = parts[1];
-  if (!slug || slug.length !== 16 || !/^[a-z0-9]{16}$/.test(slug)) {
+  var user = match[1];
+  if (user.indexOf('@') !== -1) {
     return notFound();
   }
 
-  if (parts.length === 2) {
-    var location = '/' + slug + '/';
+  var slug = match[2];
+  var rest = match[3];
+
+  if (rest === undefined) {
+    var location = '/p/' + user + '/' + slug + '/';
     var qs = buildQueryString(request.querystring);
     if (qs.length > 0) {
       location = location + qs;
@@ -1503,45 +1142,11 @@ async function handler(event) {
     };
   }
 
-  var rest = parts.slice(2).join('/');
-  var kvsKey = NAMESPACE + '/' + slug;
-
-  try {
-    var raw = await kvsHandle.get(kvsKey);
-    if (!raw) {
-      console.log('kvs missing key: ' + kvsKey);
-      return rewriteSentinel(request);
-    }
-
-    var alias = JSON.parse(raw);
-    var versionId = alias.v;
-    if (!versionId || typeof versionId !== 'string') {
-      console.log('kvs invalid value for key: ' + kvsKey);
-      return rewriteSentinel(request);
-    }
-
-    if (alias.e !== undefined && alias.e !== null) {
-      var now = Math.floor(Date.now() / 1000);
-      if (typeof alias.e === 'number' && alias.e <= now) {
-        console.log('kvs expired key: ' + kvsKey);
-        return rewriteSentinel(request);
-      }
-    }
-
-    var rewrittenUri = '/' + slug + '/' + versionId + '/' + rest;
-    if (rewrittenUri.endsWith('/')) {
-      rewrittenUri = rewrittenUri + 'index.html';
-    }
-    request.uri = rewrittenUri;
-    return request;
-  } catch (error) {
-    console.log('kvs error for key: ' + kvsKey + ' error: ' + error);
-    return rewriteSentinel(request);
+  if (rest.endsWith('/')) {
+    rest += 'index.html';
   }
-}
 
-function rewriteSentinel(request) {
-  request.uri = SENTINEL_URI;
+  request.uri = '/pages/' + user + '@' + EMAIL_DOMAIN + '/' + slug + rest;
   return request;
 }
 
@@ -1575,17 +1180,7 @@ function buildQueryString(querystring) {
 }
 ",
         "FunctionConfig": {
-          "Comment": "internal pages: URL rewrite + KVS alias",
-          "KeyValueStoreAssociations": [
-            {
-              "KeyValueStoreARN": {
-                "Fn::GetAtt": [
-                  "PagesDeliveryKeyValueStore33A55EE4",
-                  "Arn",
-                ],
-              },
-            },
-          ],
+          "Comment": "pages: /p/<user>/<slug>/... を S3 キーへ rewrite",
           "Runtime": "cloudfront-js-2.0",
         },
         "Name": {
@@ -1595,259 +1190,7 @@ function buildQueryString(querystring) {
               {
                 "Ref": "AWS::Region",
               },
-              "PageSharePagesDealRouterFunction4912042A",
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::CloudFront::Function",
-    },
-    "PagesDeliveryKeyValueStore33A55EE4": {
-      "DeletionPolicy": "Retain",
-      "Properties": {
-        "Comment": "slug → active version alias",
-        "Name": "PageSharePagesDeliveryKeyValueStore97B8FEFE",
-      },
-      "Type": "AWS::CloudFront::KeyValueStore",
-      "UpdateReplacePolicy": "Retain",
-    },
-    "PagesDeliverySharedDistribution5E588CCA": {
-      "Properties": {
-        "DistributionConfig": {
-          "Comment": "shared pages配信",
-          "DefaultCacheBehavior": {
-            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
-            "Compress": true,
-            "FunctionAssociations": [
-              {
-                "EventType": "viewer-request",
-                "FunctionARN": {
-                  "Fn::GetAtt": [
-                    "PagesDeliverySharedRouterFunctionF58C4658",
-                    "FunctionARN",
-                  ],
-                },
-              },
-            ],
-            "ResponseHeadersPolicyId": {
-              "Ref": "PagesDeliverySharedResponseHeaders7964D54F",
-            },
-            "TargetOriginId": "PageSharePagesDeliverySharedDistributionOrigin184B45494",
-            "ViewerProtocolPolicy": "redirect-to-https",
-          },
-          "Enabled": true,
-          "HttpVersion": "http2",
-          "IPV6Enabled": true,
-          "Origins": [
-            {
-              "DomainName": {
-                "Fn::GetAtt": [
-                  "PagesStorageBucketDFEB6C7C",
-                  "RegionalDomainName",
-                ],
-              },
-              "Id": "PageSharePagesDeliverySharedDistributionOrigin184B45494",
-              "OriginAccessControlId": {
-                "Fn::GetAtt": [
-                  "PagesDeliverySharedDistributionOrigin1S3OriginAccessControl5818AABB",
-                  "Id",
-                ],
-              },
-              "OriginPath": "/shared-pages",
-              "S3OriginConfig": {
-                "OriginAccessIdentity": "",
-              },
-            },
-          ],
-          "PriceClass": "PriceClass_200",
-        },
-      },
-      "Type": "AWS::CloudFront::Distribution",
-    },
-    "PagesDeliverySharedDistributionOrigin1S3OriginAccessControl5818AABB": {
-      "Properties": {
-        "OriginAccessControlConfig": {
-          "Name": "PageSharePagesDeliverySharedOrigin1S3OriginAccessControl6964ABBB",
-          "OriginAccessControlOriginType": "s3",
-          "SigningBehavior": "always",
-          "SigningProtocol": "sigv4",
-        },
-      },
-      "Type": "AWS::CloudFront::OriginAccessControl",
-    },
-    "PagesDeliverySharedResponseHeaders7964D54F": {
-      "Properties": {
-        "ResponseHeadersPolicyConfig": {
-          "CustomHeadersConfig": {
-            "Items": [
-              {
-                "Header": "X-Robots-Tag",
-                "Override": true,
-                "Value": "noindex, nofollow",
-              },
-            ],
-          },
-          "Name": "PageSharePagesDeliverySharedResponseHeaders0B7562E5",
-          "SecurityHeadersConfig": {
-            "ContentTypeOptions": {
-              "Override": true,
-            },
-            "ReferrerPolicy": {
-              "Override": true,
-              "ReferrerPolicy": "no-referrer",
-            },
-          },
-        },
-      },
-      "Type": "AWS::CloudFront::ResponseHeadersPolicy",
-    },
-    "PagesDeliverySharedRouterFunctionF58C4658": {
-      "Properties": {
-        "AutoPublish": true,
-        "FunctionCode": "import cf from 'cloudfront';
-const kvsHandle = cf.kvs();
-const NAMESPACE = 'shared';
-const SENTINEL_URI = '/__missing__/index.html';
-
-async function handler(event) {
-  var request = event.request;
-  var uri = request.uri;
-
-  if (uri.indexOf('%2f') !== -1 || uri.indexOf('%2F') !== -1) {
-    return notFound();
-  }
-
-  var parts = uri.split('/');
-  if (parts[0] !== '') {
-    return notFound();
-  }
-
-  for (var i = 1; i < parts.length; i++) {
-    if (parts[i] === '.' || parts[i] === '..') {
-      return notFound();
-    }
-    if (parts[i] === '' && i < parts.length - 1) {
-      return notFound();
-    }
-  }
-
-  if (parts.length < 2) {
-    return notFound();
-  }
-
-  var slug = parts[1];
-  if (!slug || slug.length !== 16 || !/^[a-z0-9]{16}$/.test(slug)) {
-    return notFound();
-  }
-
-  if (parts.length === 2) {
-    var location = '/' + slug + '/';
-    var qs = buildQueryString(request.querystring);
-    if (qs.length > 0) {
-      location = location + qs;
-    }
-    return {
-      statusCode: 301,
-      statusDescription: 'Moved Permanently',
-      headers: {
-        location: { value: location },
-      },
-    };
-  }
-
-  var rest = parts.slice(2).join('/');
-  var kvsKey = NAMESPACE + '/' + slug;
-
-  try {
-    var raw = await kvsHandle.get(kvsKey);
-    if (!raw) {
-      console.log('kvs missing key: ' + kvsKey);
-      return rewriteSentinel(request);
-    }
-
-    var alias = JSON.parse(raw);
-    var versionId = alias.v;
-    if (!versionId || typeof versionId !== 'string') {
-      console.log('kvs invalid value for key: ' + kvsKey);
-      return rewriteSentinel(request);
-    }
-
-    if (alias.e !== undefined && alias.e !== null) {
-      var now = Math.floor(Date.now() / 1000);
-      if (typeof alias.e === 'number' && alias.e <= now) {
-        console.log('kvs expired key: ' + kvsKey);
-        return rewriteSentinel(request);
-      }
-    }
-
-    var rewrittenUri = '/' + slug + '/' + versionId + '/' + rest;
-    if (rewrittenUri.endsWith('/')) {
-      rewrittenUri = rewrittenUri + 'index.html';
-    }
-    request.uri = rewrittenUri;
-    return request;
-  } catch (error) {
-    console.log('kvs error for key: ' + kvsKey + ' error: ' + error);
-    return rewriteSentinel(request);
-  }
-}
-
-function rewriteSentinel(request) {
-  request.uri = SENTINEL_URI;
-  return request;
-}
-
-function notFound() {
-  return {
-    statusCode: 404,
-    statusDescription: 'Not Found',
-    body: 'Not Found',
-  };
-}
-
-function buildQueryString(querystring) {
-  if (!querystring) {
-    return '';
-  }
-  var parts = [];
-  for (var key in querystring) {
-    var entry = querystring[key];
-    if (entry.multiValue) {
-      for (var i = 0; i < entry.multiValue.length; i++) {
-        parts.push(key + '=' + entry.multiValue[i].value);
-      }
-    } else {
-      parts.push(key + '=' + entry.value);
-    }
-  }
-  if (parts.length === 0) {
-    return '';
-  }
-  return '?' + parts.join('&');
-}
-",
-        "FunctionConfig": {
-          "Comment": "shared pages: URL rewrite + KVS alias",
-          "KeyValueStoreAssociations": [
-            {
-              "KeyValueStoreARN": {
-                "Fn::GetAtt": [
-                  "PagesDeliveryKeyValueStore33A55EE4",
-                  "Arn",
-                ],
-              },
-            },
-          ],
-          "Runtime": "cloudfront-js-2.0",
-        },
-        "Name": {
-          "Fn::Join": [
-            "",
-            [
-              {
-                "Ref": "AWS::Region",
-              },
-              "PageSharePagesDeedRouterFunctionADC50413",
+              "PageSharePagesDeryRouterFunction339F7902",
             ],
           ],
         },
@@ -1873,7 +1216,11 @@ function buildQueryString(querystring) {
                 "*",
               ],
               "AllowedMethods": [
+                "GET",
                 "PUT",
+                "POST",
+                "DELETE",
+                "HEAD",
               ],
               "AllowedOrigins": [
                 {
@@ -1896,21 +1243,6 @@ function buildQueryString(querystring) {
                 "ETag",
               ],
               "MaxAge": 3000,
-            },
-          ],
-        },
-        "LifecycleConfiguration": {
-          "Rules": [
-            {
-              "ExpirationInDays": 37,
-              "Id": "expire-temporary-pages",
-              "Status": "Enabled",
-              "TagFilters": [
-                {
-                  "Key": "retention",
-                  "Value": "temporary",
-                },
-              ],
             },
           ],
         },
@@ -1968,40 +1300,24 @@ function buildQueryString(querystring) {
             {
               "Action": "s3:GetObject",
               "Effect": "Deny",
-              "NotResource": [
-                {
-                  "Fn::Join": [
-                    "",
-                    [
-                      {
-                        "Fn::GetAtt": [
-                          "PagesStorageBucketDFEB6C7C",
-                          "Arn",
-                        ],
-                      },
-                      "/internal-pages/*",
-                    ],
+              "NotResource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "PagesStorageBucketDFEB6C7C",
+                        "Arn",
+                      ],
+                    },
+                    "/pages/*",
                   ],
-                },
-                {
-                  "Fn::Join": [
-                    "",
-                    [
-                      {
-                        "Fn::GetAtt": [
-                          "PagesStorageBucketDFEB6C7C",
-                          "Arn",
-                        ],
-                      },
-                      "/shared-pages/*",
-                    ],
-                  ],
-                },
-              ],
+                ],
+              },
               "Principal": {
                 "Service": "cloudfront.amazonaws.com",
               },
-              "Sid": "DenyCloudFrontGetOutsideDeliveryPrefixes",
+              "Sid": "DenyCloudFrontGetOutsidePagesPrefix",
             },
             {
               "Action": "s3:ListBucket",
@@ -2011,8 +1327,7 @@ function buildQueryString(querystring) {
                 },
                 "StringNotLike": {
                   "s3:prefix": [
-                    "internal-pages/*",
-                    "shared-pages/*",
+                    "pages/*",
                   ],
                 },
               },
@@ -2026,7 +1341,7 @@ function buildQueryString(querystring) {
                   "Arn",
                 ],
               },
-              "Sid": "DenyCloudFrontListOutsideDeliveryPrefixes",
+              "Sid": "DenyCloudFrontListOutsidePagesPrefix",
             },
             {
               "Action": [
@@ -2049,7 +1364,7 @@ function buildQueryString(querystring) {
                         },
                         ":distribution/",
                         {
-                          "Ref": "PagesDeliveryInternalDistribution6EEF4D92",
+                          "Ref": "PagesDeliveryDistribution52AA7C1B",
                         },
                       ],
                     ],
@@ -2082,241 +1397,6 @@ function buildQueryString(querystring) {
                   ],
                 },
               ],
-            },
-            {
-              "Action": [
-                "s3:GetObject",
-                "s3:ListBucket",
-              ],
-              "Condition": {
-                "StringEquals": {
-                  "AWS:SourceArn": {
-                    "Fn::Join": [
-                      "",
-                      [
-                        "arn:",
-                        {
-                          "Ref": "AWS::Partition",
-                        },
-                        ":cloudfront::",
-                        {
-                          "Ref": "AWS::AccountId",
-                        },
-                        ":distribution/",
-                        {
-                          "Ref": "PagesDeliverySharedDistribution5E588CCA",
-                        },
-                      ],
-                    ],
-                  },
-                },
-              },
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudfront.amazonaws.com",
-              },
-              "Resource": [
-                {
-                  "Fn::Join": [
-                    "",
-                    [
-                      {
-                        "Fn::GetAtt": [
-                          "PagesStorageBucketDFEB6C7C",
-                          "Arn",
-                        ],
-                      },
-                      "/*",
-                    ],
-                  ],
-                },
-                {
-                  "Fn::GetAtt": [
-                    "PagesStorageBucketDFEB6C7C",
-                    "Arn",
-                  ],
-                },
-              ],
-            },
-            {
-              "Action": "s3:GetObject",
-              "Condition": {
-                "StringEquals": {
-                  "AWS:SourceArn": {
-                    "Fn::Join": [
-                      "",
-                      [
-                        "arn:",
-                        {
-                          "Ref": "AWS::Partition",
-                        },
-                        ":cloudfront::",
-                        {
-                          "Ref": "AWS::AccountId",
-                        },
-                        ":distribution/",
-                        {
-                          "Ref": "PagesDeliveryInternalDistribution6EEF4D92",
-                        },
-                      ],
-                    ],
-                  },
-                },
-              },
-              "Effect": "Deny",
-              "NotResource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "PagesStorageBucketDFEB6C7C",
-                        "Arn",
-                      ],
-                    },
-                    "/internal-pages/*",
-                  ],
-                ],
-              },
-              "Principal": {
-                "Service": "cloudfront.amazonaws.com",
-              },
-              "Sid": "DenyDistributionGetOutsideinternalpages",
-            },
-            {
-              "Action": "s3:ListBucket",
-              "Condition": {
-                "Null": {
-                  "s3:prefix": "false",
-                },
-                "StringEquals": {
-                  "AWS:SourceArn": {
-                    "Fn::Join": [
-                      "",
-                      [
-                        "arn:",
-                        {
-                          "Ref": "AWS::Partition",
-                        },
-                        ":cloudfront::",
-                        {
-                          "Ref": "AWS::AccountId",
-                        },
-                        ":distribution/",
-                        {
-                          "Ref": "PagesDeliveryInternalDistribution6EEF4D92",
-                        },
-                      ],
-                    ],
-                  },
-                },
-                "StringNotLike": {
-                  "s3:prefix": [
-                    "internal-pages/*",
-                  ],
-                },
-              },
-              "Effect": "Deny",
-              "Principal": {
-                "Service": "cloudfront.amazonaws.com",
-              },
-              "Resource": {
-                "Fn::GetAtt": [
-                  "PagesStorageBucketDFEB6C7C",
-                  "Arn",
-                ],
-              },
-              "Sid": "DenyDistributionListOutsideinternalpages",
-            },
-            {
-              "Action": "s3:GetObject",
-              "Condition": {
-                "StringEquals": {
-                  "AWS:SourceArn": {
-                    "Fn::Join": [
-                      "",
-                      [
-                        "arn:",
-                        {
-                          "Ref": "AWS::Partition",
-                        },
-                        ":cloudfront::",
-                        {
-                          "Ref": "AWS::AccountId",
-                        },
-                        ":distribution/",
-                        {
-                          "Ref": "PagesDeliverySharedDistribution5E588CCA",
-                        },
-                      ],
-                    ],
-                  },
-                },
-              },
-              "Effect": "Deny",
-              "NotResource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "PagesStorageBucketDFEB6C7C",
-                        "Arn",
-                      ],
-                    },
-                    "/shared-pages/*",
-                  ],
-                ],
-              },
-              "Principal": {
-                "Service": "cloudfront.amazonaws.com",
-              },
-              "Sid": "DenyDistributionGetOutsidesharedpages",
-            },
-            {
-              "Action": "s3:ListBucket",
-              "Condition": {
-                "Null": {
-                  "s3:prefix": "false",
-                },
-                "StringEquals": {
-                  "AWS:SourceArn": {
-                    "Fn::Join": [
-                      "",
-                      [
-                        "arn:",
-                        {
-                          "Ref": "AWS::Partition",
-                        },
-                        ":cloudfront::",
-                        {
-                          "Ref": "AWS::AccountId",
-                        },
-                        ":distribution/",
-                        {
-                          "Ref": "PagesDeliverySharedDistribution5E588CCA",
-                        },
-                      ],
-                    ],
-                  },
-                },
-                "StringNotLike": {
-                  "s3:prefix": [
-                    "shared-pages/*",
-                  ],
-                },
-              },
-              "Effect": "Deny",
-              "Principal": {
-                "Service": "cloudfront.amazonaws.com",
-              },
-              "Resource": {
-                "Fn::GetAtt": [
-                  "PagesStorageBucketDFEB6C7C",
-                  "Arn",
-                ],
-              },
-              "Sid": "DenyDistributionListOutsidesharedpages",
             },
           ],
           "Version": "2012-10-17",

@@ -14,7 +14,9 @@
     "dev": "tsx src/index.ts"
   },
   "dependencies": {
-    "@page-share/shared": "workspace:*",
+    "@aws-sdk/client-s3": "^3.888.0",
+    "@aws-sdk/credential-providers": "^3.888.0",
+    "mime": "^4.1.0",
     "openid-client": "^6.8.1"
   },
   "devDependencies": {

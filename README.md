@@ -8,11 +8,11 @@
 
 pnpm workspaces によるモノレポ。
 
-| パッケージ       | 役割                                                   |
-| ---------------- | ------------------------------------------------------ |
-| `packages/infra` | AWS CDK。全 AWS リソースの定義                         |
-| `packages/web`   | 管理 UI（静的 SPA。S3 をブラウザから直接操作する）     |
-| `packages/cli`   | アップロード用 CLI（`npx share-html`。AWS CLI 不要）   |
+| パッケージ       | 役割                                                 |
+| ---------------- | ---------------------------------------------------- |
+| `packages/infra` | AWS CDK。全 AWS リソースの定義                       |
+| `packages/web`   | 管理 UI（静的 SPA。S3 をブラウザから直接操作する）   |
+| `packages/cli`   | アップロード用 CLI（`npx share-html`。AWS CLI 不要） |
 
 CDK をリポジトリのルートに置かずひとつのパッケージとして扱っているのは、フロントエンドや CLI と TypeScript の設定・依存が混ざらないようにするため。
 

@@ -4,6 +4,16 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ConfigError, resolveConfig } from '../src/config.js';
 
+const FULL_CONFIG = {
+  issuer: 'https://issuer.example',
+  clientId: 'client-id',
+  identityPoolId: 'ap-northeast-1:pool',
+  userPoolId: 'ap-northeast-1_pool',
+  region: 'ap-northeast-1',
+  bucket: 'pages-bucket',
+  pagesBaseUrl: 'https://pages.example',
+};
+
 describe('resolveConfig', () => {
   const dirs: string[] = [];
 
@@ -23,7 +33,7 @@ describe('resolveConfig', () => {
     await writeFile(
       configPath,
       JSON.stringify({
-        apiUrl: 'https://file-api.example',
+        ...FULL_CONFIG,
         issuer: 'https://file-issuer.example',
         clientId: 'file-client',
       }),
@@ -31,15 +41,19 @@ describe('resolveConfig', () => {
 
     const config = await resolveConfig({
       env: {
-        SHARE_HTML_API_URL: 'https://env-api.example',
         SHARE_HTML_ISSUER: 'https://env-issuer.example',
         SHARE_HTML_CLIENT_ID: 'env-client',
+        SHARE_HTML_IDENTITY_POOL_ID: FULL_CONFIG.identityPoolId,
+        SHARE_HTML_USER_POOL_ID: FULL_CONFIG.userPoolId,
+        SHARE_HTML_REGION: FULL_CONFIG.region,
+        SHARE_HTML_BUCKET: FULL_CONFIG.bucket,
+        SHARE_HTML_PAGES_BASE_URL: FULL_CONFIG.pagesBaseUrl,
       },
       configPath,
     });
 
     expect(config).toEqual({
-      apiUrl: 'https://env-api.example',
+      ...FULL_CONFIG,
       issuer: 'https://env-issuer.example',
       clientId: 'env-client',
     });
@@ -50,7 +64,7 @@ describe('resolveConfig', () => {
     await writeFile(
       configPath,
       JSON.stringify({
-        apiUrl: 'https://api.example',
+        issuer: 'https://issuer.example',
       }),
     );
 
@@ -61,7 +75,7 @@ describe('resolveConfig', () => {
       }),
     ).rejects.toMatchObject({
       name: 'ConfigError',
-      message: expect.stringContaining('issuer'),
+      message: expect.stringContaining('clientId'),
     });
 
     try {
@@ -69,10 +83,9 @@ describe('resolveConfig', () => {
     } catch (err) {
       expect(err).toBeInstanceOf(ConfigError);
       const message = (err as ConfigError).message;
-      expect(message).toContain('SHARE_HTML_ISSUER');
-      expect(message).toContain('OidcIssuerUrl');
       expect(message).toContain('SHARE_HTML_CLIENT_ID');
       expect(message).toContain('CliAppClientId');
+      expect(message).toContain('SHARE_HTML_PAGES_BASE_URL');
       expect(message).toContain('CfnOutput');
     }
   });
@@ -83,14 +96,7 @@ describe('resolveConfig', () => {
     const shareDir = join(xdgRoot, 'share-html');
     await mkdir(shareDir, { recursive: true });
     const configPath = join(shareDir, 'config.json');
-    await writeFile(
-      configPath,
-      JSON.stringify({
-        apiUrl: 'https://api.example',
-        issuer: 'https://issuer.example',
-        clientId: 'client-id',
-      }),
-    );
+    await writeFile(configPath, JSON.stringify(FULL_CONFIG));
 
     const config = await resolveConfig({
       env: {
@@ -99,6 +105,6 @@ describe('resolveConfig', () => {
       configPath,
     });
 
-    expect(config.apiUrl).toBe('https://api.example');
+    expect(config.pagesBaseUrl).toBe('https://pages.example');
   });
 });

@@ -1,54 +1,89 @@
-import type { CreatePageRequest, RedeclarePageRequest, Retention, Visibility } from '@page-share/shared';
-import { validateCreatePageRequest, validateDeclaredFiles } from '@page-share/shared';
+import { MAX_FILE_COUNT, MAX_FILE_SIZE, MAX_PAGE_SIZE, validateUploadPath } from '@cli/page';
 
 import type { UploadFileEntry } from './collect-upload-files.js';
 
-function mapDeclaredFiles(files: readonly UploadFileEntry[]) {
-  return files.map((file) => ({
-    path: file.path,
-    size: file.file.size,
-  }));
+export interface UploadValidationError {
+  code: string;
+  message: string;
 }
 
-export function buildCreatePageRequest(
-  files: readonly UploadFileEntry[],
-  options: {
-    title: string;
-    visibility: Visibility;
-    retention: Retention;
-  },
-): CreatePageRequest {
-  const request: CreatePageRequest = {
-    retention: options.retention,
-    visibility: options.visibility,
-    files: mapDeclaredFiles(files),
-  };
+const INDEX_HTML_PATH = 'index.html';
 
-  const trimmedTitle = options.title.trim();
-  if (trimmedTitle) {
-    request.title = trimmedTitle;
+export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadValidationError[] {
+  const errors: UploadValidationError[] = [];
+
+  if (files.length === 0) {
+    errors.push({
+      code: 'files_required',
+      message: 'アップロードするファイルを1件以上指定してください',
+    });
+    return errors;
   }
 
-  return request;
-}
+  if (files.length > MAX_FILE_COUNT) {
+    errors.push({
+      code: 'too_many_files',
+      message: `ファイル数は最大 ${MAX_FILE_COUNT} 件までです`,
+    });
+  }
 
-export function buildRedeclarePageRequest(files: readonly UploadFileEntry[]): RedeclarePageRequest {
-  return {
-    files: mapDeclaredFiles(files),
-  };
-}
+  const seenPaths = new Set<string>();
+  let totalSize = 0;
+  let hasIndexHtml = false;
 
-export function validateUploadRequest(
-  files: readonly UploadFileEntry[],
-  options: {
-    title: string;
-    visibility: Visibility;
-    retention: Retention;
-  },
-) {
-  return validateCreatePageRequest(buildCreatePageRequest(files, options));
-}
+  for (const file of files) {
+    const pathResult = validateUploadPath(file.path);
+    if (!pathResult.ok) {
+      errors.push({
+        code: 'invalid_path',
+        message: `無効なパスです: ${file.path}`,
+      });
+      continue;
+    }
 
-export function validateRedeclareRequest(files: readonly UploadFileEntry[]) {
-  return validateDeclaredFiles(buildRedeclarePageRequest(files).files);
+    const normalizedPath = pathResult.path;
+    if (seenPaths.has(normalizedPath)) {
+      errors.push({
+        code: 'duplicate_path',
+        message: `パスが重複しています: ${normalizedPath}`,
+      });
+    } else {
+      seenPaths.add(normalizedPath);
+    }
+
+    const size = file.file.size;
+    if (!Number.isInteger(size) || size < 0) {
+      errors.push({
+        code: 'invalid_file_size',
+        message: `サイズは0以上の整数で指定してください: ${file.path}`,
+      });
+    } else if (size > MAX_FILE_SIZE) {
+      errors.push({
+        code: 'file_too_large',
+        message: `1ファイルあたり最大 ${MAX_FILE_SIZE} バイトまでです: ${file.path}`,
+      });
+    } else {
+      totalSize += size;
+    }
+
+    if (normalizedPath === INDEX_HTML_PATH) {
+      hasIndexHtml = true;
+    }
+  }
+
+  if (totalSize > MAX_PAGE_SIZE) {
+    errors.push({
+      code: 'page_size_exceeded',
+      message: `ページ合計サイズは最大 ${MAX_PAGE_SIZE} バイトまでです`,
+    });
+  }
+
+  if (!hasIndexHtml) {
+    errors.push({
+      code: 'missing_index_html',
+      message: 'ページ直下に index.html が必要です',
+    });
+  }
+
+  return errors;
 }

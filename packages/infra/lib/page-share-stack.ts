@@ -1,9 +1,7 @@
 import { CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
-import { INTERNAL_PAGES_PREFIX, SHARED_PAGES_PREFIX } from '@page-share/shared';
 import type { Construct } from 'constructs';
 import { AppDelivery } from './constructs/app-delivery.js';
 import { Auth } from './constructs/auth.js';
-import { PagesApi } from './constructs/pages-api.js';
 import { PagesDelivery } from './constructs/pages-delivery.js';
 import { PagesStorage } from './constructs/pages-storage.js';
 import { config } from './config.js';
@@ -11,11 +9,9 @@ import { config } from './config.js';
 /**
  * 構築するリソース:
  *   - S3 (private, Public Access Block)
- *   - CloudFront x3 (app / internal pages / shared pages) + OAC
- *   - Cognito User Pool (Google federation, Web/CLI の 2 App Client)
- *   - API Gateway HTTP API + JWT Authorizer
- *   - Lambda (NodejsFunction で packages/api をバンドル)
- *   - Route 53 / ACM
+ *   - CloudFront x2 (app / pages) + OAC
+ *   - Cognito User Pool + Identity Pool (Web/CLI の 2 App Client)
+ *   - Route 53 / ACM（domains 設定時のみ）
  *
  * リソースが増えたら lib/ 配下を用途ごとに分割する。
  */
@@ -26,22 +22,19 @@ export class PageShareStack extends Stack {
     const pagesStorage = new PagesStorage(this, 'PagesStorage');
     const pagesDelivery = new PagesDelivery(this, 'PagesDelivery', {
       bucket: pagesStorage.bucket,
+      emailDomain: config.emailDomain,
     });
     const appDelivery = new AppDelivery(this, 'AppDelivery');
 
     const auth = new Auth(this, 'Auth', {
       appDomain: config.domains?.app,
       appDistributionDomain: appDelivery.distribution.distributionDomainName,
+      pagesBucket: pagesStorage.bucket,
     });
 
-    new CfnOutput(this, 'PagesViewUrl', {
-      value: `https://${pagesDelivery.internalDistribution.distributionDomainName}/`,
-      description: '社内限定 pages 閲覧URLのベース',
-    });
-
-    new CfnOutput(this, 'ShareViewUrl', {
-      value: `https://${pagesDelivery.sharedDistribution.distributionDomainName}/`,
-      description: 'URL共有 pages 閲覧URLのベース',
+    new CfnOutput(this, 'PagesBaseUrl', {
+      value: `https://${pagesDelivery.distribution.distributionDomainName}`,
+      description: 'pages 閲覧URLのベース（CLI / Web 設定用）',
     });
 
     new CfnOutput(this, 'PagesBucketName', {
@@ -71,31 +64,25 @@ export class PageShareStack extends Stack {
 
     new CfnOutput(this, 'OidcIssuerUrl', {
       value: auth.userPool.userPoolProviderUrl,
-      description: 'OIDC issuer URL (JWT Authorizer用)',
+      description: 'OIDC issuer URL',
     });
 
-    const pagesApi = new PagesApi(this, 'PagesApi', {
-      bucket: pagesStorage.bucket,
-      pagesBaseUrl: `https://${pagesDelivery.internalDistribution.distributionDomainName}`,
-      shareBaseUrl: `https://${pagesDelivery.sharedDistribution.distributionDomainName}`,
-      keyValueStoreArn: pagesDelivery.keyValueStore.keyValueStoreArn,
-      userPool: auth.userPool,
-      webClient: auth.webClient,
-      cliClient: auth.cliClient,
+    new CfnOutput(this, 'IdentityPoolId', {
+      value: auth.identityPool.identityPoolId,
+      description: 'Cognito Identity Pool ID',
     });
 
-    appDelivery.addApiBehavior(pagesApi.httpApi);
+    new CfnOutput(this, 'IdentityPoolProviderName', {
+      value: auth.identityProviderName,
+      description: 'Identity Pool の User Pool プロバイダ名（Logins キー用）',
+    });
 
-    pagesStorage.restrictDistributionRead(
-      pagesDelivery.internalDistribution.distributionArn,
-      INTERNAL_PAGES_PREFIX,
-    );
-    pagesStorage.restrictDistributionRead(
-      pagesDelivery.sharedDistribution.distributionArn,
-      SHARED_PAGES_PREFIX,
-    );
+    new CfnOutput(this, 'Region', {
+      value: Stack.of(this).region,
+      description: 'デプロイ先 AWS リージョン',
+    });
 
-    // Web UIはpresigned URLでS3へ直接PUTするため、app originからのCORSを許可する。
+    // ブラウザから Identity Pool クレデンシャルで S3 を直接操作するため CORS を許可する。
     // localhost:3000 は開発サーバー用
     pagesStorage.allowUploadsFrom([
       `https://${appDelivery.distribution.distributionDomainName}`,
@@ -110,11 +97,6 @@ export class PageShareStack extends Stack {
     new CfnOutput(this, 'AppBucketName', {
       value: appDelivery.bucket.bucketName,
       description: 'UI用bucket名（ビルド成果物のアップロード先）',
-    });
-
-    new CfnOutput(this, 'ApiEndpointUrl', {
-      value: pagesApi.httpApi.apiEndpoint,
-      description: 'API Gateway HTTP APIのエンドポイントURL（CLI設定用）',
     });
 
     // TODO: Route 53 / ACM
