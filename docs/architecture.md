@@ -25,7 +25,7 @@
         ▲
         │ OAC
    CloudFront（pages.share.example.jp / UNTRUSTED）
-        └ CloudFront Function: /p/<user>/... → /pages/<user>@<domain>/... + index.html 補完
+        └ CloudFront Function: /<user>/... → /pages/<user>@<domain>/... + index.html 補完
         └ Trusted Key Group: Signed Cookie 必須（独自ドメイン導入後）
         └ Response Headers Policy / Geo restriction
 
@@ -61,7 +61,7 @@ trusted な管理アプリと untrusted な共有ページを別 origin に分�
 
 | URL | 公開範囲 | 認証 | Distribution | S3 key |
 | --- | --- | --- | --- | --- |
-| `https://pages.share.example.jp/p/<user>/<slug>/` | 社内（ログイン必須） | Signed Cookie 必須（独自ドメイン導入後） | pages | `pages/<email>/<slug>/` |
+| `https://pages.share.example.jp/<user>/<slug>/` | 社内（ログイン必須） | Signed Cookie 必須（独自ドメイン導入後） | pages | `pages/<email>/<slug>/` |
 
 `<user>` はメールのローカル部だけを見せる。全員が同じ Workspace ドメインなので、ドメイン部は CloudFront Function で静的に補完する。
 
@@ -168,7 +168,7 @@ Signed Cookie は閲覧専用で、漏れても社内ページの閲覧以外の
 未ログインで閲覧 URL を開いたときのフロー:
 
 ```text
-pages.share.example.jp/p/<user>/<slug>/ → 403
+pages.share.example.jp/<user>/<slug>/ → 403
  → CloudFront カスタムエラーページ（元URLを持って app へ飛ばす小さなHTML）
  → app: Cognito ログイン（済んでいればスキップ）
  → POST /auth/pages-cookie で Signed Cookie 発行
@@ -240,7 +240,7 @@ Web と CLI は API を持たない。Identity Pool の一時クレデンシャ�
 4. 同じ prefix を List し、今回のアップロードに含まれないキーを DeleteObjects
    （.metadata.json はここでは消さない）
 5. .metadata.json を最後に書く
-6. https://pages.share.example.jp/p/<user>/<slug>/ を表示
+6. https://pages.share.example.jp/<user>/<slug>/ を表示
 ```
 
 再アップロードは同じ prefix を上書きする。バージョンディレクトリは持たない。ファイルが減ったり名前が変わったりしたときに古いオブジェクトが残ると、公開 URL からいつまでも読めてしまう。4 の差分削除がこれを防ぐ。`.metadata.json` がある限り cleanup は孤児とみなさない。
@@ -251,35 +251,36 @@ Web と CLI は API を持たない。Identity Pool の一時クレデンシャ�
 
 ## URL解決
 
-公開 URL は `/p/<user>/<slug>/`。pages Distribution の viewer-request に CloudFront Function を付ける。ランタイムは `cloudfront-js-2.0` を指定する（1.0 だと `String.prototype.endsWith` などが使えない）。
+公開 URL は `/<user>/<slug>/`。pages origin は配信専用なので、パス上に `/p/` のような接頭辞は置かない。pages Distribution の viewer-request に CloudFront Function を付ける。ランタイムは `cloudfront-js-2.0` を指定する（1.0 だと `String.prototype.endsWith` などが使えない）。
 
 ```js
 function handler(event) {
   var req = event.request;
-  var m = req.uri.match(/^\/p\/([^/]+)(\/.*)?$/);
+  var m = req.uri.match(/^\/([^/]+)\/([^/]+)(\/.*)?$/);
   if (!m) return { statusCode: 404, statusDescription: 'Not Found' };
   var user = m[1];
   if (user.indexOf('@') !== -1) {
     return { statusCode: 404, statusDescription: 'Not Found' };
   }
-  var rest = m[2] || '/';
-  if (/^\/[^/]+$/.test(rest)) {
+  var slug = m[2];
+  var rest = m[3];
+  if (rest === undefined) {
     return {
       statusCode: 301,
       statusDescription: 'Moved Permanently',
-      headers: { location: { value: '/p/' + user + rest + '/' } },
+      headers: { location: { value: '/' + user + '/' + slug + '/' } },
     };
   }
   if (rest.endsWith('/')) rest += 'index.html';
-  req.uri = '/pages/' + user + '@example.jp' + rest;
+  req.uri = '/pages/' + user + '@example.jp/' + slug + rest;
   return req;
 }
 ```
 
 実装では次を満たす。
 
-- `@` を含む user を弾く。`/p/a@b.jp@example.jp/` のような入力で別ユーザーの prefix を指させないため
-- `/p/<user>/<slug>` に完全一致するなら末尾 `/` 付きへ 301 する。スラッシュ無しのまま HTML を返すと、ページ内の相対パスが壊れる
+- `@` を含む user を弾く。`/a@b.jp@example.jp/` のような入力で別ユーザーの prefix を指させないため
+- `/<user>/<slug>` に完全一致するなら末尾 `/` 付きへ 301 する。スラッシュ無しのまま HTML を返すと、ページ内の相対パスが壊れる
 - ドメイン名は CDK からビルド時に埋め込む。KeyValueStore もマッピングテーブルも不要
 - Lambda@Edge も S3 Website Hosting も使わない
 
@@ -383,6 +384,16 @@ lib/
 Identity Pool の L2 Construct（`aws-cdk-lib/aws-cognito-identitypool`）が使用中の aws-cdk-lib バージョンで安定版として入っているか確認する。attributes for access control（principal tag マッピング）が L2 で設定できない場合は、`CfnIdentityPoolRoleAttachment` の escape hatch を使う。
 
 GitHub Actions からの `cdk deploy` はアクセスキーを置かず、OIDC プロバイダ + 引受ロールで行う。実装は Phase 5。
+
+### スタック削除
+
+使わなくなったときに `cdk destroy` で認証基盤と配信基盤を消す。作り直しは想定しない。
+
+- User Pool は `DESTROY`。Hosted UI ドメインも一緒に消える
+- 管理 UI 用バケットは `DESTROY` + `autoDeleteObjects`。ビルドし直せる静的ファイルだけなので中身ごと消す
+- pages バケットは `RETAIN`。アップロード済みオブジェクトはスタック削除後も残る。`autoDeleteObjects` は付けない。課金は続くので、不要なら手で空にしてバケットを消す
+- CloudFront など残りのリソースはデフォルトどおり消える。Distribution の削除は完了まで待たされる
+- CDK bootstrap はアカウント共通なので残す
 
 ## 配信
 

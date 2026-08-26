@@ -42,7 +42,7 @@ export class PagesDelivery extends Construct {
     const routerFunction = new Function(this, 'RouterFunction', {
       code: FunctionCode.fromInline(routerSource),
       runtime: FunctionRuntime.JS_2_0,
-      comment: 'pages: /p/<user>/<slug>/... を S3 キーへ rewrite',
+      comment: 'pages: /<user>/<slug>/... を S3 キーへ rewrite',
     });
 
     const cachePolicy = new CachePolicy(this, 'CachePolicy', {

@@ -21,7 +21,7 @@ export class PagesStorage extends Construct {
       // 30人規模の社内ツールでは KMS の運用コストに見合わない
       encryption: BucketEncryption.S3_MANAGED,
       enforceSSL: true,
-      // スタック削除でユーザー成果物が消えないようにする
+      // ユーザー成果物はスタック削除後も残す。中身の自動削除はしない
       removalPolicy: RemovalPolicy.RETAIN,
     });
 

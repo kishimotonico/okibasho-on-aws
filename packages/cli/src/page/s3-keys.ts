@@ -19,7 +19,7 @@ export function metadataObjectKey(email: string, slug: string): string {
 
 /** 公開 URL のパス。メールのローカル部だけを見せる */
 export function pageViewPath(userLocalPart: string, slug: string): string {
-  return `/p/${userLocalPart}/${slug}/`;
+  return `/${userLocalPart}/${slug}/`;
 }
 
 export function emailLocalPart(email: string): string {

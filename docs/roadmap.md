@@ -28,17 +28,17 @@
 - [ ] `packages/api` と `packages/shared` を削除し、workspace / tsconfig の参照を整理する
 - [ ] pages バケット（private / Public Access Block / CORS）
 - [ ] pages Distribution + OAC + Response Headers Policy + Geo restriction
-- [ ] CloudFront Function（`/p/<user>/` の展開 + index.html 補完、runtime `cloudfront-js-2.0`）
+- [ ] CloudFront Function（`/<user>/` の展開 + index.html 補完、runtime `cloudfront-js-2.0`）
 - [ ] CDK snapshot テスト（`config.env` / `config.domains` 未設定でも synth が通ること）
 
-受け入れ: 手で置いた `pages/test@example.jp/demo/index.html` が `/p/test/demo/` で表示される。
+受け入れ: 手で置いた `pages/test@example.jp/demo/index.html` が `/test/demo/` で表示される。
 
 ここで確認したい AWS 側の挙動:
 
 - OAC で S3 から実際にオブジェクトが取れるか
 - 存在しない key が 403 ではなく 404 で返るか
 - CloudFront Function が runtime 2.0 で構文エラーなく動くか
-- `/p/test/demo/` が `pages/test@example.jp/demo/index.html` に展開されるか
+- `/test/demo/` が `pages/test@example.jp/demo/index.html` に展開されるか
 - `@` を含む user が 404 になるか
 
 ## Phase 2: 認証と最初の E2E

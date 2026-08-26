@@ -77,6 +77,11 @@ describe('PageShareStack', () => {
         expect(bucket.Properties?.LifecycleConfiguration).toBeUndefined();
       }
 
+      template.hasResource('AWS::S3::Bucket', {
+        DeletionPolicy: 'Retain',
+        UpdateReplacePolicy: 'Retain',
+      });
+
       template.hasResourceProperties('AWS::S3::BucketPolicy', {
         PolicyDocument: {
           Statement: Match.arrayWith([
@@ -231,6 +236,10 @@ describe('PageShareStack', () => {
             MinimumLength: 12,
           },
         },
+      });
+      template.hasResource('AWS::Cognito::UserPool', {
+        DeletionPolicy: 'Delete',
+        UpdateReplacePolicy: 'Delete',
       });
 
       const clients = Object.values(template.findResources('AWS::Cognito::UserPoolClient'));

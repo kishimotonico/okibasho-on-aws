@@ -110,7 +110,7 @@ describe('runUpload', () => {
 
     expect(
       log.mock.calls.some((c) =>
-        String(c[0]).includes('https://pages.example.test/p/tanaka/q3-report/'),
+        String(c[0]).includes('https://pages.example.test/tanaka/q3-report/'),
       ),
     ).toBe(true);
     log.mockRestore();

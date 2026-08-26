@@ -187,19 +187,31 @@ export async function listPages(
   email: string,
 ): Promise<PageMetadata[]> {
   const prefix = ownerPrefix(email);
-  const response = await s3.send(
-    new ListObjectsV2Command({
-      Bucket: bucket,
-      Prefix: prefix,
-      Delimiter: '/',
-    }),
-  );
+  const slugs: string[] = [];
+  let continuationToken: string | undefined;
 
-  const slugs = (response.CommonPrefixes ?? [])
-    .map((entry) => entry.Prefix)
-    .filter((entry): entry is string => Boolean(entry))
-    .map((entry) => entry.slice(prefix.length).replace(/\/$/, ''))
-    .filter((slug) => slug.length > 0);
+  do {
+    const response = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        Delimiter: '/',
+        ContinuationToken: continuationToken,
+      }),
+    );
+
+    for (const entry of response.CommonPrefixes ?? []) {
+      if (!entry.Prefix) {
+        continue;
+      }
+      const slug = entry.Prefix.slice(prefix.length).replace(/\/$/, '');
+      if (slug.length > 0) {
+        slugs.push(slug);
+      }
+    }
+
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
 
   const pages: PageMetadata[] = [];
   for (const slug of slugs) {

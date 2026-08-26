@@ -60,33 +60,33 @@ function makeEvent(uri: string, querystring: Record<string, CloudFrontQueryEntry
 describe('pages-router', () => {
   const handler = loadHandler();
 
-  it('/p/<user>/<slug>/ を pages/<user>@<domain>/<slug>/index.html に rewrite する', () => {
-    const result = handler(makeEvent(`/p/${USER}/${SLUG}/`));
+  it('/<user>/<slug>/ を pages/<user>@<domain>/<slug>/index.html に rewrite する', () => {
+    const result = handler(makeEvent(`/${USER}/${SLUG}/`));
     expect(result).toMatchObject({
       uri: `/pages/${USER}@${EMAIL_DOMAIN}/${SLUG}/index.html`,
     });
   });
 
-  it('/p/<user>/<slug> を末尾スラッシュ付きへ 301 redirect する', () => {
-    const result = handler(makeEvent(`/p/${USER}/${SLUG}`));
+  it('/<user>/<slug> を末尾スラッシュ付きへ 301 redirect する', () => {
+    const result = handler(makeEvent(`/${USER}/${SLUG}`));
     expect(result).toMatchObject({
       statusCode: 301,
       statusDescription: 'Moved Permanently',
       headers: {
-        location: { value: `/p/${USER}/${SLUG}/` },
+        location: { value: `/${USER}/${SLUG}/` },
       },
     });
   });
 
-  it('/p/<user>/<slug>/assets/app.css を pages prefix 付きパスへ rewrite する', () => {
-    const result = handler(makeEvent(`/p/${USER}/${SLUG}/assets/app.css`));
+  it('/<user>/<slug>/assets/app.css を pages prefix 付きパスへ rewrite する', () => {
+    const result = handler(makeEvent(`/${USER}/${SLUG}/assets/app.css`));
     expect(result).toMatchObject({
       uri: `/pages/${USER}@${EMAIL_DOMAIN}/${SLUG}/assets/app.css`,
     });
   });
 
   it('user に @ が含まれると 404 を返す', () => {
-    const result = handler(makeEvent(`/p/${USER}@evil.jp/${SLUG}/`));
+    const result = handler(makeEvent(`/${USER}@evil.jp/${SLUG}/`));
     expect(result).toMatchObject({
       statusCode: 404,
       statusDescription: 'Not Found',
@@ -94,36 +94,43 @@ describe('pages-router', () => {
     });
   });
 
-  it('/p/ 以外のパスは 404 を返す', () => {
+  it('セグメントが足りないパスは 404 を返す', () => {
     const result = handler(makeEvent(`/${SLUG}/`));
     expect(result).toMatchObject({
       statusCode: 404,
     });
   });
 
-  it('/p/<user>/ は slug が無いので 404 を返す', () => {
-    const result = handler(makeEvent(`/p/${USER}/`));
+  it('/<user>/ は slug が無いので 404 を返す', () => {
+    const result = handler(makeEvent(`/${USER}/`));
     expect(result).toMatchObject({
       statusCode: 404,
     });
   });
 
   it('空セグメントは 404 を返す', () => {
-    const result = handler(makeEvent(`/p//${SLUG}/`));
+    const result = handler(makeEvent(`//${SLUG}/`));
     expect(result).toMatchObject({
       statusCode: 404,
     });
   });
 
   it('.. セグメントは 404 を返す', () => {
-    const result = handler(makeEvent(`/p/${USER}/${SLUG}/../index.html`));
+    const result = handler(makeEvent(`/${USER}/${SLUG}/../index.html`));
+    expect(result).toMatchObject({
+      statusCode: 404,
+    });
+  });
+
+  it('.metadata.json は配信せず 404 を返す', () => {
+    const result = handler(makeEvent(`/${USER}/${SLUG}/.metadata.json`));
     expect(result).toMatchObject({
       statusCode: 404,
     });
   });
 
   it('%2f は 404 を返す', () => {
-    const result = handler(makeEvent(`/p/${USER}/${SLUG}%2fassets/`));
+    const result = handler(makeEvent(`/${USER}/${SLUG}%2fassets/`));
     expect(result).toMatchObject({
       statusCode: 404,
     });
@@ -131,7 +138,7 @@ describe('pages-router', () => {
 
   it('301 redirect でクエリ文字列を location に付け直す', () => {
     const result = handler(
-      makeEvent(`/p/${USER}/${SLUG}`, {
+      makeEvent(`/${USER}/${SLUG}`, {
         foo: { value: 'bar' },
         id: { value: '42' },
       }),
@@ -139,7 +146,7 @@ describe('pages-router', () => {
     expect(result).toMatchObject({
       statusCode: 301,
       headers: {
-        location: { value: `/p/${USER}/${SLUG}/?foo=bar&id=42` },
+        location: { value: `/${USER}/${SLUG}/?foo=bar&id=42` },
       },
     });
   });

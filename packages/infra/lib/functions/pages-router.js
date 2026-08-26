@@ -22,7 +22,7 @@ function handler(event) {
     }
   }
 
-  var match = uri.match(/^\/p\/([^/]+)\/([^/]+)(\/.*)?$/);
+  var match = uri.match(/^\/([^/]+)\/([^/]+)(\/.*)?$/);
   if (!match) {
     return notFound();
   }
@@ -36,7 +36,7 @@ function handler(event) {
   var rest = match[3];
 
   if (rest === undefined) {
-    var location = '/p/' + user + '/' + slug + '/';
+    var location = '/' + user + '/' + slug + '/';
     var qs = buildQueryString(request.querystring);
     if (qs.length > 0) {
       location = location + qs;
@@ -48,6 +48,12 @@ function handler(event) {
         location: { value: location },
       },
     };
+  }
+
+  var lastSlash = rest.lastIndexOf('/');
+  var lastSegment = rest.substring(lastSlash + 1);
+  if (lastSegment === '.metadata.json') {
+    return notFound();
   }
 
   if (rest.endsWith('/')) {

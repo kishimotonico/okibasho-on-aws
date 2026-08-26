@@ -138,7 +138,7 @@ describe('pages-s3', () => {
 
     const pages = await listPages(client, bucket, email, pagesBaseUrl);
     expect(pages).toHaveLength(1);
-    expect(pages[0]?.viewUrl).toBe('https://pages.example.com/p/tanaka/q3-report/');
+    expect(pages[0]?.viewUrl).toBe('https://pages.example.com/tanaka/q3-report/');
   });
 
   it('再アップロードで含まれない古いオブジェクトを削除する', async () => {

@@ -123,19 +123,31 @@ export async function listPages(
   pagesBaseUrl: string,
 ): Promise<ListedPage[]> {
   const prefix = ownerPrefix(email);
-  const listResult = await client.send(
-    new ListObjectsV2Command({
-      Bucket: bucket,
-      Prefix: prefix,
-      Delimiter: '/',
-    }),
-  );
+  const slugs: string[] = [];
+  let continuationToken: string | undefined;
 
-  const slugs = (listResult.CommonPrefixes ?? [])
-    .map((entry) => entry.Prefix)
-    .filter((value): value is string => typeof value === 'string')
-    .map((entry) => entry.slice(prefix.length).replace(/\/$/, ''))
-    .filter((slug) => slug.length > 0);
+  do {
+    const listResult = await client.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        Delimiter: '/',
+        ContinuationToken: continuationToken,
+      }),
+    );
+
+    for (const entry of listResult.CommonPrefixes ?? []) {
+      if (typeof entry.Prefix !== 'string') {
+        continue;
+      }
+      const slug = entry.Prefix.slice(prefix.length).replace(/\/$/, '');
+      if (slug.length > 0) {
+        slugs.push(slug);
+      }
+    }
+
+    continuationToken = listResult.IsTruncated ? listResult.NextContinuationToken : undefined;
+  } while (continuationToken);
 
   const base = pagesBaseUrl.replace(/\/$/, '');
   const pages = await Promise.all(

@@ -66,8 +66,8 @@ export class Auth extends Construct {
         requireSymbols: false,
       },
       accountRecovery: AccountRecovery.EMAIL_ONLY,
-      // スタック削除でユーザーが消えると作り直しになる
-      removalPolicy: RemovalPolicy.RETAIN,
+      // 使わなくなったときにスタックごと消せるようにする。作り直しは想定しない
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     const oauthScopes = [OAuthScope.OPENID, OAuthScope.EMAIL, OAuthScope.PROFILE];

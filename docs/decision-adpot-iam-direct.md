@@ -42,7 +42,7 @@ owner 認可がアプリコードから消え、IAM の Resource ARN に置き�
         ▲
         │ OAC
    CloudFront（pages.share.example.jp / UNTRUSTED）
-        └ CloudFront Function: /p/<user>/... → /pages/<user>@<domain>/... + index.html 補完
+        └ CloudFront Function: /<user>/... → /pages/<user>@<domain>/... + index.html 補完
         └ Trusted Key Group: Signed Cookie 必須
         └ Response Headers Policy / Geo restriction
 
@@ -188,29 +188,31 @@ pages/
 
 ## 6. URL 解決（CloudFront Function）
 
-公開 URL は `/p/<user>/<slug>/`。`<user>` はメールのローカル部だけを見せる。
+公開 URL は `/<user>/<slug>/`。`<user>` はメールのローカル部だけを見せる。
 全員が同じ Workspace ドメインなので、ドメイン部は Function で静的に補完できる
-（KeyValueStore もマッピングテーブルも不要）。
+（KeyValueStore もマッピングテーブルも不要）。pages origin は配信専用なので、
+パス上の `/p/` 接頭辞は置かない。
 
 pages Distribution の viewer-request に付ける。ランタイムは **`cloudfront-js-2.0`** を指定すること。
 
 ```js
 function handler(event) {
   var req = event.request;
-  var m = req.uri.match(/^\/p\/([^/]+)(\/.*)?$/);
+  var m = req.uri.match(/^\/([^/]+)\/([^/]+)(\/.*)?$/);
   if (!m) return { statusCode: 404, statusDescription: 'Not Found' };
   var user = m[1];
   if (user.indexOf('@') !== -1) {
     return { statusCode: 404, statusDescription: 'Not Found' };
   }
-  var rest = m[2] || '/';
+  var slug = m[2];
+  var rest = m[3] || '/';
   if (rest.endsWith('/')) rest += 'index.html';
-  req.uri = '/pages/' + user + '@example.jp' + rest;
+  req.uri = '/pages/' + user + '@example.jp/' + slug + rest;
   return req;
 }
 ```
 
-`@` を含む user を弾いているのは、`/p/a@b.jp@example.jp/` のような入力で
+`@` を含む user を弾いているのは、`/a@b.jp@example.jp/` のような入力で
 別ユーザーの prefix を指させないため。ドメイン名は CDK からビルド時に埋め込む。
 
 ## 7. 閲覧認証（Signed Cookie）※独自ドメイン導入後
@@ -228,7 +230,7 @@ function handler(event) {
 - 未ログインで閲覧 URL を開いたときのフロー:
 
 ```text
-pages.share.example.jp/p/<user>/<slug>/ → 403
+pages.share.example.jp/<user>/<slug>/ → 403
  → CloudFront カスタムエラーページ（元URLを持って app へ飛ばす小さなHTML）
  → app: Cognito ログイン（済んでいればスキップ）
  → POST /auth/pages-cookie で Signed Cookie 発行
@@ -300,7 +302,7 @@ const s3 = new S3Client({ region, credentials })
    ドライブレター）。**symlink は無視または拒否**
 3. 各ファイルを PutObject。Content-Type は**拡張子から判定**して付ける
 4. `.metadata.json` を書く
-5. `https://pages.share.example.jp/p/<user>/<slug>/` を表示
+5. `https://pages.share.example.jp/<user>/<slug>/` を表示
 
 その他: `share-html list`（ListObjectsV2）、`share-html rm <slug>`（DeleteObjects、冪等）。
 
@@ -405,11 +407,11 @@ ALB は S3 をターゲットにできず、Lambda ターゲット経由だと�
 ### Phase 1: 配信の背骨
 - pages バケット（private / Public Access Block / CORS）
 - pages Distribution + OAC + Response Headers Policy + Geo restriction
-- CloudFront Function（`/p/<user>/` の展開 + index.html 補完）
+- CloudFront Function（`/<user>/` の展開 + index.html 補完）
 - CDK snapshot テスト
 
 受け入れ: 手で置いた `pages/test@example.jp/demo/index.html` が
-`/p/test/demo/` で表示される。
+`/test/demo/` で表示される。
 
 ### Phase 2: 認証と最初の E2E
 - Cognito User Pool + Managed Login + App Client x2（当面ローカルユーザー）
@@ -454,7 +456,7 @@ ALB は S3 をターゲットにできず、Lambda ターゲット経由だと�
   - 「認証 > API」節（API Gateway JWT Authorizer）を**削除**
   - 「アップロード」節を書き換え（presigned PUT → 一時クレデンシャルで S3 直）
   - 「S3構造」節を書き換え（owner prefix、users インデックス廃止）
-  - 「URL解決」節を書き換え（`/p/<user>/<slug>/` と Function の内容）
+  - 「URL解決」節を書き換え（`/<user>/<slug>/` と Function の内容）
   - 「保存期間」節を書き換え（論理期限を廃止し cleanup に一本化した経緯を残す）
   - 「入力の扱い」から **Content-Type 強制の項を削除**。pages は任意の HTML・JS が
     動く前提の untrusted origin なので、Content-Type を偽られてもリスクが増えない。

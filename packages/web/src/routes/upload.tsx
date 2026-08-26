@@ -109,12 +109,22 @@ function UploadPage() {
 
     try {
       const client = createPagesS3Client(config, auth.idToken);
-      const existingMetadata = reuploadSlug
-        ? await getPageMetadata(client, config.pagesBucket, auth.email, reuploadSlug)
-        : null;
+      const existingMetadata = await getPageMetadata(
+        client,
+        config.pagesBucket,
+        auth.email,
+        targetSlug,
+      );
 
       if (reuploadSlug && !existingMetadata) {
         throw new Error(`ページが見つかりません: ${reuploadSlug}`);
+      }
+      if (!reuploadSlug && existingMetadata) {
+        setPhase('idle');
+        setValidationErrors([
+          'この slug は既に使われています。My Pages から再アップロードしてください',
+        ]);
+        return;
       }
 
       await uploadPage(
