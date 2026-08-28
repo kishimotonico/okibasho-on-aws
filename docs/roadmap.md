@@ -77,6 +77,8 @@
 - 親ドメイン Cookie が pages ホストへ届くか
 - `cloudfront.net` のままでは親ドメイン Cookie が設定できないこと（独自ドメイン必須）
 
+この期間は URL を知っていれば誰でも閲覧できるため、実際の社内資料はアップロードしない（検証用データのみ）。
+
 ## Phase 4: 管理 UI
 
 - [ ] 静的 SPA を app バケットへ、app Distribution に origin 追加

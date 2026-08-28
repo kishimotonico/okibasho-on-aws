@@ -124,7 +124,7 @@ App Client は 2 つ。どちらも public client（client secret なし）+ PKC
 
 ### CLI
 
-Web と CLI で認証方式を分けず、同じ User Pool を使う。CLI のログインは OAuth 2.0 Authorization Code + PKCE。CLI が一時的に 127.0.0.1 の HTTP サーバーを立てて callback を受ける。初回認証後は refresh token を `~/.config/share-html/` 配下にパーミッション 0600 で保存し、毎回のブラウザログインを不要にする。token をログに出さない。独自の Personal API Token は作らない。
+Web と CLI で認証方式を分けず、同じ User Pool を使う。CLI のログインは OAuth 2.0 Authorization Code + PKCE。CLI が一時的に 127.0.0.1 の HTTP サーバーを立てて callback を受ける。初回認証後は refresh token を XDG state ディレクトリ（`~/.local/state/share-html/`、`XDG_STATE_HOME` 準拠）にパーミッション 0600 のファイルで保存し、毎回のブラウザログインを不要にする。設定ファイル（`~/.config/share-html/`）とは置き場所を分ける。OS Credential Store は使わない（ネイティブ依存を持ち込むと単一 JS バンドル配布が崩れる）。token をログに出さない。独自の Personal API Token は作らない。
 
 ### Cognito Identity Pool
 
@@ -161,7 +161,7 @@ pages Distribution に Trusted Key Group を設定する。CloudFront の公開�
 - `aws-jwt-verify`（AWS 公式ライブラリ）で JWKS 検証してから署名する
 - `Domain=.share.example.jp` / `Secure` / `HttpOnly` / `SameSite=Lax` で `CloudFront-Policy` / `CloudFront-Signature` / `CloudFront-Key-Pair-Id` を Set-Cookie
 
-Signed Cookie は閲覧専用で、漏れても社内ページの閲覧以外の権限を持たない。1 ページが複数ファイルを参照するため、Signed URL ではなく Signed Cookie を使う。
+Signed Cookie は閲覧専用で、漏れても社内ページの閲覧以外の権限を持たない。1 ページが複数ファイルを参照するため、Signed URL ではなく Signed Cookie を使う。有効期間は 24 時間。切れたら下記の再認証フローが走るだけなので、長さに神経質にならない。
 
 管理 UI のセッション Cookie（もし持つなら）は `__Host-` プレフィックスを付ける。`__Host-` は `Domain` 指定付きでは設定できないため、pages 上の untrusted JS からの cookie tossing（親ドメイン Cookie の送りつけ）で app session を上書きできない。
 
@@ -191,7 +191,7 @@ pages/
 - `users/<sub>/<slug>.json` のインデックスは持たない。二重書き込みをしない
 - My Pages = `ListObjectsV2(Bucket, Prefix: 'pages/<email>/', Delimiter: '/')` の CommonPrefixes が slug 一覧。各 slug の `.metadata.json` を並列 GetObject して詳細を取る。数十ページなら十分。将来遅くなったら、メタ情報をキー名に埋める等の手を考える
 - slug の一意性はユーザー単位。他人と衝突しないので、グローバルな slug 予約も条件付き書き込みによる排他制御も不要
-- slug の許可文字は `[a-z0-9][a-z0-9_-]{0,63}`。`.` で始まる名前、`/`、`..`、`.metadata.json` は拒否する
+- slug の許可文字は `[a-z0-9][a-z0-9_-]{0,63}`。大文字は S3 キーと URL の大文字小文字問題を避けるため受け付けず、暗黙の変換もしない。`.` で始まる名前、`/`、`..`、`.metadata.json` は拒否する
 - `.metadata.json` の内容:
 
 ```json
@@ -306,6 +306,8 @@ metadata キーだけを拾う走査では、`.metadata.json` が一度も書け
 期限切れから実際に消えるまで最大 1 時間のズレが出る。社内ツールとして十分であり、その間は URL を知っていればまだ見られる。
 
 保存期間の変更は `.metadata.json` の `expiresAt` を書き換えるだけである。オブジェクトタグも Lifecycle も追随させない。`createdAt` は初回アップロードの値を維持する。
+
+再アップロード（同一 slug への上書き）では `expiresAt` を再計算する。temporary ページの期限は更新のたびにリセットされ、再共有し直したページが 30 日で消えない。permanent 化済みのページは `--permanent` を付けずに再アップロードしても permanent のまま維持する（temporary への変更は保存期間変更の操作で行う）。
 
 ## 管理UI（web）
 
