@@ -276,6 +276,11 @@ export async function uploadPage(
         ...options.existingMetadata,
         slug,
         owner: email,
+        // permanent 化済みページは再アップロードで temporary に戻さない
+        expiresAt:
+          options.existingMetadata.expiresAt === null
+            ? null
+            : computeExpiresAtForNewUpload(options.retention, now),
       }
     : {
         slug,

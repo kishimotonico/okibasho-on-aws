@@ -197,6 +197,62 @@ describe('pages-s3', () => {
     ).resolves.toBeDefined();
   });
 
+  it('permanent 化済みページを temporary 指定で再アップロードしても expiresAt は null のまま', async () => {
+    const slug = 'q3-report';
+    const existingMetadata = {
+      slug,
+      owner: email,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      expiresAt: null,
+    };
+    const client = createFakeS3Client({
+      [metadataObjectKey(email, slug)]: {
+        body: new TextEncoder().encode(JSON.stringify(existingMetadata)),
+        contentType: 'application/json',
+      },
+    });
+
+    const metadata = await uploadPage(
+      client,
+      bucket,
+      email,
+      slug,
+      [{ path: 'index.html', file: new Blob(['<html></html>'], { type: 'text/html' }) }],
+      { retention: 'temporary', existingMetadata },
+    );
+
+    expect(metadata.expiresAt).toBeNull();
+  });
+
+  it('temporary ページの再アップロードで expiresAt が現在時刻起点に再計算される', async () => {
+    const slug = 'q3-report';
+    const existingMetadata = {
+      slug,
+      owner: email,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      expiresAt: '2026-08-10T00:00:00.000Z',
+    };
+    const client = createFakeS3Client({
+      [metadataObjectKey(email, slug)]: {
+        body: new TextEncoder().encode(JSON.stringify(existingMetadata)),
+        contentType: 'application/json',
+      },
+    });
+    const now = new Date('2026-08-26T00:00:00.000Z');
+
+    const metadata = await uploadPage(
+      client,
+      bucket,
+      email,
+      slug,
+      [{ path: 'index.html', file: new Blob(['<html></html>'], { type: 'text/html' }) }],
+      { retention: 'temporary', existingMetadata },
+    );
+
+    expect(metadata.expiresAt).toBe(computeExpiresAtForNewUpload('temporary', now));
+    expect(metadata.expiresAt).not.toBe(existingMetadata.expiresAt);
+  });
+
   it('保存期間変更は metadata だけ更新する', async () => {
     const slug = 'q3-report';
     const createdAt = '2026-08-01T00:00:00.000Z';

@@ -8,8 +8,6 @@ function createSessionStorage(): WebStorageStateStore {
   // アップロードされた untrusted な HTML は別 origin（pages 側）で配信されるため、
   // Same-Origin Policy により管理アプリの storage を読めない。これが設計上の主要な防御になる。
   // localStorage ではなく sessionStorage にするのは、タブを閉じたら消えるぶん露出時間が短いため。
-  // Phase 3 で app 側に __Host- プレフィックス付きのセッション Cookie を導入する予定があり、
-  // そのときにこの置き方は見直しになる。
   return new WebStorageStateStore({ store: window.sessionStorage });
 }
 

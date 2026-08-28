@@ -98,7 +98,5 @@ export class PageShareStack extends Stack {
       value: appDelivery.bucket.bucketName,
       description: 'UI用bucket名（ビルド成果物のアップロード先）',
     });
-
-    // TODO: Route 53 / ACM
   }
 }

@@ -87,7 +87,7 @@ describe('runUpload', () => {
           slug: 'q3-report',
           owner: TEST_EMAIL,
           createdAt: '2026-01-01T00:00:00.000Z',
-          expiresAt: null,
+          expiresAt: '2026-01-31T00:00:00.000Z',
         }),
       ),
       contentType: 'application/json',
@@ -113,6 +113,31 @@ describe('runUpload', () => {
         String(c[0]).includes('https://pages.example.test/tanaka/q3-report/'),
       ),
     ).toBe(true);
+    log.mockRestore();
+  });
+
+  it('permanent 化済みページを --permanent なしで再アップロードしても expiresAt は null のまま', async () => {
+    const dir = await createHtmlDir('already-permanent');
+    const store = new FakeS3Store();
+    const metadataKey = metadataObjectKey(TEST_EMAIL, 'already-permanent');
+    store.objects.set(metadataKey, {
+      body: Buffer.from(
+        JSON.stringify({
+          slug: 'already-permanent',
+          owner: TEST_EMAIL,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          expiresAt: null,
+        }),
+      ),
+      contentType: 'application/json',
+    });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const result = await runUpload(dir, {}, defaultUploadDeps(store));
+
+    expect(result.exitCode).toBe(0);
+    const metadata = JSON.parse(store.objects.get(metadataKey)!.body.toString('utf8'));
+    expect(metadata.expiresAt).toBeNull();
     log.mockRestore();
   });
 

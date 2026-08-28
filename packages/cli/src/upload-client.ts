@@ -132,12 +132,14 @@ export async function uploadPage(
   );
 
   let createdAt = new Date().toISOString();
+  let existingPermanent = false;
   const existingMetadataBody = await readObjectBody(s3, bucket, metadataKey);
   if (existingMetadataBody) {
     try {
       const parsed: unknown = JSON.parse(existingMetadataBody.toString('utf8'));
       if (isPageMetadata(parsed)) {
         createdAt = parsed.createdAt;
+        existingPermanent = parsed.expiresAt === null;
       }
     } catch {
       // 壊れた metadata は上書きする
@@ -163,7 +165,8 @@ export async function uploadPage(
     slug: input.slug,
     owner: input.email,
     createdAt,
-    expiresAt: computeExpiresAt(input.permanent),
+    // permanent 化済みページは再アップロードで temporary に戻さない
+    expiresAt: computeExpiresAt(input.permanent || existingPermanent),
   };
 
   await s3.send(
