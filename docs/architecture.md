@@ -1,10 +1,10 @@
 # アーキテクチャ
 
-決定済みの設計だけを書く。検討中の論点は [open-questions.md](open-questions.md) にある。決まったらここへ移す。
-
-旧設計（静的 SPA + API Gateway + JWT Authorizer + presigned PUT）は破棄した。判断の経緯は [decision-adpot-iam-direct.md](decision-adpot-iam-direct.md) にある。本書が設計の正本である。
+本書が設計の正本である。決定済みの設計だけを書く。検討中の論点は [open-questions.md](open-questions.md) に、設計に至る背景は文末の「検討の経緯」にある。
 
 ## 全体構成
+
+構成図: [architecture.drawio](architecture.drawio)（draw.io 形式。VS Code の Draw.io Integration 拡張か [app.diagrams.net](https://app.diagrams.net) で開く）
 
 ```text
    ブラウザ（管理UI）                        CLI（share-html）
@@ -65,7 +65,7 @@ trusted な管理アプリと untrusted な共有ページを別 origin に分�
 
 `<user>` はメールのローカル部だけを見せる。全員が同じ Workspace ドメインなので、ドメイン部は CloudFront Function で静的に補完する。
 
-ホスト名は `app` / `pages` とする。旧設計にあった URL 共有用 origin（`share`）は持たない。閲覧は社内メンバーに限定し、社外への URL 共有はスコープ外とする。
+ホスト名は `app` / `pages` の 2 つだけとする。閲覧は社内メンバーに限定し、社外への URL 共有はスコープ外とする。
 
 CloudFront の Distribution は app 用と pages 用の 2 つ。Signed Cookie、Response Headers Policy、403 時の認証導線を別々の設定として持つ。
 
@@ -99,7 +99,7 @@ authenticated role の権限ポリシーが唯一のセキュリティ境界で�
 ```
 
 - 他人の prefix への Put / Get / Delete / List は `AccessDenied` になる
-- 旧設計の `metadata.ownerSub == currentUser.sub` 照合は持たない。アプリのバグで他人のページを壊せない
+- metadata の owner とログインユーザーの照合はアプリに持たない。認可は IAM だけが行うため、アプリのバグで他人のページを壊せない
 - `s3:prefix` 条件があるため、`ListObjectsV2` には必ず prefix を渡す。渡さないと `AccessDenied`
 - CDK のレビュー時はこのポリシーと、ロールの信頼ポリシー（次節）を重点的に見る
 
@@ -288,9 +288,9 @@ function handler(event) {
 
 デフォルト 30 日。ユーザー操作で無期限に変更できる。
 
-旧設計の「論理期限（閲覧時に 404/410）」は廃止する。pages 側は CloudFront → S3 の直配信で Lambda を通らないため、`expiresAt` を評価するコードが動く場所が存在しない。設計上の穴だった。
+閲覧時に期限を検査する仕組みは持たない。閲覧経路は CloudFront → S3 の直配信で Lambda を通らず、`expiresAt` を評価するコードが動く場所がないためである。期限の実施は cleanup Lambda に一本化する。
 
-新しい方式:
+仕組み:
 
 - `.metadata.json` の `expiresAt` が唯一の判定材料
 - EventBridge Scheduler が 1 時間ごとに cleanup Lambda を起動する
@@ -313,7 +313,7 @@ metadata キーだけを拾う走査では、`.metadata.json` が一度も書け
 
 静的 SPA。S3 + CloudFront で配信する。SSR もサーバー関数も使わない。
 
-フレームワークは TanStack Start の SPA モード + prerender（既存の選定を維持する）。成果物は静的ファイルのみとし、app Distribution の S3 origin から配信する。
+フレームワークは TanStack Start の SPA モード + prerender。成果物は静的ファイルのみとし、app Distribution の S3 origin から配信する。
 
 API クライアントは書かない。ブラウザから直接 AWS SDK for JavaScript v3 で S3 を叩く。
 
@@ -372,20 +372,20 @@ lib/
   config.ts                  env / domains を集約（domains は任意）
   constructs/
     auth.ts                  UserPool / Managed Login / App Client x2 /
-                             PreSignUp トリガー / IdentityPool / authenticated role
-    storage.ts               pages バケット（private, PAB, CORS）
-    delivery.ts              pages Distribution / OAC / CloudFront Function /
-                             Key Group / Response Headers Policy / Geo restriction
-    app-site.ts              app バケット + Distribution + /auth/* の Lambda
-    cleanup.ts               EventBridge Scheduler + cleanup Lambda
-    domains.ts               Route 53 + ACM（config.domains 未設定なら作らない）
+                             IdentityPool / authenticated role / principal tag
+    pages-storage.ts         pages バケット（private, PAB, CORS）
+    pages-delivery.ts        pages Distribution / OAC / CloudFront Function /
+                             Response Headers Policy / Geo restriction
+    app-delivery.ts          app バケット + Distribution + SPA 用 CloudFront Function
 ```
 
-`config.domains` が未設定でも `cdk synth` が通ること。ドメイン関連の分岐は `domains.ts` の 1 箇所に閉じ込め、他の構成に波及させない。未設定の間は CloudFront のデフォルトドメインで構築し、証明書・Route 53・Signed Cookie 閲覧認証は作らない。`config.domains` に `share` は持たない（URL 共有 origin は廃止した）。
+Signed Cookie 発行 Lambda・cleanup・PreSignUp・ドメイン関連（Route 53 / ACM）の Construct は、それぞれの機能の導入と同時に追加する。導入順は [roadmap.md](roadmap.md) にある。
 
-Identity Pool の L2 Construct（`aws-cdk-lib/aws-cognito-identitypool`）が使用中の aws-cdk-lib バージョンで安定版として入っているか確認する。attributes for access control（principal tag マッピング）が L2 で設定できない場合は、`CfnIdentityPoolRoleAttachment` の escape hatch を使う。
+`config.domains` が未設定でも `cdk synth` が通ること。ドメイン関連の分岐は 1 つの Construct に閉じ込め、他の構成に波及させない。未設定の間は CloudFront のデフォルトドメインで構築し、証明書・Route 53・Signed Cookie 閲覧認証は作らない。
 
-GitHub Actions からの `cdk deploy` はアクセスキーを置かず、OIDC プロバイダ + 引受ロールで行う。実装は Phase 5。
+Identity Pool は L2 Construct（`aws-cdk-lib/aws-cognito-identitypool`）を使う。attributes for access control（principal tag マッピング）は L2 で設定できないため、`CfnIdentityPoolPrincipalTag` で補う。
+
+GitHub Actions からの `cdk deploy` はアクセスキーを置かず、OIDC プロバイダ + 引受ロールで行う。
 
 ### スタック削除
 
@@ -410,7 +410,7 @@ Response Headers Policy は CDK で付ける。アプリのコードは 1 行も
 
 CloudFront の Geo restriction を日本に絞る。無料である。WAF は月額コストが乗るので入れない。
 
-再アップロードは同じ key の上書きなので、CloudFront のキャッシュが残ると古い内容と新しい内容が混ざる。pages 側は短い TTL（60 秒）にする。invalidation は持たない。クライアントに `cloudfront:CreateInvalidation` を足すと IAM の境界が広がり、案 3 の狙いを損なう。社内ツールとして最大 60 秒の遅れは許容する。app 配信の静的ファイルはハッシュ付きアセットを長期キャッシュし、シェルだけ短くする。
+再アップロードは同じ key の上書きなので、CloudFront のキャッシュが残ると古い内容と新しい内容が混ざる。pages 側は短い TTL（60 秒）にする。invalidation は持たない。クライアントに `cloudfront:CreateInvalidation` を足すと IAM の境界が S3 の外へ広がり、権限を自分の prefix の S3 操作だけに絞る狙いを損なう。社内ツールとして最大 60 秒の遅れは許容する。app 配信の静的ファイルはハッシュ付きアセットを長期キャッシュし、シェルだけ短くする。
 
 ## 入力の扱い
 
@@ -462,3 +462,8 @@ packages/
 API Gateway / REST API / JWT Authorizer / DynamoDB / Lambda@Edge / WAF / S3 Lifecycle + オブジェクトタグ / presigned URL / CloudFront KeyValueStore / `packages/api` / `packages/shared` / 既存 ALB との統合 / 社外向け URL 共有 origin。
 
 ALB は S3 をターゲットにできず、Lambda ターゲット経由だとレスポンス 1MB 上限で配信に使えないため、この構成には組み込みどころがない。
+
+## 検討の経緯
+
+- [decision-adpot-iam-direct.md](decision-adpot-iam-direct.md) — 旧設計（静的 SPA + API Gateway + JWT Authorizer + presigned PUT）を破棄し、Identity Pool の一時クレデンシャルで S3 を直接操作する現設計を採用した判断
+- [notes-optional-metadata.md](notes-optional-metadata.md) — S3 直置きと `.metadata.json` 任意化の検討メモ（未採用）
