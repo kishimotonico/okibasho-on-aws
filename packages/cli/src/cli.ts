@@ -31,13 +31,13 @@ const HELP_TEXT = `okiba — 社内向けHTML共有サービスのCLI
     --dry-run     ネットワークにアクセスせず送信内容だけ表示
 
 接続先の設定 (環境変数は設定ファイルより優先):
-  SHARE_HTML_ISSUER             OIDC issuer URL (CfnOutput: OidcIssuerUrl)
-  SHARE_HTML_CLIENT_ID          CLI用 App Client ID (CfnOutput: CliAppClientId)
-  SHARE_HTML_IDENTITY_POOL_ID   Identity Pool ID (CfnOutput: IdentityPoolId)
-  SHARE_HTML_USER_POOL_ID       User Pool ID (CfnOutput: UserPoolId)
-  SHARE_HTML_REGION             AWS リージョン (CfnOutput: Region)
-  SHARE_HTML_BUCKET             pages バケット名 (CfnOutput: PagesBucketName)
-  SHARE_HTML_PAGES_BASE_URL     公開 URL のベース (CfnOutput: PagesBaseUrl)
+  OKIBA_ISSUER             OIDC issuer URL (CfnOutput: OidcIssuerUrl)
+  OKIBA_CLIENT_ID          CLI用 App Client ID (CfnOutput: CliAppClientId)
+  OKIBA_IDENTITY_POOL_ID   Identity Pool ID (CfnOutput: IdentityPoolId)
+  OKIBA_USER_POOL_ID       User Pool ID (CfnOutput: UserPoolId)
+  OKIBA_REGION             AWS リージョン (CfnOutput: Region)
+  OKIBA_BUCKET             pages バケット名 (CfnOutput: PagesBucketName)
+  OKIBA_PAGES_BASE_URL     公開 URL のベース (CfnOutput: PagesBaseUrl)
 
 設定ファイル: ~/.config/okibasho/config.json
   (XDG_CONFIG_HOME が設定されていれば $XDG_CONFIG_HOME/okibasho/config.json)

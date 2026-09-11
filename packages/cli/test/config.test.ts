@@ -41,13 +41,13 @@ describe('resolveConfig', () => {
 
     const config = await resolveConfig({
       env: {
-        SHARE_HTML_ISSUER: 'https://env-issuer.example',
-        SHARE_HTML_CLIENT_ID: 'env-client',
-        SHARE_HTML_IDENTITY_POOL_ID: FULL_CONFIG.identityPoolId,
-        SHARE_HTML_USER_POOL_ID: FULL_CONFIG.userPoolId,
-        SHARE_HTML_REGION: FULL_CONFIG.region,
-        SHARE_HTML_BUCKET: FULL_CONFIG.bucket,
-        SHARE_HTML_PAGES_BASE_URL: FULL_CONFIG.pagesBaseUrl,
+        OKIBA_ISSUER: 'https://env-issuer.example',
+        OKIBA_CLIENT_ID: 'env-client',
+        OKIBA_IDENTITY_POOL_ID: FULL_CONFIG.identityPoolId,
+        OKIBA_USER_POOL_ID: FULL_CONFIG.userPoolId,
+        OKIBA_REGION: FULL_CONFIG.region,
+        OKIBA_BUCKET: FULL_CONFIG.bucket,
+        OKIBA_PAGES_BASE_URL: FULL_CONFIG.pagesBaseUrl,
       },
       configPath,
     });
@@ -83,9 +83,9 @@ describe('resolveConfig', () => {
     } catch (err) {
       expect(err).toBeInstanceOf(ConfigError);
       const message = (err as ConfigError).message;
-      expect(message).toContain('SHARE_HTML_CLIENT_ID');
+      expect(message).toContain('OKIBA_CLIENT_ID');
       expect(message).toContain('CliAppClientId');
-      expect(message).toContain('SHARE_HTML_PAGES_BASE_URL');
+      expect(message).toContain('OKIBA_PAGES_BASE_URL');
       expect(message).toContain('CfnOutput');
     }
   });

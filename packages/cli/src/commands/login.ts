@@ -72,7 +72,7 @@ export async function runLogin(): Promise<void> {
     server.close();
     console.error(
       `認証サーバー (${config.issuer}) に接続できませんでした。\n` +
-        'SHARE_HTML_ISSUER の値が正しいか確認してください。',
+        'OKIBA_ISSUER の値が正しいか確認してください。',
     );
     process.exitCode = 1;
     return;

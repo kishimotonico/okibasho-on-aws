@@ -17,15 +17,15 @@ pnpm --filter @okibasho/cli build
 
 環境変数（優先）または `~/.config/okibasho/config.json`:
 
-| 環境変数                      | 設定ファイルのキー | CDK CfnOutput     |
-| ----------------------------- | ------------------ | ----------------- |
-| `SHARE_HTML_ISSUER`           | `issuer`           | `OidcIssuerUrl`   |
-| `SHARE_HTML_CLIENT_ID`        | `clientId`         | `CliAppClientId`  |
-| `SHARE_HTML_IDENTITY_POOL_ID` | `identityPoolId`   | `IdentityPoolId`  |
-| `SHARE_HTML_USER_POOL_ID`     | `userPoolId`       | `UserPoolId`      |
-| `SHARE_HTML_REGION`           | `region`           | `Region`          |
-| `SHARE_HTML_BUCKET`           | `bucket`           | `PagesBucketName` |
-| `SHARE_HTML_PAGES_BASE_URL`   | `pagesBaseUrl`     | `PagesBaseUrl`    |
+| 環境変数                 | 設定ファイルのキー | CDK CfnOutput     |
+| ------------------------ | ------------------ | ----------------- |
+| `OKIBA_ISSUER`           | `issuer`           | `OidcIssuerUrl`   |
+| `OKIBA_CLIENT_ID`        | `clientId`         | `CliAppClientId`  |
+| `OKIBA_IDENTITY_POOL_ID` | `identityPoolId`   | `IdentityPoolId`  |
+| `OKIBA_USER_POOL_ID`     | `userPoolId`       | `UserPoolId`      |
+| `OKIBA_REGION`           | `region`           | `Region`          |
+| `OKIBA_BUCKET`           | `bucket`           | `PagesBucketName` |
+| `OKIBA_PAGES_BASE_URL`   | `pagesBaseUrl`     | `PagesBaseUrl`    |
 
 refresh token は `~/.config/okibasho/` 配下にパーミッション 0600 で保存する。
 
