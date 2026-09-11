@@ -2,7 +2,7 @@ import { UserManager, WebStorageStateStore } from 'oidc-client-ts';
 
 import { getWebConfig } from '~/config/env';
 
-const RETURN_PATH_KEY = 'page-share:auth:returnTo';
+const RETURN_PATH_KEY = 'okibasho:auth:returnTo';
 
 function createSessionStorage(): WebStorageStateStore {
   // アップロードされた untrusted な HTML は別 origin（pages 側）で配信されるため、

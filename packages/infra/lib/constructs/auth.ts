@@ -225,7 +225,7 @@ export class Auth extends Construct {
     }
 
     // prefixはAWS全体で一意。アカウントIDを混ぜて他環境との衝突を避ける
-    const domainPrefix = `page-share-${Stack.of(this).account}`;
+    const domainPrefix = `okibasho-${Stack.of(this).account}`;
 
     this.hostedUiDomain = this.userPool.addDomain('HostedUiDomain', {
       cognitoDomain: {

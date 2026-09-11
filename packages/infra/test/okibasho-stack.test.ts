@@ -1,7 +1,7 @@
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { PageShareStack } from '../lib/page-share-stack.js';
+import { OkibashoStack } from '../lib/okibasho-stack.js';
 
 /**
  * スタック全体のsnapshot。
@@ -11,7 +11,7 @@ import { PageShareStack } from '../lib/page-share-stack.js';
  */
 function synth(): Template {
   const app = new App({ context: { 'aws:cdk:bundling-stacks': [] } });
-  const stack = new PageShareStack(app, 'PageShare', { emailDomain: 'example.jp' });
+  const stack = new OkibashoStack(app, 'Okibasho', { emailDomain: 'example.jp' });
   return Template.fromStack(stack);
 }
 
@@ -50,7 +50,7 @@ function findDistributionByComment(
   );
 }
 
-describe('PageShareStack', () => {
+describe('OkibashoStack', () => {
   it('テンプレートが意図せず変化していない', () => {
     expect(synthJson()).toMatchSnapshot();
   });

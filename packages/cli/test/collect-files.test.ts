@@ -12,7 +12,7 @@ describe('collectFiles', () => {
   });
 
   async function createTempDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'share-html-collect-'));
+    const dir = await mkdtemp(join(tmpdir(), 'okibasho-collect-'));
     tempDirs.push(dir);
     return dir;
   }

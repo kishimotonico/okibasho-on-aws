@@ -8,9 +8,9 @@ describe('runCli', () => {
     const result = await runCli(['--help']);
     expect(result.exitCode).toBe(0);
     const help = String(log.mock.calls[0]?.[0]);
-    expect(help).toContain('share-html login');
-    expect(help).toContain('share-html list');
-    expect(help).toContain('share-html rm');
+    expect(help).toContain('okiba login');
+    expect(help).toContain('okiba list');
+    expect(help).toContain('okiba rm');
     expect(help).toContain('--name');
     expect(help).toContain('--permanent');
     expect(help).not.toContain('--shared');

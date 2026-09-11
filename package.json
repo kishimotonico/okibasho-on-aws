@@ -1,9 +1,9 @@
 {
-  "name": "internal-page-share",
+  "name": "okibasho",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
-  "description": "社内向けHTML共有サービス",
+  "description": "ちょっとしたHTML・アーティファクトを共有するためのAWSスタック",
   "packageManager": "pnpm@11.5.0",
   "engines": {
     "node": ">=22"

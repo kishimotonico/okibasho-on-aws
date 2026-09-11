@@ -12,19 +12,19 @@ import { PortsInUseError } from './port.js';
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
 
-const HELP_TEXT = `share-html — 社内向けHTML共有サービスのCLI
+const HELP_TEXT = `okiba — 社内向けHTML共有サービスのCLI
 
 使い方:
-  share-html login              ブラウザでログイン (OAuth PKCE)
-  share-html logout             保存したトークンを削除
-  share-html list               アップロード済みページ一覧
-  share-html rm <slug>          ページを削除
-  share-html <path>             HTMLをアップロード
-  share-html --help, -h         このヘルプを表示
-  share-html --version          バージョンを表示
+  okiba login              ブラウザでログイン (OAuth PKCE)
+  okiba logout             保存したトークンを削除
+  okiba list               アップロード済みページ一覧
+  okiba rm <slug>          ページを削除
+  okiba <path>             HTMLをアップロード
+  okiba --help, -h         このヘルプを表示
+  okiba --version          バージョンを表示
 
 アップロード:
-  share-html <path> [--name <slug>] [--permanent] [--dry-run]
+  okiba <path> [--name <slug>] [--permanent] [--dry-run]
     <path>        単一ファイル (.html/.htm) またはディレクトリ
     --name        ページ slug (省略時はディレクトリ/ファイル名から生成)
     --permanent   無期限保存 (省略時は 30 日)
@@ -39,8 +39,8 @@ const HELP_TEXT = `share-html — 社内向けHTML共有サービスのCLI
   SHARE_HTML_BUCKET             pages バケット名 (CfnOutput: PagesBucketName)
   SHARE_HTML_PAGES_BASE_URL     公開 URL のベース (CfnOutput: PagesBaseUrl)
 
-設定ファイル: ~/.config/share-html/config.json
-  (XDG_CONFIG_HOME が設定されていれば $XDG_CONFIG_HOME/share-html/config.json)
+設定ファイル: ~/.config/okibasho/config.json
+  (XDG_CONFIG_HOME が設定されていれば $XDG_CONFIG_HOME/okibasho/config.json)
 `;
 
 export interface CliResult {
@@ -61,7 +61,7 @@ function formatCliError(err: unknown): string {
   }
   if (err instanceof Error) {
     if (err.message.startsWith('Unknown option')) {
-      return `${err.message}\nshare-html --help で使い方を確認できます。`;
+      return `${err.message}\nokiba --help で使い方を確認できます。`;
     }
     return err.message;
   }
@@ -105,7 +105,7 @@ export async function runCli(argv: string[]): Promise<CliResult> {
 
   if (positionals.length === 0) {
     console.error('サブコマンドまたはアップロードするパスを指定してください。');
-    console.error('share-html --help で使い方を確認できます。');
+    console.error('okiba --help で使い方を確認できます。');
     return { exitCode: 1 };
   }
 
@@ -146,7 +146,7 @@ export async function runCli(argv: string[]): Promise<CliResult> {
   if (command === 'rm') {
     const slug = rest[0];
     if (!slug || rest.length > 1) {
-      console.error('share-html rm <slug>');
+      console.error('okiba rm <slug>');
       return { exitCode: 1 };
     }
     if (!isValidSlug(slug)) {
@@ -158,7 +158,7 @@ export async function runCli(argv: string[]): Promise<CliResult> {
 
   // それ以外の先頭引数はアップロード対象のパスとみなす
   if (rest.length > 0) {
-    console.error('不明なサブコマンドです。share-html --help で使い方を確認できます。');
+    console.error('不明なサブコマンドです。okiba --help で使い方を確認できます。');
     return { exitCode: 1 };
   }
 

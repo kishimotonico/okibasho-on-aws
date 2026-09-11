@@ -7,7 +7,7 @@ export const Route = createFileRoute('/')({
 function HomePage() {
   return (
     <div className="page">
-      <h1>Page Share</h1>
+      <h1>okibasho</h1>
       <p>社内向け HTML 共有サービスの管理画面です。</p>
       <p>
         <Link to="/upload" search={{}} className="button-link">

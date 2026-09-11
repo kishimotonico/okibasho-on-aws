@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`PageShareStack > テンプレートが意図せず変化していない 1`] = `
+exports[`OkibashoStack > テンプレートが意図せず変化していない 1`] = `
 {
   "Outputs": {
     "AppBucketName": {
@@ -348,7 +348,7 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
             "ResponseHeadersPolicyId": {
               "Ref": "AppDeliveryResponseHeadersC3C12CC1",
             },
-            "TargetOriginId": "PageShareAppDeliveryDistributionOrigin16E502F17",
+            "TargetOriginId": "OkibashoAppDeliveryDistributionOrigin1BAC13D3D",
             "ViewerProtocolPolicy": "redirect-to-https",
           },
           "DefaultRootObject": "_shell.html",
@@ -363,7 +363,7 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
                   "RegionalDomainName",
                 ],
               },
-              "Id": "PageShareAppDeliveryDistributionOrigin16E502F17",
+              "Id": "OkibashoAppDeliveryDistributionOrigin1BAC13D3D",
               "OriginAccessControlId": {
                 "Fn::GetAtt": [
                   "AppDeliveryDistributionOrigin1S3OriginAccessControl2535E57C",
@@ -383,7 +383,7 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
     "AppDeliveryDistributionOrigin1S3OriginAccessControl2535E57C": {
       "Properties": {
         "OriginAccessControlConfig": {
-          "Name": "PageShareAppDeliveryDistribuOrigin1S3OriginAccessControl9D849CC1",
+          "Name": "OkibashoAppDeliveryDistributOrigin1S3OriginAccessControlB56A795A",
           "OriginAccessControlOriginType": "s3",
           "SigningBehavior": "always",
           "SigningProtocol": "sigv4",
@@ -394,7 +394,7 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
     "AppDeliveryResponseHeadersC3C12CC1": {
       "Properties": {
         "ResponseHeadersPolicyConfig": {
-          "Name": "PageShareAppDeliveryResponseHeaders8B128815",
+          "Name": "OkibashoAppDeliveryResponseHeadersDED897DD",
           "SecurityHeadersConfig": {
             "ContentSecurityPolicy": {
               "ContentSecurityPolicy": "frame-ancestors 'none'",
@@ -449,7 +449,7 @@ function handler(event) {
               {
                 "Ref": "AWS::Region",
               },
-              "PageShareAppDeliryRouterFunction93B4D559",
+              "OkibashoAppDeliveryRouterFunction1AB64549",
             ],
           ],
         },
@@ -818,7 +818,7 @@ function handler(event) {
           "Fn::Join": [
             "",
             [
-              "page-share-",
+              "okibasho-",
               {
                 "Ref": "AWS::AccountId",
               },
@@ -964,7 +964,7 @@ function handler(event) {
             "Fn::Join": [
               "",
               [
-                "PageSharePagesDeliveryCachePolicyE257D5B4-",
+                "OkibashoPagesDeliveryCachePolicyB846C1B7-",
                 {
                   "Ref": "AWS::Region",
                 },
@@ -1011,7 +1011,7 @@ function handler(event) {
             "ResponseHeadersPolicyId": {
               "Ref": "PagesDeliveryResponseHeaders847FFCC2",
             },
-            "TargetOriginId": "PageSharePagesDeliveryDistributionOrigin1AE901BBD",
+            "TargetOriginId": "OkibashoPagesDeliveryDistributionOrigin1EA4A56FB",
             "ViewerProtocolPolicy": "redirect-to-https",
           },
           "Enabled": true,
@@ -1025,7 +1025,7 @@ function handler(event) {
                   "RegionalDomainName",
                 ],
               },
-              "Id": "PageSharePagesDeliveryDistributionOrigin1AE901BBD",
+              "Id": "OkibashoPagesDeliveryDistributionOrigin1EA4A56FB",
               "OriginAccessControlId": {
                 "Fn::GetAtt": [
                   "PagesDeliveryDistributionOrigin1S3OriginAccessControlF49D3697",
@@ -1053,7 +1053,7 @@ function handler(event) {
     "PagesDeliveryDistributionOrigin1S3OriginAccessControlF49D3697": {
       "Properties": {
         "OriginAccessControlConfig": {
-          "Name": "PageSharePagesDeliveryDistriOrigin1S3OriginAccessControlA89B9C0E",
+          "Name": "OkibashoPagesDeliveryDistribOrigin1S3OriginAccessControl20C50D2D",
           "OriginAccessControlOriginType": "s3",
           "SigningBehavior": "always",
           "SigningProtocol": "sigv4",
@@ -1073,7 +1073,7 @@ function handler(event) {
               },
             ],
           },
-          "Name": "PageSharePagesDeliveryResponseHeaders866E4726",
+          "Name": "OkibashoPagesDeliveryResponseHeaders2F9A1C6F",
           "SecurityHeadersConfig": {
             "ContentSecurityPolicy": {
               "ContentSecurityPolicy": "frame-ancestors 'none'",
@@ -1196,7 +1196,7 @@ function buildQueryString(querystring) {
               {
                 "Ref": "AWS::Region",
               },
-              "PageSharePagesDeryRouterFunction339F7902",
+              "OkibashoPagesDelryRouterFunctionB212A306",
             ],
           ],
         },

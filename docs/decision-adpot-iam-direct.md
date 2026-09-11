@@ -1,4 +1,4 @@
-# 引き継ぎ: internal-page-share を「案3（IAM 活用案）」で実装する
+# 引き継ぎ: okibasho を「案3（IAM 活用案）」で実装する
 
 ## 0. この文書の位置づけ
 
@@ -24,7 +24,7 @@ owner 認可がアプリコードから消え、IAM の Resource ARN に置き�
 ## 2. 全体構成
 
 ```text
-   ブラウザ（管理UI）                        CLI（share-html）
+   ブラウザ（管理UI）                        CLI（okiba）
         │                                         │
         │  Authorization Code + PKCE              │  同左
         ▼                                         ▼
@@ -62,7 +62,7 @@ owner 認可がアプリコードから消え、IAM の Resource ARN に置き�
 packages/
   infra/   AWS CDK（単一スタック、機能境界は Construct）
   web/     管理UI（静的 SPA。S3 + CloudFront で配信）
-  cli/     share-html（Node.js のみ。AWS CLI に依存しない）
+  cli/     okiba（Node.js のみ。AWS CLI に依存しない）
 ```
 
 `packages/api` と `packages/shared` は**削除する**。API が存在しないため、
@@ -265,23 +265,23 @@ CloudFront → S3 の直配信で Lambda を通らないため、`expiresAt` を
 **cleanup Lambda のロールだけは prefix 制限のない権限を持つ**ので、
 IAM の境界の外にある唯一の処理になる。ここはレビュー対象。
 
-## 9. CLI（`share-html`）
+## 9. CLI（`okiba`）
 
 **Node.js のみで実装する。AWS CLI のインストールを前提にしない。**
 
 依存: `@aws-sdk/client-s3`、`@aws-sdk/credential-providers`、
 PKCE 用に `openid-client`（または `node:crypto` で自前実装）、拡張子→MIME の判定ライブラリ。
-依存を単一 JS にバンドルして npm 配布（`npx share-html`）。
+依存を単一 JS にバンドルして npm 配布（`npx okiba`）。
 
-### `share-html login`
+### `okiba login`
 
 1. 127.0.0.1 の空きポートで一時 HTTP サーバーを立てる
 2. Cognito の authorize URL（Authorization Code + PKCE）をブラウザで開く
 3. コールバックで受けた code を `/oauth2/token` で交換
-4. **refresh token** を保存する。保存先は `~/.config/share-html/` 配下、パーミッション 0600。
+4. **refresh token** を保存する。保存先は `~/.config/okibasho/` 配下、パーミッション 0600。
    token をログに出さないこと
 
-### `share-html <path> [--name <slug>] [--permanent]`
+### `okiba <path> [--name <slug>] [--permanent]`
 
 ```ts
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers'
@@ -304,7 +304,7 @@ const s3 = new S3Client({ region, credentials })
 4. `.metadata.json` を書く
 5. `https://pages.share.example.jp/<user>/<slug>/` を表示
 
-その他: `share-html list`（ListObjectsV2）、`share-html rm <slug>`（DeleteObjects、冪等）。
+その他: `okiba list`（ListObjectsV2）、`okiba rm <slug>`（DeleteObjects、冪等）。
 
 ## 10. 管理 UI（`packages/web`）
 
@@ -325,7 +325,7 @@ S3 を叩く。
 
 ```
 lib/
-  page-share-stack.ts        各 Construct の組み立てだけ
+  okibasho-stack.ts        各 Construct の組み立てだけ
   config.ts                  既存。env / domains を集約（domains は任意）
   constructs/
     auth.ts                  UserPool / Managed Login / App Client x2 /
@@ -419,7 +419,7 @@ ALB は S3 をターゲットにできず、Lambda ターゲット経由だと�
 - CLI: `login`（PKCE + localhost コールバック + token 保存）
 - CLI: アップロード（単一ファイル / ディレクトリ、`.metadata.json` 書き込み、URL 表示）
 
-受け入: `share-html login` → `share-html ./dist/` でアップロードし、
+受け入: `okiba login` → `okiba ./dist/` でアップロードし、
 発行された URL で閲覧できる（このフェーズでは閲覧認証なし）。
 **別ユーザーの prefix に書こうとすると AccessDenied になることをテストで確認する。**
 

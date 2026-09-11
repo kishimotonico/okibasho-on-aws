@@ -12,7 +12,7 @@ describe('token-store', () => {
   });
 
   async function makeTokenPath(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'share-html-tokens-'));
+    const dir = await mkdtemp(join(tmpdir(), 'okibasho-tokens-'));
     dirs.push(dir);
     return join(dir, 'tokens.json');
   }

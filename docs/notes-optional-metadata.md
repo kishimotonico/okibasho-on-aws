@@ -37,7 +37,7 @@ CLI / Web が守っているページ契約:
 
 cleanup Lambda は未実装（Phase 5）。設計上は 1 時間ごとに全キーを List し、`pages/<email>/<slug>/` 単位で束ね、`.metadata.json` が無ければ孤児として prefix ごと削除、あれば `expiresAt` が過去なら削除する。pages は CloudFront → S3 の直配信なので、閲覧時に期限を見る場所は無い。`expiresAt` が期限の正本。
 
-My Pages と `share-html list` は CommonPrefixes で slug を拾ったあと、各 `.metadata.json` を Get する。metadata が無い（または壊れている）slug は一覧から落とす。
+My Pages と `okiba list` は CommonPrefixes で slug を拾ったあと、各 `.metadata.json` を Get する。metadata が無い（または壊れている）slug は一覧から落とす。
 
 再アップロードで CLI は `createdAt` を残し `expiresAt` を作り直す。Web は既存 metadata をほぼそのまま残す（期限の再計算は保存期間の変更操作だけ）。ここは現行でも CLI と Web で違う。
 
@@ -77,7 +77,7 @@ My Pages と `share-html list` は CommonPrefixes で slug を拾ったあと、
 
 **`.metadata.json`** は寿命の任意の注釈。無ければ無期限。`expiresAt` が過去なら cleanup が prefix ごと消す。CLI / Web は今どおり最後に書く（デフォルト 30 日、`--permanent` / 無期限トグルで `null`）。直置きは JSON なしで残る。あとから期限を付けたければ JSON を足す。Web から 30 日に変える操作は、そのとき metadata を作れば足りる。
 
-**現行の orphan** は「オブジェクトはあるが `.metadata.json` が無い prefix」。想定発生源は (1) ファイル PUT のあと metadata を書く前に落ちたアップロード (2) 削除の途中失敗。metadata 無しを無期限にすると、意図した直置きと失敗作をファイルの並びでは区別できない。草案では orphan 回収を捨て、中断アップロードは本人が My Pages / `share-html rm` で消す。30 人規模では、失敗作を Lambda が推測して消すより小さい、という判断。
+**現行の orphan** は「オブジェクトはあるが `.metadata.json` が無い prefix」。想定発生源は (1) ファイル PUT のあと metadata を書く前に落ちたアップロード (2) 削除の途中失敗。metadata 無しを無期限にすると、意図した直置きと失敗作をファイルの並びでは区別できない。草案では orphan 回収を捨て、中断アップロードは本人が My Pages / `okiba rm` で消す。30 人規模では、失敗作を Lambda が推測して消すより小さい、という判断。
 
 orphan ではないもの:
 
@@ -85,7 +85,7 @@ orphan ではないもの:
 - 名前付き HTML だけの直置き
 - metadata を意図して置かない直置き
 
-**My Pages / `share-html list`** は CommonPrefixes をそのまま出す。metadata も `index.html` も無くてよい。正規 URL は常に `/<user>/<slug>/`（`index.html` が無ければ開くと 404）。作成日は metadata の `createdAt`、無ければ空。オブジェクトの LastModified をページの誕生日にしない（再アップロードで動き、ファイルごとに違う）。
+**My Pages / `okiba list`** は CommonPrefixes をそのまま出す。metadata も `index.html` も無くてよい。正規 URL は常に `/<user>/<slug>/`（`index.html` が無ければ開くと 404）。作成日は metadata の `createdAt`、無ければ空。オブジェクトの LastModified をページの誕生日にしない（再アップロードで動き、ファイルごとに違う）。
 
 **不完全アップロード**は自動では正しく判定できないので推測しない。metadata を最後に書く今の順を変えない。中断すると無期限の欠けた prefix が残りうる。それを許容する。
 

@@ -13,7 +13,7 @@ import { uploadPage } from '../src/upload-client.js';
 import { FakeS3Store, makeIdToken, TEST_CONFIG, TEST_EMAIL } from './fake-s3.js';
 
 async function createHtmlDir(name = 'my-page'): Promise<string> {
-  const parent = await mkdtemp(join(tmpdir(), 'share-html-upload-'));
+  const parent = await mkdtemp(join(tmpdir(), 'okibasho-upload-'));
   const dir = join(parent, name);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, 'index.html'), '<html></html>');
@@ -34,7 +34,7 @@ function defaultUploadDeps(store: FakeS3Store) {
 
 describe('runUpload', () => {
   it('index.html が無いディレクトリは S3 を呼ばず検証エラーになる', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'share-html-upload-'));
+    const dir = await mkdtemp(join(tmpdir(), 'okibasho-upload-'));
     await writeFile(join(dir, 'page.html'), '<html></html>');
 
     const store = new FakeS3Store();
@@ -166,13 +166,13 @@ describe('runUpload', () => {
       {
         ...defaultUploadDeps(store),
         ensureIdToken: async () => {
-          throw new TokenRefreshError('先に `share-html login` を実行してください。');
+          throw new TokenRefreshError('先に `okiba login` を実行してください。');
         },
       },
     );
 
     expect(result.exitCode).toBe(1);
-    expect(error.mock.calls[0]?.[0]).toContain('share-html login');
+    expect(error.mock.calls[0]?.[0]).toContain('okiba login');
     error.mockRestore();
   });
 

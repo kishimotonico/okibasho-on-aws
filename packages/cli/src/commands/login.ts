@@ -19,7 +19,7 @@ const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 
 const SUCCESS_HTML = `<!DOCTYPE html>
 <html lang="ja">
-<head><meta charset="utf-8"><title>share-html</title></head>
+<head><meta charset="utf-8"><title>okiba</title></head>
 <body>
 <p>ログインが完了しました。ターミナルに戻ってください。</p>
 </body>
@@ -95,7 +95,7 @@ export async function runLogin(): Promise<void> {
       const timeout = setTimeout(() => {
         reject(
           new Error(
-            'ログインがタイムアウトしました (5分)。もう一度 share-html login を実行してください。',
+            'ログインがタイムアウトしました (5分)。もう一度 okiba login を実行してください。',
           ),
         );
       }, LOGIN_TIMEOUT_MS);

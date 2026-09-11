@@ -1,4 +1,4 @@
-# internal-page-share
+# okibasho
 
 社内向けの HTML 共有サービス。生成した HTML やモックを、URL ひとつで社内メンバーへ共有する。
 
@@ -8,11 +8,11 @@
 
 pnpm workspaces によるモノレポ。
 
-| パッケージ       | 役割                                                 |
-| ---------------- | ---------------------------------------------------- |
-| `packages/infra` | AWS CDK。全 AWS リソースの定義                       |
-| `packages/web`   | 管理 UI（静的 SPA。S3 をブラウザから直接操作する）   |
-| `packages/cli`   | アップロード用 CLI（`npx share-html`。AWS CLI 不要） |
+| パッケージ       | 役割                                               |
+| ---------------- | -------------------------------------------------- |
+| `packages/infra` | AWS CDK。全 AWS リソースの定義                     |
+| `packages/web`   | 管理 UI（静的 SPA。S3 をブラウザから直接操作する） |
+| `packages/cli`   | アップロード用 CLI（`npx okiba`。AWS CLI 不要）    |
 
 CDK をリポジトリのルートに置かずひとつのパッケージとして扱っているのは、フロントエンドや CLI と TypeScript の設定・依存が混ざらないようにするため。
 
@@ -29,11 +29,11 @@ cp packages/infra/.env.example packages/infra/.env   # デプロイ設定。EMAI
 pnpm typecheck                          # 全パッケージの型チェック
 pnpm test                               # 全パッケージのテスト（Vitest）
 pnpm format                             # Prettier で整形
-pnpm --filter @page-share/infra synth   # CloudFormation テンプレートの生成
-pnpm --filter @page-share/infra diff    # デプロイ済みスタックとの差分
-pnpm --filter @page-share/infra deploy  # デプロイ
-pnpm --filter @page-share/web dev        # 管理UIの開発サーバー
-pnpm --filter @page-share/cli build      # CLIを単一JSにバンドル
+pnpm --filter @okibasho/infra synth   # CloudFormation テンプレートの生成
+pnpm --filter @okibasho/infra diff    # デプロイ済みスタックとの差分
+pnpm --filter @okibasho/infra deploy  # デプロイ
+pnpm --filter @okibasho/web dev        # 管理UIの開発サーバー
+pnpm --filter @okibasho/cli build      # CLIを単一JSにバンドル
 ```
 
 ## ドキュメント

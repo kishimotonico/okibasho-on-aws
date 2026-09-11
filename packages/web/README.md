@@ -7,7 +7,7 @@ TanStack Start（React）を使う。SPA モード + prerender で静的ファ�
 ## 開発
 
 ```bash
-pnpm --filter @page-share/web dev
+pnpm --filter @okibasho/web dev
 ```
 
 接続先は `packages/web/.env.example` を `.env` にコピーして埋める（`cdk deploy` の CfnOutput に対応）。
@@ -26,7 +26,7 @@ pnpm --filter @page-share/web dev
 ## ビルド
 
 ```bash
-pnpm --filter @page-share/web build
+pnpm --filter @okibasho/web build
 ```
 
 成果物は `dist/client`（静的ファイル）。CloudFront の 404 rewrite 先は `/_shell.html`。

@@ -6,7 +6,7 @@ import { PagesDelivery } from './constructs/pages-delivery.js';
 import { PagesStorage } from './constructs/pages-storage.js';
 import type { DomainsConfig } from './config.js';
 
-export interface PageShareStackProps extends StackProps {
+export interface OkibashoStackProps extends StackProps {
   /** メールドメイン。CloudFront Function が URL の user を S3 キーへ展開するときに補う */
   readonly emailDomain: string;
   /** 独自ドメイン設定。未設定ならデフォルトドメインで構築する */
@@ -22,8 +22,8 @@ export interface PageShareStackProps extends StackProps {
  *
  * リソースが増えたら lib/ 配下を用途ごとに分割する。
  */
-export class PageShareStack extends Stack {
-  constructor(scope: Construct, id: string, props: PageShareStackProps) {
+export class OkibashoStack extends Stack {
+  constructor(scope: Construct, id: string, props: OkibashoStackProps) {
     super(scope, id, props);
 
     const pagesStorage = new PagesStorage(this, 'PagesStorage');

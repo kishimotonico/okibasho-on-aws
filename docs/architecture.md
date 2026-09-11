@@ -7,7 +7,7 @@
 構成図: [architecture.drawio](architecture.drawio)（draw.io 形式。VS Code の Draw.io Integration 拡張か [app.diagrams.net](https://app.diagrams.net) で開く）
 
 ```text
-   ブラウザ（管理UI）                        CLI（share-html）
+   ブラウザ（管理UI）                        CLI（okiba）
         │                                         │
         │  Authorization Code + PKCE              │  同左
         ▼                                         ▼
@@ -124,7 +124,7 @@ App Client は 2 つ。どちらも public client（client secret なし）+ PKC
 
 ### CLI
 
-Web と CLI で認証方式を分けず、同じ User Pool を使う。CLI のログインは OAuth 2.0 Authorization Code + PKCE。CLI が一時的に 127.0.0.1 の HTTP サーバーを立てて callback を受ける。初回認証後は refresh token を XDG state ディレクトリ（`~/.local/state/share-html/`、`XDG_STATE_HOME` 準拠）にパーミッション 0600 のファイルで保存し、毎回のブラウザログインを不要にする。設定ファイル（`~/.config/share-html/`）とは置き場所を分ける。OS Credential Store は使わない（ネイティブ依存を持ち込むと単一 JS バンドル配布が崩れる）。token をログに出さない。独自の Personal API Token は作らない。
+Web と CLI で認証方式を分けず、同じ User Pool を使う。CLI のログインは OAuth 2.0 Authorization Code + PKCE。CLI が一時的に 127.0.0.1 の HTTP サーバーを立てて callback を受ける。初回認証後は refresh token を XDG state ディレクトリ（`~/.local/state/okibasho/`、`XDG_STATE_HOME` 準拠）にパーミッション 0600 のファイルで保存し、毎回のブラウザログインを不要にする。設定ファイル（`~/.config/okibasho/`）とは置き場所を分ける。OS Credential Store は使わない（ネイティブ依存を持ち込むと単一 JS バンドル配布が崩れる）。token をログに出さない。独自の Personal API Token は作らない。
 
 ### Cognito Identity Pool
 
@@ -332,7 +332,7 @@ App Distribution のルーティング:
 
 ## CLI
 
-TypeScript + Node.js で書き、npm で配布する。実行は `npx share-html`。依存は単一 JS にバンドルする。AWS CLI のインストールを前提にしない。
+TypeScript + Node.js で書き、npm で配布する。実行は `npx okiba`。依存は単一 JS にバンドルする。AWS CLI のインストールを前提にしない。
 
 依存: `@aws-sdk/client-s3`、`@aws-sdk/credential-providers`、PKCE 用に `openid-client`、拡張子→ MIME の判定ライブラリ。
 
@@ -351,10 +351,10 @@ const s3 = new S3Client({ region, credentials })
 
 コマンド:
 
-- `share-html login` — PKCE + 127.0.0.1 コールバック + refresh token 保存
-- `share-html <path> [--name <slug>] [--permanent]` — 走査して PutObject、差分削除、`.metadata.json` を書き、URL を表示
-- `share-html list` — `ListObjectsV2`
-- `share-html rm <slug>` — `DeleteObjects`（冪等）
+- `okiba login` — PKCE + 127.0.0.1 コールバック + refresh token 保存
+- `okiba <path> [--name <slug>] [--permanent]` — 走査して PutObject、差分削除、`.metadata.json` を書き、URL を表示
+- `okiba list` — `ListObjectsV2`
+- `okiba rm <slug>` — `DeleteObjects`（冪等）
 
 走査時は path traversal を拒否する（`../`、絶対パス、ドライブレター）。symlink は無視する。Content-Type は拡張子から判定して付ける。
 
@@ -368,7 +368,7 @@ OAuth / PKCE は既存ライブラリ（openid-client）を使い、独自実装
 
 ```text
 lib/
-  page-share-stack.ts        各 Construct の組み立てだけ
+  okibasho-stack.ts        各 Construct の組み立てだけ
   config.ts                  環境変数から emailDomain / domains を読む
   constructs/
     auth.ts                  UserPool / Managed Login / App Client x2 /
@@ -454,7 +454,7 @@ IAM の境界は、別ユーザーの prefix に書こうとすると `AccessDen
 packages/
   infra/   AWS CDK（単一スタック、機能境界は Construct）
   web/     管理UI（静的 SPA。S3 + CloudFront で配信）
-  cli/     share-html（Node.js のみ。AWS CLI に依存しない）
+  cli/     okiba（Node.js のみ。AWS CLI に依存しない）
 ```
 
 `packages/api` と `packages/shared` は置かない。API が存在しないため、共有すべき API 型もない。slug 規則、S3 キー組み立て、拡張子→ Content-Type、path traversal 検査は `packages/cli` 側に置き、`web` から相対 import する。必要になった時点で小さな共有モジュールを切り直す。

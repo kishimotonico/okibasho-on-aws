@@ -23,7 +23,7 @@ export async function ensureIdToken(
   const now = options.now ?? Date.now;
   const stored = await loadTokens(config);
   if (!stored) {
-    throw new TokenRefreshError('先に `share-html login` を実行してください。');
+    throw new TokenRefreshError('先に `okiba login` を実行してください。');
   }
 
   if (now() < stored.expiresAt) {
@@ -35,7 +35,7 @@ export async function ensureIdToken(
     return refreshed.idToken;
   } catch {
     throw new TokenRefreshError(
-      'トークンの更新に失敗しました。もう一度 `share-html login` を実行してください。',
+      'トークンの更新に失敗しました。もう一度 `okiba login` を実行してください。',
     );
   }
 }

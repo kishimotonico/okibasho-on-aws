@@ -22,7 +22,7 @@ describe('resolveConfig', () => {
   });
 
   async function makeConfigDir(): Promise<{ dir: string; configPath: string }> {
-    const dir = await mkdtemp(join(tmpdir(), 'share-html-config-'));
+    const dir = await mkdtemp(join(tmpdir(), 'okibasho-config-'));
     dirs.push(dir);
     const configPath = join(dir, 'config.json');
     return { dir, configPath };
@@ -93,7 +93,7 @@ describe('resolveConfig', () => {
   it('XDG_CONFIG_HOME 配下の設定ファイルを読める', async () => {
     const xdgRoot = await mkdtemp(join(tmpdir(), 'xdg-config-'));
     dirs.push(xdgRoot);
-    const shareDir = join(xdgRoot, 'share-html');
+    const shareDir = join(xdgRoot, 'okibasho');
     await mkdir(shareDir, { recursive: true });
     const configPath = join(shareDir, 'config.json');
     await writeFile(configPath, JSON.stringify(FULL_CONFIG));

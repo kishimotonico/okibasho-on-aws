@@ -9,7 +9,7 @@ export function AppHeader() {
     <header className="header">
       <div className="header-inner">
         <Link to="/" className="logo">
-          Page Share
+          <span aria-hidden="true">📦</span> okibasho
         </Link>
         <nav className="nav" aria-label="メイン">
           <Link to="/upload" search={{}}>

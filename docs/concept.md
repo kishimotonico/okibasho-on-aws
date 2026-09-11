@@ -87,16 +87,16 @@ Web:
 CLI:
 
 ```console
-$ share-html login
+$ okiba login
 Opening browser...
 Authenticated.
 
-$ share-html ./report/ --name q3-report
+$ okiba ./report/ --name q3-report
 Uploading 4 files...
 
 https://pages.share.example.jp/tanaka/q3-report/
 
-$ share-html ./report/ --name q3-report --permanent
+$ okiba ./report/ --name q3-report --permanent
 Uploading 4 files...
 
 https://pages.share.example.jp/tanaka/q3-report/

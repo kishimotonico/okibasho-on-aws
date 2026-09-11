@@ -51,7 +51,7 @@
 - [ ] CLI: アップロード（単一ファイル / ディレクトリ、`.metadata.json` 書き込み、URL 表示）
 - [ ] CLI: `list` / `rm`
 
-受け入れ: `share-html login` → `share-html ./dist/` でアップロードし、発行された URL で閲覧できる（このフェーズでは閲覧認証なし）。**別ユーザーの prefix に書こうとすると AccessDenied になることをテストで確認する。**
+受け入れ: `okiba login` → `okiba ./dist/` でアップロードし、発行された URL で閲覧できる（このフェーズでは閲覧認証なし）。**別ユーザーの prefix に書こうとすると AccessDenied になることをテストで確認する。**
 
 ここで確認したい AWS 側の挙動:
 
@@ -105,7 +105,7 @@
 App Distribution の UI 用 bucket へは、`cdk deploy` とは別に手でアップロードする。`cdk synth` が web のビルドに依存する形にしたくないため、CDK の BucketDeployment は使わない。
 
 ```bash
-pnpm --filter @page-share/web build
+pnpm --filter @okibasho/web build
 aws s3 sync packages/web/dist/client s3://<AppBucketName> --delete
 aws cloudfront create-invalidation --distribution-id <id> --paths '/*'
 ```
