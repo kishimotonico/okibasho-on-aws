@@ -2,6 +2,7 @@
   "name": "internal-page-share",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "description": "社内向けHTML共有サービス",
   "packageManager": "pnpm@11.5.0",
   "engines": {

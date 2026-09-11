@@ -2,6 +2,7 @@
   "name": "@page-share/cli",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "bin": {
     "share-html": "./dist/share-html.js"
