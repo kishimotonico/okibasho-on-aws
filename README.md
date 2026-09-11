@@ -20,6 +20,7 @@ CDK をリポジトリのルートに置かずひとつのパッケージとし�
 
 ```bash
 pnpm install
+cp packages/infra/.env.example packages/infra/.env   # デプロイ設定。EMAIL_DOMAIN は必須
 ```
 
 ## よく使うコマンド

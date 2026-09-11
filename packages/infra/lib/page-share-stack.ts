@@ -4,7 +4,14 @@ import { AppDelivery } from './constructs/app-delivery.js';
 import { Auth } from './constructs/auth.js';
 import { PagesDelivery } from './constructs/pages-delivery.js';
 import { PagesStorage } from './constructs/pages-storage.js';
-import { config } from './config.js';
+import type { DomainsConfig } from './config.js';
+
+export interface PageShareStackProps extends StackProps {
+  /** メールドメイン。CloudFront Function が URL の user を S3 キーへ展開するときに補う */
+  readonly emailDomain: string;
+  /** 独自ドメイン設定。未設定ならデフォルトドメインで構築する */
+  readonly domains?: DomainsConfig;
+}
 
 /**
  * 構築するリソース:
@@ -16,18 +23,18 @@ import { config } from './config.js';
  * リソースが増えたら lib/ 配下を用途ごとに分割する。
  */
 export class PageShareStack extends Stack {
-  constructor(scope: Construct, id: string, props?: StackProps) {
+  constructor(scope: Construct, id: string, props: PageShareStackProps) {
     super(scope, id, props);
 
     const pagesStorage = new PagesStorage(this, 'PagesStorage');
     const pagesDelivery = new PagesDelivery(this, 'PagesDelivery', {
       bucket: pagesStorage.bucket,
-      emailDomain: config.emailDomain,
+      emailDomain: props.emailDomain,
     });
     const appDelivery = new AppDelivery(this, 'AppDelivery');
 
     const auth = new Auth(this, 'Auth', {
-      appDomain: config.domains?.app,
+      appDomain: props.domains?.app,
       appDistributionDomain: appDelivery.distribution.distributionDomainName,
       pagesBucket: pagesStorage.bucket,
     });

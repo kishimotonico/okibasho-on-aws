@@ -14,7 +14,7 @@
 
 ## Phase 0: 前提（手動）
 
-- [ ] AWS アカウントとリージョンの確定（決まったら `packages/infra/lib/config.ts` の `env` を設定）
+- [ ] AWS アカウントとリージョンの確定（決まったら `packages/infra/.env` の `CDK_DEPLOY_ACCOUNT` / `CDK_DEPLOY_REGION` を設定）
 - [ ] `cdk bootstrap`（デプロイ先リージョンと、証明書用に us-east-1 の両方）
 - [ ] 請求アラート / Budgets の設定
 - [ ] **独自ドメインの取得と Route 53 hosted zone の用意**（早めにやると Phase 3 の制約が消える）
@@ -29,7 +29,7 @@
 - [ ] pages バケット（private / Public Access Block / CORS）
 - [ ] pages Distribution + OAC + Response Headers Policy + Geo restriction
 - [ ] CloudFront Function（`/<user>/` の展開 + index.html 補完、runtime `cloudfront-js-2.0`）
-- [ ] CDK snapshot テスト（`config.env` / `config.domains` 未設定でも synth が通ること）
+- [ ] CDK snapshot テスト（env / domains 未設定でも synth が通ること）
 
 受け入れ: 手で置いた `pages/test@example.jp/demo/index.html` が `/test/demo/` で表示される。
 

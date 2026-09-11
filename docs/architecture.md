@@ -369,7 +369,7 @@ OAuth / PKCE は既存ライブラリ（openid-client）を使い、独自実装
 ```text
 lib/
   page-share-stack.ts        各 Construct の組み立てだけ
-  config.ts                  env / domains を集約（domains は任意）
+  config.ts                  環境変数から emailDomain / domains を読む
   constructs/
     auth.ts                  UserPool / Managed Login / App Client x2 /
                              IdentityPool / authenticated role / principal tag
@@ -380,6 +380,8 @@ lib/
 ```
 
 Signed Cookie 発行 Lambda・cleanup・PreSignUp・ドメイン関連（Route 53 / ACM）の Construct は、それぞれの機能の導入と同時に追加する。導入順は [roadmap.md](roadmap.md) にある。
+
+環境ごとに変わる値（メールドメイン、デプロイ先、独自ドメイン）はリポジトリに持たず、`packages/infra/.env`（git 管理外）かシェルの環境変数で渡す。項目は `packages/infra/.env.example` にある。メールドメインだけは必須で、未設定なら synth の時点で止める。仮の値のままデプロイすると、URL から S3 キーへの展開が実在しないドメインを指し、全ページが 404 になるためである。
 
 `config.domains` が未設定でも `cdk synth` が通ること。ドメイン関連の分岐は 1 つの Construct に閉じ込め、他の構成に波及させない。未設定の間は CloudFront のデフォルトドメインで構築し、証明書・Route 53・Signed Cookie 閲覧認証は作らない。
 
@@ -442,7 +444,7 @@ CloudFront Function は `node:vm` で handler を直接実行する。rewrite、
 
 CDK は `Template.fromStack()` の snapshot テストを正とする。個別リソースのアサーションは、意図を明示したい箇所（bucket が private であること、CORS があること、pages Distribution に OAC と Function が付いていること、authenticated role のポリシーと信頼ポリシー、unauthenticated access が無効であること）にだけ足す。
 
-snapshot は `config.env` / `config.domains` が未設定の状態で合成する。これにより「設定が空でも synth が通る」という制約がテストで守られる。
+snapshot は `.env` や環境変数を読まず、固定のメールドメインだけを渡し、env / domains が未設定の状態で合成する。これにより「設定が空でも synth が通る」という制約がテストで守られる。
 
 IAM の境界は、別ユーザーの prefix に書こうとすると `AccessDenied` になることをテストで確認する。実 AWS が要る確認はデプロイ後に回し、単体ではポリシー文書の形をアサートする。
 

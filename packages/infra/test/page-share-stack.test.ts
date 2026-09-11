@@ -6,12 +6,12 @@ import { PageShareStack } from '../lib/page-share-stack.js';
 /**
  * スタック全体のsnapshot。
  *
- * config.env / config.domains が未設定でも synth が通ることを担保する意図もあるため、
- * ここでは config を読まず env なし（region-agnostic）で合成する。
+ * env / domains が未設定でも synth が通ることを担保する意図もあるため、
+ * .env や環境変数は読まず、env なし（region-agnostic）で合成する。
  */
 function synth(): Template {
   const app = new App({ context: { 'aws:cdk:bundling-stacks': [] } });
-  const stack = new PageShareStack(app, 'PageShare');
+  const stack = new PageShareStack(app, 'PageShare', { emailDomain: 'example.jp' });
   return Template.fromStack(stack);
 }
 
