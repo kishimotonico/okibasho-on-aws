@@ -1,0 +1,316 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-11T08:38:00.000Z",
+  "title": "Design System: okibasho",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Office Ground",
+        "canonical": "#eef0f2",
+        "tonalRamp": [
+          "oklch(18% 0.01 250)",
+          "oklch(28% 0.01 250)",
+          "oklch(38% 0.01 250)",
+          "oklch(48% 0.01 250)",
+          "oklch(58% 0.01 250)",
+          "oklch(68% 0.01 250)",
+          "oklch(78% 0.01 250)",
+          "oklch(94% 0.005 250)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Copy Paper",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.005 250)",
+          "oklch(25% 0.005 250)",
+          "oklch(35% 0.005 250)",
+          "oklch(45% 0.005 250)",
+          "oklch(55% 0.005 250)",
+          "oklch(65% 0.005 250)",
+          "oklch(80% 0.003 250)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Rule Line",
+        "canonical": "#d3d6db",
+        "tonalRamp": [
+          "oklch(20% 0.01 250)",
+          "oklch(30% 0.01 250)",
+          "oklch(40% 0.01 250)",
+          "oklch(50% 0.01 250)",
+          "oklch(60% 0.01 250)",
+          "oklch(70% 0.01 250)",
+          "oklch(80% 0.008 250)",
+          "oklch(90% 0.006 250)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Office Ink",
+        "canonical": "#1a1d21",
+        "tonalRamp": [
+          "oklch(12% 0.01 250)",
+          "oklch(18% 0.01 250)",
+          "oklch(24% 0.01 250)",
+          "oklch(30% 0.01 250)",
+          "oklch(40% 0.01 250)",
+          "oklch(50% 0.01 250)",
+          "oklch(65% 0.008 250)",
+          "oklch(80% 0.005 250)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Label",
+        "canonical": "#5b6169",
+        "tonalRamp": [
+          "oklch(18% 0.015 250)",
+          "oklch(28% 0.015 250)",
+          "oklch(38% 0.015 250)",
+          "oklch(45% 0.015 250)",
+          "oklch(52% 0.015 250)",
+          "oklch(60% 0.012 250)",
+          "oklch(72% 0.01 250)",
+          "oklch(88% 0.006 250)"
+        ]
+      },
+      "emerald": {
+        "role": "primary",
+        "displayName": "Copy Emerald",
+        "canonical": "#1f7a4d",
+        "tonalRamp": [
+          "oklch(18% 0.06 155)",
+          "oklch(28% 0.08 155)",
+          "oklch(38% 0.10 155)",
+          "oklch(45% 0.12 155)",
+          "oklch(50% 0.13 155)",
+          "oklch(55% 0.12 155)",
+          "oklch(70% 0.08 155)",
+          "oklch(90% 0.04 155)"
+        ]
+      },
+      "danger": {
+        "role": "neutral",
+        "displayName": "Alert Red",
+        "canonical": "#b42318",
+        "tonalRamp": [
+          "oklch(18% 0.10 25)",
+          "oklch(28% 0.12 25)",
+          "oklch(38% 0.14 25)",
+          "oklch(45% 0.16 25)",
+          "oklch(50% 0.17 25)",
+          "oklch(58% 0.14 25)",
+          "oklch(72% 0.08 25)",
+          "oklch(90% 0.03 25)"
+        ]
+      },
+      "danger-soft": {
+        "role": "neutral",
+        "displayName": "Expired Wash",
+        "canonical": "#fbf3f2",
+        "tonalRamp": [
+          "oklch(18% 0.04 25)",
+          "oklch(28% 0.05 25)",
+          "oklch(38% 0.05 25)",
+          "oklch(48% 0.04 25)",
+          "oklch(58% 0.03 25)",
+          "oklch(72% 0.02 25)",
+          "oklch(88% 0.01 25)",
+          "oklch(97% 0.005 25)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page headings (h1) on exception screens like 404."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headings (h2), e.g. My Pages."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Row slug titles and unfurl card headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Composer guidance, messages, and general copy."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels and details summary text."
+      }
+    },
+    "shadows": [
+      {
+        "name": "composer-lift",
+        "value": "0 8px 20px rgba(26, 29, 33, 0.08)",
+        "purpose": "Drop-zone composer well only; lifts the primary writing surface."
+      }
+    ],
+    "motion": [
+      {
+        "name": "unfurl-in",
+        "value": "280ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Success unfurl card entrance (opacity + translateY)."
+      },
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Default easing for hover brightness transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "40rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action: Upload / Re-upload in toolbar.",
+      "html": "<button type=\"button\" class=\"ds-btn-primary\">アップロード</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border: none; border-radius: 6px; background: var(--text, #1a1d21); color: var(--bg, #eef0f2); font-family: inherit; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: filter 0.15s ease; } .ds-btn-primary:hover { filter: brightness(1.08); } .ds-btn-primary:focus-visible { outline: 2px solid var(--text, #1a1d21); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary actions inside composer: file/directory pickers.",
+      "html": "<button type=\"button\" class=\"ds-btn-ghost\">ファイルを選択</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border: 1px solid var(--line, #d3d6db); border-radius: 6px; background: var(--bg, #eef0f2); color: var(--text, #1a1d21); font-family: inherit; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background 0.15s ease; } .ds-btn-ghost:hover { background: var(--raised, #ffffff); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--text, #1a1d21); outline-offset: 2px; }"
+    },
+    {
+      "name": "Copy Button",
+      "kind": "button",
+      "refersTo": "button-copy",
+      "description": "Emerald copy action inside success unfurl card only.",
+      "html": "<button type=\"button\" class=\"ds-btn-copy\">URL をコピー</button>",
+      "css": ".ds-btn-copy { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border: none; border-radius: 6px; background: var(--emerald, #1f7a4d); color: #f4f7f5; font-family: inherit; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background 0.15s ease; } .ds-btn-copy:hover { background: #19653f; } .ds-btn-copy:focus-visible { outline: 2px solid var(--text, #1a1d21); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Dense inline actions in My Pages rows.",
+      "html": "<button type=\"button\" class=\"ds-text-btn\">コピー</button>",
+      "css": ".ds-text-btn { border: none; background: none; padding: 0.15rem 0.35rem; color: var(--muted, #5b6169); font-family: inherit; font-size: 0.8rem; cursor: pointer; transition: color 0.15s ease; } .ds-text-btn:hover { color: var(--text, #1a1d21); } .ds-text-btn:focus-visible { outline: 2px solid var(--text, #1a1d21); outline-offset: 2px; } .ds-text-btn.ds-text-btn--copied { color: var(--emerald, #1f7a4d); font-weight: 600; }"
+    },
+    {
+      "name": "Retention Segment",
+      "kind": "chip",
+      "refersTo": "button-ghost",
+      "description": "30日 / 無期限 toggle in toolbar.",
+      "html": "<div class=\"ds-seg\" role=\"group\" aria-label=\"保存期間\"><button type=\"button\" class=\"ds-seg-btn ds-seg-btn--on\" aria-pressed=\"true\">30日</button><button type=\"button\" class=\"ds-seg-btn\" aria-pressed=\"false\">無期限</button></div>",
+      "css": ".ds-seg { display: inline-flex; border: 1px solid var(--line, #d3d6db); border-radius: 6px; overflow: hidden; background: var(--raised, #ffffff); } .ds-seg-btn { border: 0; background: transparent; color: var(--muted, #5b6169); padding: 0.5rem 0.75rem; font-family: inherit; font-size: 0.875rem; cursor: pointer; } .ds-seg-btn--on { background: var(--text, #1a1d21); color: var(--bg, #eef0f2); font-weight: 600; } .ds-seg-btn:focus-visible { outline: 2px solid var(--text, #1a1d21); outline-offset: -2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "button-ghost",
+      "description": "Slug field inside details; read-only on re-upload.",
+      "html": "<input type=\"text\" class=\"ds-input\" placeholder=\"例: q3-report\" />",
+      "css": ".ds-input { width: 100%; padding: 0.5rem 0.65rem; border: 1px solid var(--line, #d3d6db); border-radius: 6px; font-family: inherit; color: var(--text, #1a1d21); background: var(--raised, #ffffff); caret-color: var(--text, #1a1d21); } .ds-input::placeholder { color: var(--muted, #5b6169); } .ds-input:focus-visible { outline: 2px solid var(--text, #1a1d21); outline-offset: 2px; } .ds-input:read-only { background: var(--bg, #eef0f2); }"
+    },
+    {
+      "name": "Composer Well",
+      "kind": "custom",
+      "refersTo": "composer-well",
+      "description": "Primary drop zone; largest element on screen.",
+      "html": "<div class=\"ds-composer\"><p class=\"ds-composer-lead\">ファイルまたはディレクトリをドロップ</p><button type=\"button\" class=\"ds-btn-ghost\">ファイルを選択</button></div>",
+      "css": ".ds-composer { background: var(--well, #ffffff); border: 1px solid var(--text, #1a1d21); border-radius: 10px; min-height: 12.5rem; padding: 2rem 1rem; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1rem; text-align: center; box-shadow: 0 8px 20px rgba(26, 29, 33, 0.08); } .ds-composer-lead { margin: 0; font-weight: 500; color: var(--text, #1a1d21); } .ds-composer.ds-composer--active { background: var(--bg, #eef0f2); }"
+    },
+    {
+      "name": "Unfurl Card",
+      "kind": "card",
+      "refersTo": "composer-well",
+      "description": "Link preview card shown only after successful upload.",
+      "html": "<article class=\"ds-unfurl\"><h3 class=\"ds-unfurl-title\">q3-report</h3><a class=\"ds-unfurl-url\" href=\"#\">https://pages.example.com/user/q3-report/</a><button type=\"button\" class=\"ds-btn-copy\">URL をコピー</button></article>",
+      "css": ".ds-unfurl { background: var(--raised, #ffffff); border: 1px solid var(--line, #d3d6db); border-radius: 8px; padding: 0.75rem 0.875rem; } .ds-unfurl-title { margin: 0 0 0.25rem; font-size: 0.95rem; font-weight: 600; color: var(--text, #1a1d21); } .ds-unfurl-url { display: block; color: var(--text, #1a1d21); font-size: 0.82rem; word-break: break-all; text-decoration: underline; text-underline-offset: 0.18em; } .ds-btn-copy { margin-top: 0.65rem; display: inline-flex; align-items: center; padding: 0.5rem 1rem; border: none; border-radius: 6px; background: var(--emerald, #1f7a4d); color: #f4f7f5; font-weight: 600; font-size: 0.95rem; cursor: pointer; }"
+    },
+    {
+      "name": "Page Row",
+      "kind": "custom",
+      "refersTo": "composer-well",
+      "description": "Dense My Pages list row with inline text actions.",
+      "html": "<div class=\"ds-page-row\"><div><h3 class=\"ds-page-row-title\">q3-report</h3><p class=\"ds-page-row-meta\">無期限</p></div><div class=\"ds-page-row-actions\"><button type=\"button\" class=\"ds-text-btn\">コピー</button><button type=\"button\" class=\"ds-text-btn\">再アップロード</button></div></div>",
+      "css": ".ds-page-row { background: var(--raised, #ffffff); border: 1px solid var(--line, #d3d6db); border-radius: 8px; padding: 0.55rem 0.75rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.35rem 1rem; align-items: center; } .ds-page-row-title { margin: 0; font-size: 0.88rem; font-weight: 600; overflow-wrap: anywhere; color: var(--text, #1a1d21); } .ds-page-row-meta { margin: 0.15rem 0 0; color: var(--muted, #5b6169); font-size: 0.75rem; } .ds-page-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.15rem; }"
+    },
+    {
+      "name": "Header",
+      "kind": "nav",
+      "refersTo": "button-primary",
+      "description": "Thin top bar: logo and logout.",
+      "html": "<header class=\"ds-header\"><div class=\"ds-header-inner\"><a href=\"/\" class=\"ds-logo\"><span aria-hidden=\"true\">📦</span> okibasho</a><button type=\"button\" class=\"ds-logout\">ログアウト</button></div></header>",
+      "css": ".ds-header { border-bottom: 1px solid var(--line, #d3d6db); background: var(--raised, #ffffff); } .ds-header-inner { max-width: 45rem; margin: 0 auto; padding: 0 1.25rem; height: 3rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; } .ds-logo { font-weight: 700; color: inherit; text-decoration: none; white-space: nowrap; } .ds-logout { border: none; background: none; padding: 0.25rem 0; color: var(--muted, #5b6169); font-family: inherit; cursor: pointer; } .ds-logout:hover { color: var(--text, #1a1d21); } .ds-logout:focus-visible { outline: 2px solid var(--text, #1a1d21); outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Composer Well",
+    "overview": "管理画面は、社内チャットに URL を貼る直前の下書きである。蛍光灯のオフィスで開く明るいコンポーザー。地は薄いグレー、本文は白いウェル、成果物はリンクの展開カード。ダッシュボードでもマーケでも5列表でもない。\n\n操作の主役はドロップゾーン（composer）。ファイルを置いてから保存期間を選び、アップロードする。成功したときだけウェル下に展開カード（unfurl）が生える。下の My Pages は密な行で、同じ URL のコピー・差し替え・保存期間・削除を繰り返す。",
+    "keyCharacteristics": [
+      "明るい単一カラム（最大 45rem）。地 #EEF0F2、紙 #FFFFFF、罫 #D3D6DB、墨 #1A1D21",
+      "本文ウェルが画面の重心。墨の 1px 枠と軽い影で「書く場所」を示す",
+      "エメラルド #1F7A4D はコピー成功だけ。ラベンダー・旧ブルー #0B5FFF は使わない",
+      "展開カードはアップロード成功時のみ。一覧は密な行",
+      "日本語の敬体。キッカー（eyebrow / 小見出しラベル）禁止",
+      "フォーカスは墨の 2px リング。テキスト選択は罫色（var(--line)）"
+    ],
+    "rules": [
+      {
+        "name": "The Emerald-Only Rule",
+        "body": "エメラルドはコピー成功の瞬間だけ。リンク色・アクセント・選択ハイライト・フォーカスには使わない。選択色は var(--line)。",
+        "section": "colors"
+      },
+      {
+        "name": "The No Accent Blue Rule",
+        "body": "ラベンダー、旧ブルー #0B5FFF、およびそれに類する鮮やかな補色アクセントは使わない。インタラクティブ要素は墨と罫で足りる。",
+        "section": "colors"
+      },
+      {
+        "name": "The Keigo Rule",
+        "body": "UI 文言は簡潔な日本語の敬体（「〜です」「〜してください」）。用語は slug・保存期間・30日・無期限・閲覧 URL・My Pages・再アップロードで統一する。",
+        "section": "typography"
+      },
+      {
+        "name": "The No Kicker Rule",
+        "body": "画面上部やセクション直前に装飾用小見出し（kicker / eyebrow）を置かない。見出しは h1/h2 のみ。",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "カード・行・入力は平面。影は composer ウェルに限定し、ホバーで影を足さない。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do ドロップゾーン（composer）を画面の最大要素として扱う",
+      "Do slug を <details class=\"field--details\"> の「URL を指定する（任意）」に置き、初期は閉じる",
+      "Do 保存期間（30日/無期限）とアップロードを composer 直下のツールバーに置く",
+      "Do コピー成功だけエメラルド（#1F7A4D）を使う",
+      "Do フォーカスを墨 2px リング（outline: 2px solid var(--text); outline-offset: 2px）で示す",
+      "Do テキスト選択を罫色（background: var(--line)）にする",
+      "Do 一覧を密な行（page-row）で、テキストボタンで操作する",
+      "Do 日本語敬体で、簡潔な文言にする"
+    ],
+    "donts": [
+      "Don't キッカー（eyebrow / 装飾ラベル）を使う",
+      "Don't ラベンダー・旧ブルー #0B5FFF・鮮やかな補色アクセントを使う",
+      "Don't エメラルドをリンク色・選択色・一般アクセントに使う",
+      "Don't slug をツールバーに置く",
+      "Don't 展開カードを成功以外（アップロード前・エラー時）に表示する",
+      "Don't ダッシュボード風の多列レイアウト・マーケティング的なヒーローを作る",
+      "Don't MVP 外の概念（チーム、履歴、公開設定など）を UI に予告する"
+    ]
+  }
+}

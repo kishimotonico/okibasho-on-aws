@@ -3,7 +3,6 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useSt
 import { useAuth } from '~/auth/auth-context';
 import { getWebConfig } from '~/config/env';
 import { getExpirationStatus } from '~/lib/expiration-status';
-import { formatDateTime } from '~/lib/format-datetime';
 import {
   deletePage,
   listPages,
@@ -20,10 +19,6 @@ export interface MyPagesListHandle {
 
 interface MyPagesListProps {
   onReupload: (slug: string) => void;
-}
-
-function retentionLabel(retention: Retention): string {
-  return retention === 'temporary' ? '30日' : '無期限';
 }
 
 export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(function MyPagesList(
@@ -165,116 +160,89 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
 
       {actionError ? <pre className="message message--error">{actionError}</pre> : null}
 
-      {isLoading ? <p>一覧を読み込み中...</p> : null}
+      {isLoading ? <p className="loading-note">一覧を読み込み中...</p> : null}
 
       {!isLoading && !loadError && pages.length === 0 ? (
-        <section className="panel">
-          <p>まだページがありません。上のフォームからアップロードしてください。</p>
-        </section>
+        <p className="empty-note">
+          まだページがありません。上のフォームからアップロードしてください。
+        </p>
       ) : null}
 
       {!isLoading && pages.length > 0 ? (
-        <div className="table-wrap">
-          <table className="page-table">
-            <thead>
-              <tr>
-                <th>slug</th>
-                <th>閲覧 URL</th>
-                <th>作成日時</th>
-                <th>保存期間</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pages.map((page) => {
-                const expiration = getExpirationStatus(page.expiresAt);
-                const isBusy = busySlug === page.slug;
+        <ul className="page-stack">
+          {pages.map((page) => {
+            const expiration = getExpirationStatus(page.expiresAt);
+            const isBusy = busySlug === page.slug;
+            const copied = copySlug === page.slug;
 
-                return (
-                  <tr
-                    key={page.slug}
-                    className={expiration.kind === 'expired' ? 'page-row--expired' : undefined}
+            return (
+              <li
+                key={page.slug}
+                className={
+                  expiration.kind === 'expired' ? 'page-row page-row--expired' : 'page-row'
+                }
+              >
+                <div>
+                  <h3>{page.slug}</h3>
+                  <p
+                    className={
+                      expiration.kind === 'expired'
+                        ? 'page-row__meta page-row__meta--expired'
+                        : 'page-row__meta'
+                    }
                   >
-                    <td>
-                      <code>{page.slug}</code>
-                    </td>
-                    <td className="page-table__url">
-                      <a href={page.viewUrl} target="_blank" rel="noreferrer">
-                        {page.viewUrl}
-                      </a>
-                    </td>
-                    <td>{formatDateTime(page.createdAt)}</td>
-                    <td>
-                      <div>{retentionLabel(page.retention)}</div>
-                      <div
-                        className={
-                          expiration.kind === 'expired'
-                            ? 'expiration expiration--expired'
-                            : 'expiration'
-                        }
-                      >
-                        {expiration.kind === 'expired'
-                          ? expiration.label
-                          : page.expiresAt
-                            ? `削除予定: ${formatDateTime(page.expiresAt)}`
-                            : expiration.label}
-                      </div>
-                      <div className="retention-actions">
-                        <button
-                          type="button"
-                          className="text-button"
-                          disabled={isBusy || page.retention === 'temporary'}
-                          onClick={() => void handleRetentionChange(page, 'temporary')}
-                        >
-                          30日
-                        </button>
-                        <button
-                          type="button"
-                          className="text-button"
-                          disabled={isBusy || page.retention === 'permanent'}
-                          onClick={() => void handleRetentionChange(page, 'permanent')}
-                        >
-                          無期限
-                        </button>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          disabled={isBusy}
-                          onClick={() => onReupload(page.slug)}
-                        >
-                          再アップロード
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--secondary"
-                          disabled={isBusy}
-                          onClick={() => void handleCopyUrl(page)}
-                        >
-                          URL をコピー
-                        </button>
-                        {copySlug === page.slug ? (
-                          <span className="copy-feedback">コピーしました</span>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="button button--danger"
-                          disabled={isBusy}
-                          onClick={() => void handleDelete(page)}
-                        >
-                          削除
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    {expiration.label}
+                  </p>
+                </div>
+                <div className="page-row__actions">
+                  <button
+                    type="button"
+                    className={copied ? 'text-button text-button--copied' : 'text-button'}
+                    disabled={isBusy}
+                    onClick={() => void handleCopyUrl(page)}
+                  >
+                    {copied ? 'コピーしました' : 'コピー'}
+                  </button>
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={isBusy}
+                    onClick={() => onReupload(page.slug)}
+                  >
+                    再アップロード
+                  </button>
+                  {page.retention === 'temporary' ? (
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={isBusy}
+                      onClick={() => void handleRetentionChange(page, 'permanent')}
+                    >
+                      無期限にする
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={isBusy}
+                      onClick={() => void handleRetentionChange(page, 'temporary')}
+                    >
+                      30日に戻す
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-button text-button--danger"
+                    disabled={isBusy}
+                    onClick={() => void handleDelete(page)}
+                  >
+                    削除
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       ) : null}
     </div>
   );

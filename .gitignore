@@ -23,3 +23,12 @@ cdk.context.json
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Impeccable: 作業成果は除外し、リポジトリに残すファイルだけ戻す
+**/.impeccable/**
+!**/.impeccable/config.json
+!**/.impeccable/design.json
+!**/.impeccable/surfaces/
+!**/.impeccable/surfaces/**
+!**/.impeccable/live/
+!**/.impeccable/live/config.json

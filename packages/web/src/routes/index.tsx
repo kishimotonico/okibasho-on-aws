@@ -43,14 +43,12 @@ function HomePage() {
 
   return (
     <div className="page">
-      <div ref={uploadSectionRef}>
-        <h1>アップロード</h1>
+      <div ref={uploadSectionRef} className="upload-section">
         <UploadPanel ref={uploadPanelRef} initialSlug={slug} onUploaded={handleUploaded} />
       </div>
 
-      <section>
-        <h2>My Pages</h2>
-        <p>自分がアップロードしたページの一覧です。</p>
+      <section className="pages-section" aria-labelledby="my-pages-heading">
+        <h2 id="my-pages-heading">My Pages</h2>
         <MyPagesList ref={myPagesListRef} onReupload={handleReupload} />
       </section>
     </div>

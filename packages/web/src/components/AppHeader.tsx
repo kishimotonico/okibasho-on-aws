@@ -11,9 +11,11 @@ export function AppHeader() {
         <Link to="/" className="logo">
           <span aria-hidden="true">📦</span> okibasho
         </Link>
-        <button type="button" className="text-button" onClick={() => void auth.logout()}>
-          ログアウト
-        </button>
+        {auth.isAuthenticated ? (
+          <button type="button" className="logout" onClick={() => void auth.logout()}>
+            ログアウト
+          </button>
+        ) : null}
       </div>
     </header>
   );

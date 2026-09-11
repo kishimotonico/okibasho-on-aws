@@ -4,3 +4,5 @@ cdk.out/
 pnpm-lock.yaml
 docs/
 packages/web/src/routeTree.gen.ts
+.claude/
+.omp/

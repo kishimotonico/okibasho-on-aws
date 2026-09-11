@@ -1,4 +1,4 @@
-import { isValidSlug } from '@cli/page';
+import { generateRandomSlug, isValidSlug } from '@cli/page';
 import {
   forwardRef,
   useCallback,
@@ -17,6 +17,7 @@ import {
   collectUploadFilesFromPathEntries,
   type UploadFileEntry,
 } from '~/lib/collect-upload-files';
+import { formatBytes } from '~/lib/format-bytes';
 import { buildViewUrl, getPageMetadata, type Retention, uploadPage } from '~/lib/pages-s3';
 import { collectFilesFromDataTransfer } from '~/lib/read-data-transfer';
 import { createPagesS3Client } from '~/lib/s3-client';
@@ -46,6 +47,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   const directoryInputRef = useRef<HTMLInputElement>(null);
 
   const [slug, setSlug] = useState(initialSlug ?? '');
+  const [reuploadMode, setReuploadMode] = useState(Boolean(initialSlug));
   const [files, setFiles] = useState<UploadFileEntry[]>([]);
   const [skippedInvalidPath, setSkippedInvalidPath] = useState(0);
   const [retention, setRetention] = useState<Retention>(DEFAULT_RETENTION);
@@ -57,17 +59,20 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [viewUrl, setViewUrl] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [slugDetailsOpen, setSlugDetailsOpen] = useState(Boolean(initialSlug));
 
   useImperativeHandle(
     ref,
     () => ({
       setSlug: (value: string) => {
         setSlug(value);
+        setReuploadMode(true);
         setPhase('idle');
         setViewUrl(null);
         setCopyMessage(null);
         setValidationErrors([]);
         setUploadError(null);
+        setSlugDetailsOpen(true);
       },
     }),
     [],
@@ -109,12 +114,11 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   };
 
   const handleSubmit = async () => {
-    const targetSlug = slug.trim();
+    const trimmedSlug = slug.trim();
+    const targetSlug = trimmedSlug || generateRandomSlug();
     const errors = validateUploadFiles(files).map((error) => error.message);
 
-    if (!targetSlug) {
-      errors.push('slug を入力してください');
-    } else if (!isValidSlug(targetSlug)) {
+    if (trimmedSlug && !isValidSlug(trimmedSlug)) {
       errors.push('slug は小文字英数字・ハイフン・アンダースコアのみ使用できます');
     }
 
@@ -163,6 +167,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
         (completed, total) => setProgress({ completed, total }),
       );
 
+      setSlug(targetSlug);
       setViewUrl(buildViewUrl(config.pagesBaseUrl, auth.email, targetSlug));
       setPhase('success');
       onUploaded();
@@ -185,10 +190,21 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
     }
   };
 
+  const remappedOriginalName =
+    files.length === 1 && files[0]!.path === 'index.html' && files[0]!.file.name !== 'index.html'
+      ? files[0]!.file.name
+      : null;
+
   return (
-    <div className="upload-page">
+    <div className="upload-panel">
+      {reuploadMode ? (
+        <p className="reupload-note">
+          ページ <code>{slug}</code> の内容を差し替えます。保存期間は変わりません。
+        </p>
+      ) : null}
+
       <div
-        className={`drop-zone${isDragging ? ' drop-zone--active' : ''}`}
+        className={`composer${isDragging ? ' composer--active' : ''}`}
         onDragEnter={(event) => {
           event.preventDefault();
           setIsDragging(true);
@@ -202,18 +218,32 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
         }}
         onDrop={(event) => void handleDrop(event)}
       >
-        <p>ファイルまたはディレクトリをドラッグ &amp; ドロップ</p>
-        <div className="button-row">
+        <p>
+          {files.length > 0
+            ? `${files.length} 件を置いています`
+            : 'ファイルまたはディレクトリをドロップ'}
+        </p>
+        {files.length > 0 ? (
+          <ul className="file-list">
+            {files.map((file) => (
+              <li key={file.path} className="file-chip">
+                {file.path}
+                <span>{formatBytes(file.file.size)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <div className="composer-actions">
           <button
             type="button"
-            className="button button--secondary"
+            className="button button--ghost"
             onClick={() => fileInputRef.current?.click()}
           >
             ファイルを選択
           </button>
           <button
             type="button"
-            className="button button--secondary"
+            className="button button--ghost"
             onClick={() => directoryInputRef.current?.click()}
           >
             ディレクトリを選択
@@ -237,6 +267,12 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
         />
       </div>
 
+      {remappedOriginalName ? (
+        <p className="message">
+          共有ページでは index.html として保存されます（元: {remappedOriginalName}）
+        </p>
+      ) : null}
+
       {selectionError ? <p className="message message--error">{selectionError}</p> : null}
       {skippedInvalidPath > 0 ? (
         <p className="message message--warning">
@@ -244,56 +280,61 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
         </p>
       ) : null}
 
-      {files.length > 0 ? (
-        <section className="panel">
-          <h2>選択中のファイル ({files.length} 件)</h2>
-          <ul className="file-list">
-            {files.map((file) => (
-              <li key={file.path}>
-                <code>{file.path}</code> ({file.file.size.toLocaleString()} bytes)
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <section className="panel">
+      <details
+        className="field--details"
+        open={slugDetailsOpen}
+        onToggle={(event) => setSlugDetailsOpen(event.currentTarget.open)}
+      >
+        <summary>URL を指定する（任意）</summary>
         <label className="field">
-          <span className="field-label">slug</span>
+          <span className="visually-hidden">slug</span>
           <input
             type="text"
             value={slug}
             onChange={(event) => setSlug(event.target.value)}
             placeholder="例: q3-report"
+            readOnly={reuploadMode}
             autoComplete="off"
             spellCheck={false}
           />
         </label>
+        <p className="field-hint">
+          {reuploadMode
+            ? '再アップロードでは URL は変わりません。'
+            : '空欄なら自動生成します。小文字英数字・ハイフン・アンダースコア、最大 64 文字です。'}
+        </p>
+      </details>
 
-        <fieldset className="field">
-          <legend className="field-label">保存期間</legend>
-          <label className="radio">
-            <input
-              type="radio"
-              name="retention"
-              value="temporary"
-              checked={retention === 'temporary'}
-              onChange={() => setRetention('temporary')}
-            />
-            30日
-          </label>
-          <label className="radio">
-            <input
-              type="radio"
-              name="retention"
-              value="permanent"
-              checked={retention === 'permanent'}
-              onChange={() => setRetention('permanent')}
-            />
-            無期限
-          </label>
-        </fieldset>
-      </section>
+      <div className="toolbar">
+        {reuploadMode ? null : (
+          <div className="seg" role="group" aria-label="保存期間">
+            <button
+              type="button"
+              className={retention === 'temporary' ? 'on' : undefined}
+              aria-pressed={retention === 'temporary'}
+              onClick={() => setRetention('temporary')}
+            >
+              30日
+            </button>
+            <button
+              type="button"
+              className={retention === 'permanent' ? 'on' : undefined}
+              aria-pressed={retention === 'permanent'}
+              onClick={() => setRetention('permanent')}
+            >
+              無期限
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          className="button"
+          disabled={files.length === 0 || phase === 'uploading'}
+          onClick={() => void handleSubmit()}
+        >
+          {reuploadMode ? '再アップロード' : 'アップロード'}
+        </button>
+      </div>
 
       {validationErrors.length > 0 ? (
         <div className="message message--error">
@@ -315,26 +356,23 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
       {uploadError ? <pre className="message message--error">{uploadError}</pre> : null}
 
       {phase === 'success' && viewUrl ? (
-        <section className="panel panel--success">
-          <h2>アップロード完了</h2>
-          <p>
-            閲覧 URL: <a href={viewUrl}>{viewUrl}</a>
-          </p>
-          <button type="button" className="button" onClick={() => void handleCopyUrl()}>
-            URL をコピー
-          </button>
-          {copyMessage ? <p className="message">{copyMessage}</p> : null}
-        </section>
+        <article className="unfurl">
+          <h3>{slug || 'アップロード完了'}</h3>
+          <a className="url" href={viewUrl}>
+            {viewUrl}
+          </a>
+          {copyMessage ? <p className="copy-feedback">{copyMessage}</p> : null}
+          <div>
+            <button
+              type="button"
+              className="button button--copy"
+              onClick={() => void handleCopyUrl()}
+            >
+              URL をコピー
+            </button>
+          </div>
+        </article>
       ) : null}
-
-      <button
-        type="button"
-        className="button"
-        disabled={files.length === 0 || phase === 'uploading'}
-        onClick={() => void handleSubmit()}
-      >
-        アップロード
-      </button>
     </div>
   );
 });
