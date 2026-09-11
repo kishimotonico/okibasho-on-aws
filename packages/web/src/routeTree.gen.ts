@@ -10,13 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CallbackRouteImport } from './routes/callback'
 import { Route as MyPagesRouteImport } from './routes/my-pages'
 import { Route as UploadRouteImport } from './routes/upload'
-import { Route as CallbackRouteImport } from './routes/callback'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CallbackRoute = CallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MyPagesRoute = MyPagesRouteImport.update({
@@ -29,44 +34,39 @@ const UploadRoute = UploadRouteImport.update({
   path: '/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CallbackRoute = CallbackRouteImport.update({
-  id: '/callback',
-  path: '/callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/callback': typeof CallbackRoute
   '/my-pages': typeof MyPagesRoute
   '/upload': typeof UploadRoute
-  '/callback': typeof CallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/callback': typeof CallbackRoute
   '/my-pages': typeof MyPagesRoute
   '/upload': typeof UploadRoute
-  '/callback': typeof CallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/callback': typeof CallbackRoute
   '/my-pages': typeof MyPagesRoute
   '/upload': typeof UploadRoute
-  '/callback': typeof CallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/my-pages' | '/upload' | '/callback'
+  fullPaths: '/' | '/callback' | '/my-pages' | '/upload'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/my-pages' | '/upload' | '/callback'
-  id: '__root__' | '/' | '/my-pages' | '/upload' | '/callback'
+  to: '/' | '/callback' | '/my-pages' | '/upload'
+  id: '__root__' | '/' | '/callback' | '/my-pages' | '/upload'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CallbackRoute: typeof CallbackRoute
   MyPagesRoute: typeof MyPagesRoute
   UploadRoute: typeof UploadRoute
-  CallbackRoute: typeof CallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -76,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/callback': {
+      id: '/callback'
+      path: '/callback'
+      fullPath: '/callback'
+      preLoaderRoute: typeof CallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/my-pages': {
@@ -92,21 +99,14 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UploadRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/callback': {
-      id: '/callback'
-      path: '/callback'
-      fullPath: '/callback'
-      preLoaderRoute: typeof CallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CallbackRoute: CallbackRoute,
   MyPagesRoute: MyPagesRoute,
   UploadRoute: UploadRoute,
-  CallbackRoute: CallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

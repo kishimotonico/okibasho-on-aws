@@ -397,7 +397,7 @@ exports[`PageShareStack > テンプレートが意図せず変化していない
           "Name": "PageShareAppDeliveryResponseHeaders8B128815",
           "SecurityHeadersConfig": {
             "ContentSecurityPolicy": {
-              "ContentSecurityPolicy": "default-src 'self'; frame-ancestors 'none'",
+              "ContentSecurityPolicy": "frame-ancestors 'none'",
               "Override": true,
             },
             "StrictTransportSecurity": {

@@ -59,7 +59,7 @@ export class AppDelivery extends Construct {
           override: true,
         },
         contentSecurityPolicy: {
-          contentSecurityPolicy: "default-src 'self'; frame-ancestors 'none'",
+          contentSecurityPolicy: "frame-ancestors 'none'",
           override: true,
         },
       },

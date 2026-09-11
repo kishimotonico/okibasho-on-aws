@@ -193,7 +193,8 @@ async function putFilesWithConcurrency(
         new PutObjectCommand({
           Bucket: bucket,
           Key: pageObjectKey(email, slug, entry.path),
-          Body: entry.file,
+          // Blob のまま渡すと、SDK のチェックサム計算が ReadableStream として読もうとして失敗する
+          Body: new Uint8Array(await entry.file.arrayBuffer()),
           ContentType: contentTypeFromPath(entry.path),
         }),
       );

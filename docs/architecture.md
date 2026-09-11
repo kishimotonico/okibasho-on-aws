@@ -381,7 +381,7 @@ lib/
 
 Signed Cookie 発行 Lambda・cleanup・PreSignUp・ドメイン関連（Route 53 / ACM）の Construct は、それぞれの機能の導入と同時に追加する。導入順は [roadmap.md](roadmap.md) にある。
 
-環境ごとに変わる値（メールドメイン、デプロイ先、独自ドメイン）はリポジトリに持たず、`packages/infra/.env`（git 管理外）かシェルの環境変数で渡す。項目は `packages/infra/.env.example` にある。メールドメインだけは必須で、未設定なら synth の時点で止める。仮の値のままデプロイすると、URL から S3 キーへの展開が実在しないドメインを指し、全ページが 404 になるためである。
+環境ごとに変わる値（メールドメイン、デプロイ先、独自ドメイン）はリポジトリに持たず、`packages/infra/.env`（git 管理外）かシェルの環境変数で渡す。項目は `packages/infra/.env.example` にある。メールドメインだけは必須で、未設定なら synth の時点で止める。
 
 `config.domains` が未設定でも `cdk synth` が通ること。ドメイン関連の分岐は 1 つの Construct に閉じ込め、他の構成に波及させない。未設定の間は CloudFront のデフォルトドメインで構築し、証明書・Route 53・Signed Cookie 閲覧認証は作らない。
 
@@ -408,7 +408,7 @@ Response Headers Policy は CDK で付ける。アプリのコードは 1 行も
 | Distribution | ヘッダ |
 | --- | --- |
 | pages | `X-Content-Type-Options: nosniff`、`Cross-Origin-Opener-Policy: same-origin`、`Content-Security-Policy: frame-ancestors 'none'` |
-| app | HSTS と CSP |
+| app | HSTS、`Content-Security-Policy: frame-ancestors 'none'` |
 
 CloudFront の Geo restriction を日本に絞る。無料である。WAF は月額コストが乗るので入れない。
 

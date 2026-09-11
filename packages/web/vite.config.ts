@@ -11,7 +11,10 @@ export default defineConfig({
   server: {
     port: 3000,
     fs: {
-      allow: [path.resolve(rootDir, '..', 'cli')],
+      // ../cli の @cli/page を読むためワークスペースルートまで許可する。
+      // packages/cli だけを指すと、dev サーバーで web 自身のルートファイル
+      // (tsr-split 由来の動的 import) が allow list の外扱いになって動かない
+      allow: [path.resolve(rootDir, '..', '..')],
     },
   },
   resolve: {

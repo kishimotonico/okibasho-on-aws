@@ -30,6 +30,7 @@
 - [ ] pages Distribution + OAC + Response Headers Policy + Geo restriction
 - [ ] CloudFront Function（`/<user>/` の展開 + index.html 補完、runtime `cloudfront-js-2.0`）
 - [ ] CDK snapshot テスト（env / domains 未設定でも synth が通ること）
+- [ ] 存在しないページの 404 で S3 のエラー XML を返さない（本文の `<Key>` に `pages/<email>/...` がそのまま出て、メールアドレスとキー構成が見える。デプロイ後の確認で発覚）
 
 受け入れ: 手で置いた `pages/test@example.jp/demo/index.html` が `/test/demo/` で表示される。
 
