@@ -83,9 +83,8 @@
 ## Phase 4: 管理 UI
 
 - [ ] 静的 SPA を app バケットへ、app Distribution に origin 追加
-- [ ] ログイン → Identity Pool → 一時クレデンシャル取得
-- [ ] アップロード画面（単一 / ディレクトリ / drag & drop、slug 指定、保存期間）
-- [ ] My Pages（一覧・URL コピー・保存期間変更・削除）
+- [ ] SPA ルート直下の認証ゲート（未ログインなら即 Managed Login へリダイレクト） → Identity Pool → 一時クレデンシャル取得
+- [ ] `/` 画面（上にアップロード：単一 / ディレクトリ / drag & drop、slug 指定、保存期間。下に自分のページ一覧：URL コピー・保存期間変更・削除・再アップロード）
 - [ ] pages バケットの CORS（app origin + 開発用 localhost）
 
 受け入れ: ブラウザだけでログイン → drag & drop アップロード → URL コピーまでできる。

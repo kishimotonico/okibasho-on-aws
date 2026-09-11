@@ -233,6 +233,8 @@ CloudFront から読めるのを配信対象の prefix（`pages/`）だけに制
 
 Web と CLI は API を持たない。Identity Pool の一時クレデンシャルで S3 に直接 PutObject / ListObjectsV2 / DeleteObjects する。
 
+slug の指定は任意。web は省略時に乱数（小文字英数字 10 文字）を自動生成し、CLI は従来どおり省略時にパス名から生成する。決定した slug を使って以降の PutObject に進む。
+
 ```text
 1. Cognito ログイン（Authorization Code + PKCE）→ id_token
 2. Identity Pool から一時 IAM クレデンシャルを取得
@@ -317,11 +319,13 @@ metadata キーだけを拾う走査では、`.metadata.json` が一度も書け
 
 API クライアントは書かない。ブラウザから直接 AWS SDK for JavaScript v3 で S3 を叩く。
 
+全ページログイン必須。SPA のルート直下に認証ゲートを置き、未ログインで開くと即 Cognito Managed Login へリダイレクトする。ログイン画面やログインボタンは持たない。唯一の例外は `/callback`（Managed Login からのリダイレクト先）。
+
 画面:
 
-- ログイン（Cognito Managed Login へリダイレクト → callback で id_token を得る）
-- アップロード（単一ファイル / ディレクトリ / drag & drop、slug 指定、保存期間の選択）
-- My Pages（一覧・URL コピー・保存期間変更・削除）
+- `/`（トップ）: 上にアップロード（単一ファイル / ディレクトリ / drag & drop、保存期間の選択、slug の指定は任意で、省略すれば乱数の slug を自動生成する）、下に自分のページ一覧（URL コピー・保存期間変更・削除・再アップロード）。一覧の「再アップロード」はアップロードフォームに slug をセットしてスクロールする。`?slug=` クエリもこの画面が受ける
+- `/callback`（ログインコールバック処理。未ログインでも到達できる唯一のルート）
+- 404
 
 App Distribution のルーティング:
 
@@ -329,6 +333,8 @@ App Distribution のルーティング:
 /auth/*  → Signed Cookie 発行 Lambda（Function URL）。独自ドメイン未設定ならこの behavior は作らない
 それ以外  → 管理UI用 S3 origin（404 は SPA シェルへ rewrite）
 ```
+
+認証ゲートは CloudFront 側では行わずアプリ側（SPA のルート直下）で行う。理由: Lambda@Edge は不採用、CloudFront Function は JWT を検証できない、app 配信に Signed Cookie を使うと発行元が app 自身になり循環する。守る対象は公開前提の静的バンドルであり、実際のセキュリティ境界はブラウザ側の認証ゲートではなく IAM ポリシー（S3 への書き込み範囲）のままである。
 
 ## CLI
 
@@ -421,6 +427,7 @@ CloudFront の Geo restriction を日本に絞る。無料である。WAF は月
 - ディレクトリアップロードでは path traversal を防ぐ。`../`、絶対パス、ドライブレターを拒否し、S3 key は必ず `pages/<email>/<slug>/` 配下に限定する
 - symlink は無視する
 - slug は `[a-z0-9][a-z0-9_-]{0,63}`。ページ直下に `index.html` が無いアップロードは拒否する
+- Web での slug 指定は任意。省略時は乱数（小文字英数字 10 文字）を自動生成する。生成関数 `generateRandomSlug`（`packages/cli/src/page/slug.ts`）を web と CLI で共有する。CLI は従来どおり `--name` 省略時にパス名から slug を作り、この挙動は変えない
 
 サイズ・ファイル数は IAM で強制できない。`PutObject` には `s3:content-length-range` に相当する条件キーがなく、それは presigned POST policy 限定のためである。クライアント側で次の目安を置き、超えたら送る前に弾く。サーバー側の強制は持たない。逸脱は請求アラートで見つける。
 

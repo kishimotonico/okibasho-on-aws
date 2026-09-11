@@ -48,11 +48,6 @@ a:hover {
   color: inherit;
 }
 
-.nav {
-  display: flex;
-  gap: 1rem;
-}
-
 .main {
   max-width: 56rem;
   margin: 0 auto;
@@ -62,6 +57,11 @@ a:hover {
 .page h1 {
   margin: 0 0 0.75rem;
   font-size: 1.5rem;
+}
+
+.page h2 {
+  margin: 2rem 0 0.75rem;
+  font-size: 1.25rem;
 }
 
 .page p {
@@ -130,11 +130,6 @@ a:hover {
 
 .text-button:hover {
   text-decoration: underline;
-}
-
-.auth-status {
-  color: #555;
-  font-size: 0.9rem;
 }
 
 .drop-zone {

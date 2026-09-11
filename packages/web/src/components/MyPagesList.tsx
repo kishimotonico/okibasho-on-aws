@@ -1,5 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
 import { getWebConfig } from '~/config/env';
@@ -15,15 +14,22 @@ import {
 import { shouldWarnImmediateExpiryOnTemporary } from '~/lib/retention-warning';
 import { createPagesS3Client } from '~/lib/s3-client';
 
-export const Route = createFileRoute('/my-pages')({
-  component: MyPagesPage,
-});
+export interface MyPagesListHandle {
+  reload: () => Promise<void>;
+}
+
+interface MyPagesListProps {
+  onReupload: (slug: string) => void;
+}
 
 function retentionLabel(retention: Retention): string {
   return retention === 'temporary' ? '30日' : '無期限';
 }
 
-function MyPagesPage() {
+export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(function MyPagesList(
+  { onReupload },
+  ref,
+) {
   const auth = useAuth();
   const config = useMemo(() => getWebConfig(), []);
   const [pages, setPages] = useState<ListedPage[]>([]);
@@ -52,6 +58,8 @@ function MyPagesPage() {
       setIsLoading(false);
     }
   }, [auth.email, auth.idToken, config]);
+
+  useImperativeHandle(ref, () => ({ reload: loadPages }), [loadPages]);
 
   useEffect(() => {
     if (auth.isAuthenticated && auth.idToken) {
@@ -140,31 +148,8 @@ function MyPagesPage() {
     }
   };
 
-  if (auth.isLoading) {
-    return (
-      <div className="page">
-        <p>読み込み中...</p>
-      </div>
-    );
-  }
-
-  if (!auth.isAuthenticated) {
-    return (
-      <div className="page">
-        <h1>My Pages</h1>
-        <p>ページ一覧を見るにはログインが必要です。</p>
-        <button type="button" className="button" onClick={() => void auth.login('/my-pages')}>
-          ログイン
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="page my-pages">
-      <h1>My Pages</h1>
-      <p>自分がアップロードしたページの一覧です。</p>
-
+    <div>
       {loadError ? (
         <div className="message message--error">
           <p>{loadError}</p>
@@ -184,10 +169,7 @@ function MyPagesPage() {
 
       {!isLoading && !loadError && pages.length === 0 ? (
         <section className="panel">
-          <p>まだページがありません。</p>
-          <Link to="/upload" search={{}} className="button-link">
-            アップロードへ
-          </Link>
+          <p>まだページがありません。上のフォームからアップロードしてください。</p>
         </section>
       ) : null}
 
@@ -231,9 +213,11 @@ function MyPagesPage() {
                             : 'expiration'
                         }
                       >
-                        {page.expiresAt
-                          ? `削除予定: ${formatDateTime(page.expiresAt)}`
-                          : expiration.label}
+                        {expiration.kind === 'expired'
+                          ? expiration.label
+                          : page.expiresAt
+                            ? `削除予定: ${formatDateTime(page.expiresAt)}`
+                            : expiration.label}
                       </div>
                       <div className="retention-actions">
                         <button
@@ -256,13 +240,14 @@ function MyPagesPage() {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <Link
-                          to="/upload"
-                          search={{ slug: page.slug }}
+                        <button
+                          type="button"
                           className="button button--secondary"
+                          disabled={isBusy}
+                          onClick={() => onReupload(page.slug)}
                         >
                           再アップロード
-                        </Link>
+                        </button>
                         <button
                           type="button"
                           className="button button--secondary"
@@ -293,4 +278,4 @@ function MyPagesPage() {
       ) : null}
     </div>
   );
-}
+});

@@ -1,22 +1,58 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { isValidSlug } from '@cli/page';
+import { createFileRoute } from '@tanstack/react-router';
+import { useCallback, useRef } from 'react';
+
+import { useAuth } from '~/auth/auth-context';
+import { MyPagesList, type MyPagesListHandle } from '~/components/MyPagesList';
+import { UploadPanel, type UploadPanelHandle } from '~/components/UploadPanel';
 
 export const Route = createFileRoute('/')({
+  validateSearch: (search: Record<string, unknown>): { slug?: string } => ({
+    slug: typeof search.slug === 'string' && isValidSlug(search.slug) ? search.slug : undefined,
+  }),
   component: HomePage,
 });
 
 function HomePage() {
+  const auth = useAuth();
+  const { slug } = Route.useSearch();
+  const uploadPanelRef = useRef<UploadPanelHandle>(null);
+  const myPagesListRef = useRef<MyPagesListHandle>(null);
+  const uploadSectionRef = useRef<HTMLDivElement>(null);
+
+  const handleReupload = useCallback((targetSlug: string) => {
+    uploadPanelRef.current?.setSlug(targetSlug);
+    uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  const handleUploaded = useCallback(() => {
+    void myPagesListRef.current?.reload();
+  }, []);
+
+  if (auth.isLoading) {
+    return (
+      <div className="page">
+        <p>読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (!auth.idToken || !auth.email) {
+    return null;
+  }
+
   return (
     <div className="page">
-      <h1>okibasho</h1>
-      <p>社内向け HTML 共有サービスの管理画面です。</p>
-      <p>
-        <Link to="/upload" search={{}} className="button-link">
-          アップロードへ
-        </Link>{' '}
-        <Link to="/my-pages" className="button-link button-link--secondary">
-          My Pages
-        </Link>
-      </p>
+      <div ref={uploadSectionRef}>
+        <h1>アップロード</h1>
+        <UploadPanel ref={uploadPanelRef} initialSlug={slug} onUploaded={handleUploaded} />
+      </div>
+
+      <section>
+        <h2>My Pages</h2>
+        <p>自分がアップロードしたページの一覧です。</p>
+        <MyPagesList ref={myPagesListRef} onReupload={handleReupload} />
+      </section>
     </div>
   );
 }

@@ -1,0 +1,89 @@
+# Product
+
+<!-- impeccable:product-schema 1 -->
+
+## Platform
+
+web
+
+## Users
+
+社員約 30 名の会社の全社員。職種を問わず、開発者も非開発職も同じくらいの頻度で管理 UI（web）を使う想定（ユーザー確認済み）。
+
+- 非開発職（企画・営業・デザイナーなど）: ブラウザで HTML やディレクトリをドラッグ＆ドロップして共有する。CLI は使わない
+- 開発者: Claude Code / Codex などの AI エージェントや自分の手で CLI（`okiba`）からアップロードし、管理 UI では一覧確認・URL コピー・保存期間変更・削除を行う
+- AI エージェント: CLI 経由でアップロードする。管理 UI は使わない
+- 閲覧者: 同じ会社の社員。共有 URL を開き、未ログインなら Google ログインを挟んで HTML を見る
+
+仕事: 「生成した HTML を、URL ひとつで社内の誰かに今すぐ見せる」「同じ URL のまま内容を差し替えて最新版を見せ続ける」。
+
+## Product Purpose
+
+AI エージェントや開発者が生成した HTML（分析レポート、説明資料、UI モック、画像・CSS・JS を含む複数ファイル構成）を、社内メンバー限定で URL ひとつで共有する小さな Web サービス。
+
+成功とは: ログインからアップロード、URL コピーまでがブラウザだけで迷わず終わること。共有相手が URL を開けば見られること。同じ URL への再アップロードで最新版が見えること。
+
+## Positioning
+
+- 社内限定の共有。アップロードできるのも閲覧できるのも、会社の Google Workspace ドメインで認証済みの社員だけ
+- API サーバーを持たない。ブラウザと CLI は Cognito Identity Pool の一時クレデンシャルで S3 を直接操作し、認可は IAM ポリシー（自分の prefix にしか書けない）に委譲する
+- 「Simple > Feature rich」「標準機能 > 独自実装」「IAM に委譲できる認可 > アプリコードで書く認可」。30 人規模の社内ツールであり、構成要素を増やしてベストプラクティスに寄せる判断はしない
+- ただしアプリ層（web / CLI）の技術選定は、安定感よりもモダンな技術への積極的なチャレンジを優先する
+
+## Operating Context
+
+- 規模: 全ユーザー合計で 10〜100 request/hour 程度。高負荷・高可用性・低レイテンシは求めない
+- 2 つのホスト: `app.<service-domain>`（trusted。ログイン・アップロード・My Pages・Signed Cookie 発行）と `pages.<service-domain>`（untrusted。アップロードされた HTML を配信）。実際のドメイン名は未確定
+- 共有 URL は `https://pages.<service-domain>/<user>/<slug>/`。`<user>` はメールアドレスのローカル部（`@` より前）
+- 典型フロー（Web）: 管理アプリを開く（未ログインなら即 Managed Login にリダイレクト） → Google ログイン → `/` の上部で HTML またはディレクトリを drop → 保存期間（30 日 / 無期限）を選んで Upload（slug は省略可。省略時は自動生成） → 下部の自分のページ一覧に表示された URL を共有
+- 典型フロー（CLI）: `okiba login` → `okiba ./report/ --name q3-report [--permanent]` → URL が表示される。`list` / `rm` もある
+- 認証は Cognito Managed Login（ログイン画面は自作しない）。web は Authorization Code + PKCE（`oidc-client-ts`）
+- 現状: CloudFront のデフォルトドメインで初回デプロイ済み。独自ドメインと閲覧認証はまだ入っていない
+
+## Capabilities and Constraints
+
+MVP の機能（管理 UI）:
+
+- 全ページログイン必須。未ログインで開くと即 Cognito Managed Login にリダイレクトする（SPA のルート直下の認証ゲート）。ログイン画面やログインボタンは持たない
+- ルートは `/` と `/callback`（ログインコールバック処理。未ログインでも到達できる唯一の例外）と 404 のみ
+- `/`: 上にアップロード（単一 HTML / ディレクトリ / ドラッグ＆ドロップ。保存期間の選択（30 日がデフォルト、無期限に変更可）。slug の指定は任意で、省略すると乱数の slug を自動生成する）、下に自分のページ一覧（閲覧 URL のコピー、保存期間の変更（30 日 ⇄ 無期限）、削除）
+- 同じ slug への再アップロード（内容の差し替え。保存期間は変わらない。参照できるのは常に最新版）。一覧の「再アップロード」はフォームに slug をセットし、「URL を指定する（任意）」を開いた状態でスクロールする
+
+MVP でやらないこと（UI に匂わせない）: 管理者ロール・RBAC、他人のページ編集・owner 変更、組織・チーム、コメント、履歴・過去バージョン参照・切り戻し、社外公開、analytics・全文検索・アクセスログ、パスワード共有・共有相手の限定、MCP server、CI/CD 連携、slug のリネーム。
+
+制約と用語:
+
+- slug: `[a-z0-9][a-z0-9_-]{0,63}`。小文字英数字・ハイフン・アンダースコアのみ、最大 64 文字。ユーザー単位で一意。大文字は暗黙変換しない。web では指定は任意で、省略時は乱数（小文字英数字 10 文字）を自動生成する。生成関数 `generateRandomSlug`（`packages/cli/src/page/slug.ts`）を web と CLI で共有する。CLI は従来どおり `--name` 省略時にパス名から slug を作る
+- サイズ上限（クライアント側の目安。IAM では強制できない）: 1 ファイル 50 MB、1 ページ合計 200 MB、ファイル数 200
+- ページ直下に `index.html` が必須。dotfile などの無効なパスはスキップされる。単一ファイル選択では HTML のみ
+- 保存期間: temporary（作成から 30 日固定。変更時刻ではなく `createdAt` 起点）と permanent（無期限）。無期限から 30 日へ戻すと、作成から 30 日以上経過している場合は即座に期限切れになる
+- ページごとの `.metadata.json`: `{ slug, owner, createdAt, expiresAt }`。`expiresAt` が null なら無期限
+- 一覧は S3 ListObjectsV2 の CommonPrefixes から取得し、各ページの `.metadata.json` を並列取得する。ページ数が増えると一覧はその分遅くなる
+- UI 言語は日本語のみ。i18n は前提にしない（ユーザー確認済み）
+- 技術: TanStack Start（React 19）の SPA モード + prerender。SSR もサーバー関数も使わない。成果物は静的ファイルのみで S3 + CloudFront から配信。AWS SDK for JavaScript v3 でブラウザから直接 S3 を操作。slug 規則・上限・S3 キー組み立ては `packages/cli/src/page` を `@cli/page` として web から参照する
+- ブラウザ操作には pages バケットの CORS が必要（Phase 4）
+
+## Brand Commitments
+
+- プロダクト名は okibasho。UI の表示名は「📦 okibasho」（ヘッダーのロゴ）、パッケージは `@okibasho/*`、CLI 名は `okiba`。リポジトリ名だけ `internal-page-share` のまま残っている
+- 📦 の絵文字以外にロゴはなく、社名・ブランドカラーも存在しない。会社を特定する要素を発明しない
+- 既存 UI の文言は簡潔な日本語の敬体（「〜です」「〜してください」）。用語は「slug」「保存期間」「30日」「無期限」「閲覧 URL」「My Pages」「再アップロード」で web と CLI が揃っている
+
+## Evidence on Hand
+
+- 要件と設計のドキュメント: `docs/concept.md`（目的・MVP スコープ・完成イメージ）、`docs/architecture.md`（決定済み設計）、`docs/roadmap.md`（フェーズと受け入れ条件）、`docs/open-questions.md`（未確定論点）
+- 既存の管理 UI 実装: `packages/web/src/routes/`（index, callback）、`packages/web/src/components/`、`packages/web/src/styles/app.css`。単一 CSS ファイルにクラスベースのスタイル。トークン・コンポーネントライブラリは未導入
+- CLI の完成イメージ（コンソール出力例）は `docs/concept.md` にある
+- 存在しないもの: 実ユーザーの利用データ、テスティモニアル、スクリーンショット、ロゴ。これらを作らない・語らない
+
+## Product Principles
+
+1. ブラウザだけで完結する。ログインからアップロード、URL コピーまで、開発環境を持たない社員が迷わず終えられること
+2. 差し替えとURL の安定性が価値。同じ slug に上げ直せば URL は変わらない。この保証を UI でも壊さない
+3. 「今どこまで見せられているか」を隠さない。保存期限、期限切れ、無期限への変更、削除の取り消し不可を、操作の前に明示する
+4. 機能を足すより減らす。MVP 外の概念（チーム、履歴、公開設定）を UI に予告しない
+5. 制約はクライアントの目安であり保証ではない。IAM が守るのは prefix だけであることを踏まえ、上限や検証は親切な事前チェックとして扱う
+
+## Accessibility & Inclusion
+
+社内ツールとして特別な準拠基準は設けない（ユーザー確認済み）。キーボード操作、フォーカスの可視化、十分なコントラストといった常識的な範囲は満たす。

@@ -19,11 +19,10 @@ function AuthCallbackPage() {
       .completeSignInCallback()
       .then((returnTo) => {
         if (active) {
-          if (returnTo === '/upload') {
-            void navigate({ to: '/upload', search: {} });
-          } else {
-            void navigate({ to: '/' });
-          }
+          // ルートは "/" と "/callback" のみのため、ログイン前のパスは常に "/" 側。
+          // ただし ?slug=... の再アップロード指定だけは復元する。
+          const slug = new URL(returnTo, window.location.origin).searchParams.get('slug');
+          void navigate({ to: '/', search: slug ? { slug } : {} });
         }
       })
       .catch((err: unknown) => {

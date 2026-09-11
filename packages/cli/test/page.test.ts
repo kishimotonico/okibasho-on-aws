@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidSlug } from '../src/page/slug.js';
+import { generateRandomSlug, isValidSlug } from '../src/page/slug.js';
 import {
   emailLocalPart,
   metadataObjectKey,
@@ -22,6 +22,20 @@ describe('isValidSlug', () => {
     expect(isValidSlug('HasUpper')).toBe(false);
     expect(isValidSlug('has/slash')).toBe(false);
     expect(isValidSlug('.hidden')).toBe(false);
+  });
+});
+
+describe('generateRandomSlug', () => {
+  it('10 文字の小文字英数字を生成する', () => {
+    const slug = generateRandomSlug();
+    expect(slug).toHaveLength(10);
+    expect(slug).toMatch(/^[a-z0-9]{10}$/);
+    expect(isValidSlug(slug)).toBe(true);
+  });
+
+  it('複数回呼んでも重複しない', () => {
+    const slugs = new Set(Array.from({ length: 50 }, () => generateRandomSlug()));
+    expect(slugs.size).toBe(50);
   });
 });
 

@@ -33,6 +33,6 @@ pnpm --filter @okibasho/web build
 
 ## 機能
 
-- Cognito Hosted UI によるログイン（Authorization Code + PKCE、`oidc-client-ts`）
-- アップロード画面（単一ファイル / ディレクトリ / drag & drop、slug 指定、保存期間選択）
-- My Pages（自分のページ一覧、閲覧 URL コピー、保存期間の変更、削除）
+- 全ページログイン必須。未ログインで開くと即 Cognito Managed Login（Authorization Code + PKCE、`oidc-client-ts`）にリダイレクトする。ログイン画面やログインボタンは持たない。例外は `/callback` のみ
+- `/`: 上にアップロード（単一ファイル / ディレクトリ / drag & drop、slug 指定は任意で省略時は自動生成、保存期間選択）、下に自分のページ一覧（閲覧 URL コピー、保存期間の変更、削除）。一覧の「再アップロード」はフォームに slug をセットしてスクロールする
+- ヘッダーは「📦 okibasho」とログアウトのみ（メールアドレスは表示しない）

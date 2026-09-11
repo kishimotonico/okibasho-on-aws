@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { createRootRoute, HeadContent, Scripts } from '@tanstack/react-router';
 
+import { AuthGate } from '~/auth/AuthGate';
 import { AuthProvider } from '~/auth/auth-context';
 import { AppHeader } from '~/components/AppHeader';
 import { NotFoundPage } from '~/components/NotFoundPage';
@@ -27,8 +28,10 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         <AuthProvider>
-          <AppHeader />
-          <main className="main">{children}</main>
+          <AuthGate>
+            <AppHeader />
+            <main className="main">{children}</main>
+          </AuthGate>
         </AuthProvider>
         <Scripts />
       </body>

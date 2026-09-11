@@ -11,5 +11,5 @@ export {
   pagePrefix,
   pageViewPath,
 } from './s3-keys.js';
-export { SLUG_PATTERN, isValidSlug } from './slug.js';
+export { SLUG_PATTERN, generateRandomSlug, isValidSlug } from './slug.js';
 export { type UploadPathValidationResult, validateUploadPath } from './upload-path.js';
