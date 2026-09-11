@@ -3,14 +3,19 @@ import { chmod } from 'node:fs/promises';
 
 await esbuild.build({
   entryPoints: ['src/index.ts'],
-  outfile: 'dist/share-html.js',
+  outfile: 'dist/okiba.js',
   bundle: true,
   platform: 'node',
   format: 'esm',
   target: 'node22',
   banner: {
-    js: '#!/usr/bin/env node',
+    // AWS SDK (CJS) をESMに束ねると内部の require() が残るため、createRequire で補う
+    js: [
+      '#!/usr/bin/env node',
+      "import { createRequire as __bannerCreateRequire } from 'node:module';",
+      'const require = __bannerCreateRequire(import.meta.url);',
+    ].join('\n'),
   },
 });
 
-await chmod('dist/share-html.js', 0o755);
+await chmod('dist/okiba.js', 0o755);
