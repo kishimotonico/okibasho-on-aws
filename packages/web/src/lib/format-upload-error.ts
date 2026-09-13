@@ -3,8 +3,7 @@ export type FormattedUploadError = {
   detail: string | null;
 };
 
-const NETWORK_MESSAGE =
-  'アップロードできませんでした。ネットワーク接続を確認して、もう一度お試しください。';
+const NETWORK_MESSAGE = 'つながりません。接続を確かめて、もう一度どうぞ。';
 
 /**
  * アップロード失敗を画面用の日本語にする。
@@ -21,7 +20,7 @@ export function formatUploadError(error: unknown): FormattedUploadError {
   }
 
   return {
-    message: 'アップロードできませんでした。',
+    message: '送れませんでした。もう一度どうぞ。',
     detail,
   };
 }

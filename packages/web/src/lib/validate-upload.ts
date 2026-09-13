@@ -15,7 +15,7 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
   if (files.length === 0) {
     errors.push({
       code: 'files_required',
-      message: 'アップロードするファイルを1件以上指定してください',
+      message: 'ファイルを選んでください',
     });
     return errors;
   }
@@ -23,7 +23,7 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
   if (files.length > MAX_FILE_COUNT) {
     errors.push({
       code: 'too_many_files',
-      message: `ファイル数は最大 ${MAX_FILE_COUNT} 件までです`,
+      message: `ファイルは ${MAX_FILE_COUNT} 件までです`,
     });
   }
 
@@ -36,7 +36,7 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
     if (!pathResult.ok) {
       errors.push({
         code: 'invalid_path',
-        message: `無効なパスです: ${file.path}`,
+        message: `${file.path} は使えません`,
       });
       continue;
     }
@@ -45,7 +45,7 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
     if (seenPaths.has(normalizedPath)) {
       errors.push({
         code: 'duplicate_path',
-        message: `パスが重複しています: ${normalizedPath}`,
+        message: `${normalizedPath} が重複しています`,
       });
     } else {
       seenPaths.add(normalizedPath);
@@ -55,12 +55,12 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
     if (!Number.isInteger(size) || size < 0) {
       errors.push({
         code: 'invalid_file_size',
-        message: `サイズは0以上の整数で指定してください: ${file.path}`,
+        message: `${file.path} のサイズが不正です`,
       });
     } else if (size > MAX_FILE_SIZE) {
       errors.push({
         code: 'file_too_large',
-        message: `1ファイルあたり最大 ${MAX_FILE_SIZE} バイトまでです: ${file.path}`,
+        message: `${file.path} が大きすぎます`,
       });
     } else {
       totalSize += size;
@@ -74,14 +74,14 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
   if (totalSize > MAX_PAGE_SIZE) {
     errors.push({
       code: 'page_size_exceeded',
-      message: `ページ合計サイズは最大 ${MAX_PAGE_SIZE} バイトまでです`,
+      message: '合計サイズが上限を超えています',
     });
   }
 
   if (!hasIndexHtml) {
     errors.push({
       code: 'missing_index_html',
-      message: 'ページ直下に index.html が必要です',
+      message: 'index.html がありません',
     });
   }
 

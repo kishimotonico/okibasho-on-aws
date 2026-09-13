@@ -78,7 +78,6 @@ describe('MyPagesList', () => {
     updatePageRetention.mockReset();
     deletePage.mockReset();
     listPages.mockResolvedValue([page('alpha'), page('beta'), page('gamma')]);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: () => Promise.resolve() },
@@ -96,7 +95,7 @@ describe('MyPagesList', () => {
     const item = row.closest('li');
     expect(item).not.toBeNull();
     expect(within(item!).getByText('https://pages.example.com/tanaka/beta/')).toBeInTheDocument();
-    expect(within(item!).getByText(/あと \d+ 日|無期限|期限切れ/)).toBeInTheDocument();
+    expect(within(item!).getByText(/まで（あと\d+日）|無期限|期限切れ（/)).toBeInTheDocument();
   });
 
   it('直接操作は開くとコピーだけで、kebab に低頻度操作を入れる', async () => {
@@ -260,6 +259,138 @@ describe('MyPagesList', () => {
     expect(screen.getByRole('heading', { name: 'gamma' }).closest('li')).toHaveClass(
       'page-row--highlight',
     );
+  });
+
+  it('削除は AlertDialog で確認してから deletePage を呼ぶ', async () => {
+    const user = userEvent.setup();
+    renderList();
+
+    const betaHeading = await screen.findByRole('heading', { name: 'beta' });
+    const row = betaHeading.closest('li')!;
+
+    await user.click(within(row).getByRole('button', { name: 'betaの操作' }));
+    await user.click(screen.getByRole('menuitem', { name: '削除' }));
+
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('「beta」を削除しますか？');
+    expect(deletePage).not.toHaveBeenCalled();
+
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '削除' }));
+
+    expect(deletePage).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('削除確認でやめるを押したとき deletePage を呼ばない', async () => {
+    const user = userEvent.setup();
+    renderList();
+
+    const betaHeading = await screen.findByRole('heading', { name: 'beta' });
+    const row = betaHeading.closest('li')!;
+
+    await user.click(within(row).getByRole('button', { name: 'betaの操作' }));
+    await user.click(screen.getByRole('menuitem', { name: '削除' }));
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'やめる' }),
+    );
+
+    expect(deletePage).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('30日に戻すは AlertDialog で確認してから updatePageRetention を呼ぶ', async () => {
+    const user = userEvent.setup();
+    const recentCreatedAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    listPages.mockResolvedValue([
+      page('keep-perm', {
+        retention: 'permanent',
+        expiresAt: null,
+        createdAt: recentCreatedAt,
+      }),
+    ]);
+    updatePageRetention.mockResolvedValue({
+      slug: 'keep-perm',
+      owner: 'tanaka@example.jp',
+      createdAt: recentCreatedAt,
+      expiresAt: '2026-08-31T00:00:00.000Z',
+    });
+
+    renderList();
+
+    const row = (await screen.findByRole('heading', { name: 'keep-perm' })).closest('li')!;
+    await user.click(within(row).getByRole('button', { name: 'keep-permの操作' }));
+    await user.click(screen.getByRole('menuitem', { name: '30日に戻す' }));
+
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('保存期間を30日に変更しますか？');
+    expect(updatePageRetention).not.toHaveBeenCalled();
+
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: '30日に戻す' }),
+    );
+
+    expect(updatePageRetention).toHaveBeenCalledOnce();
+  });
+
+  it('30日に戻すで即期限切れになるとき警告文を出す', async () => {
+    const user = userEvent.setup();
+    listPages.mockResolvedValue([
+      page('old-perm', {
+        retention: 'permanent',
+        expiresAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }),
+    ]);
+
+    renderList();
+
+    const row = (await screen.findByRole('heading', { name: 'old-perm' })).closest('li')!;
+    await user.click(within(row).getByRole('button', { name: 'old-permの操作' }));
+    await user.click(screen.getByRole('menuitem', { name: '30日に戻す' }));
+
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      '30日保存に戻すと、作成から30日以上経過しているため即座に期限切れになります。続行しますか？',
+    );
+  });
+
+  it('無期限に変更は確認なしで updatePageRetention を呼ぶ', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    const user = userEvent.setup();
+    updatePageRetention.mockResolvedValue({
+      slug: 'beta',
+      owner: 'tanaka@example.jp',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      expiresAt: null,
+    });
+
+    renderList();
+
+    const row = (await screen.findByRole('heading', { name: 'beta' })).closest('li')!;
+    await user.click(within(row).getByRole('button', { name: 'betaの操作' }));
+    await user.click(screen.getByRole('menuitem', { name: '無期限に変更' }));
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(updatePageRetention).toHaveBeenCalledOnce();
+    expect(updatePageRetention.mock.calls[0]?.[4]).toBe('permanent');
+    expect(within(row).getByText('無期限')).toBeInTheDocument();
+
+    confirmSpy.mockRestore();
+  });
+
+  it('window.confirm を呼ばない', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    const user = userEvent.setup();
+    listPages.mockResolvedValue([page('perm-page', { retention: 'permanent', expiresAt: null })]);
+    renderList();
+
+    const row = (await screen.findByRole('heading', { name: 'perm-page' })).closest('li')!;
+    await user.click(within(row).getByRole('button', { name: 'perm-pageの操作' }));
+    await user.click(screen.getByRole('menuitem', { name: '30日に戻す' }));
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'やめる' }),
+    );
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 
   it('再アップロード後の reload でも createdAt 順を保つ', async () => {

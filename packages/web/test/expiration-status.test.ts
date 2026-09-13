@@ -12,12 +12,13 @@ describe('getExpirationStatus', () => {
     });
   });
 
-  it('未来のとき残日数を返す', () => {
+  it('未来のとき日本時間の絶対日時と残日数を返す', () => {
     const status = getExpirationStatus('2026-08-20T12:00:00.000Z', now);
     expect(status).toEqual({
       kind: 'active',
-      label: 'あと 2 日',
+      label: '2026/8/20 21:00 まで（あと2日）',
       daysRemaining: 2,
+      expiresAt: '2026-08-20T12:00:00.000Z',
     });
   });
 
@@ -25,22 +26,25 @@ describe('getExpirationStatus', () => {
     const status = getExpirationStatus('2026-08-18T18:00:00.000Z', now);
     expect(status).toEqual({
       kind: 'active',
-      label: 'あと 1 日',
+      label: '2026/8/19 03:00 まで（あと1日）',
       daysRemaining: 1,
+      expiresAt: '2026-08-18T18:00:00.000Z',
     });
   });
 
-  it('過去のとき期限切れ', () => {
+  it('過去のとき期限切れ日付を返す', () => {
     expect(getExpirationStatus('2026-08-17T12:00:00.000Z', now)).toEqual({
       kind: 'expired',
-      label: '期限切れ',
+      label: '期限切れ（2026/8/17）',
+      expiresAt: '2026-08-17T12:00:00.000Z',
     });
   });
 
   it('ちょうど今のとき期限切れ', () => {
     expect(getExpirationStatus('2026-08-18T12:00:00.000Z', now)).toEqual({
       kind: 'expired',
-      label: '期限切れ',
+      label: '期限切れ（2026/8/18）',
+      expiresAt: '2026-08-18T12:00:00.000Z',
     });
   });
 });

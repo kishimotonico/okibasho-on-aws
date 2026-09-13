@@ -2,6 +2,7 @@ import { Check, Copy, EllipsisVertical, SquareArrowOutUpRight } from 'lucide-rea
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
+import { ConfirmAlertDialog } from '~/components/AlertDialog';
 import { Menu, MenuItem } from '~/components/Menu';
 import { Tooltip } from '~/components/Tooltip';
 import { getWebConfig } from '~/config/env';
@@ -28,6 +29,10 @@ interface MyPagesListProps {
 
 const COPY_FEEDBACK_MS = 2000;
 
+type ConfirmState =
+  | { kind: 'delete'; page: ListedPage }
+  | { kind: 'retention'; page: ListedPage; nextRetention: Retention };
+
 export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(function MyPagesList(
   { onReupload },
   ref,
@@ -44,6 +49,7 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
     slug: string;
     gen: number;
   } | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   const loadPages = useCallback(async () => {
     if (!auth.idToken || !auth.email) {
@@ -127,16 +133,6 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
       return;
     }
 
-    if (page.retention === 'permanent' && nextRetention === 'temporary') {
-      const immediateExpiry = shouldWarnImmediateExpiryOnTemporary(page.createdAt);
-      const message = immediateExpiry
-        ? '30日保存に戻すと、作成から30日以上経過しているため即座に期限切れになります。続行しますか？'
-        : '保存期間を30日に変更しますか？';
-      if (!window.confirm(message)) {
-        return;
-      }
-    }
-
     setActionError(null);
     setBusySlug(page.slug);
 
@@ -174,10 +170,6 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
       return;
     }
 
-    if (!window.confirm(`「${page.slug}」を削除しますか？この操作は取り消せません。`)) {
-      return;
-    }
-
     setActionError(null);
     setBusySlug(page.slug);
 
@@ -193,8 +185,57 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
     }
   };
 
+  const confirmDialog = (() => {
+    if (!confirm) {
+      return null;
+    }
+
+    if (confirm.kind === 'delete') {
+      return {
+        title: 'このページを削除する',
+        description: `「${confirm.page.slug}」を削除しますか？この操作は取り消せません。`,
+        confirmLabel: '削除',
+        danger: true,
+        onConfirm: () => {
+          setConfirm(null);
+          void handleDelete(confirm.page);
+        },
+      };
+    }
+
+    const immediateExpiry = shouldWarnImmediateExpiryOnTemporary(confirm.page.createdAt);
+    return {
+      title: '保存期間を30日に変更',
+      description: immediateExpiry
+        ? '30日保存に戻すと、作成から30日以上経過しているため即座に期限切れになります。続行しますか？'
+        : '保存期間を30日に変更しますか？',
+      confirmLabel: '30日に戻す',
+      danger: immediateExpiry,
+      onConfirm: () => {
+        setConfirm(null);
+        void handleRetentionChange(confirm.page, confirm.nextRetention);
+      },
+    };
+  })();
+
   return (
     <div>
+      {confirmDialog ? (
+        <ConfirmAlertDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setConfirm(null);
+            }
+          }}
+          title={confirmDialog.title}
+          description={confirmDialog.description}
+          confirmLabel={confirmDialog.confirmLabel}
+          danger={confirmDialog.danger}
+          onConfirm={confirmDialog.onConfirm}
+        />
+      ) : null}
+
       {loadError ? (
         <div className="message message--error">
           <p>{loadError}</p>
@@ -298,12 +339,18 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
                     ) : (
                       <MenuItem
                         disabled={isBusy}
-                        onSelect={() => void handleRetentionChange(page, 'temporary')}
+                        onSelect={() =>
+                          setConfirm({ kind: 'retention', page, nextRetention: 'temporary' })
+                        }
                       >
                         30日に戻す
                       </MenuItem>
                     )}
-                    <MenuItem danger disabled={isBusy} onSelect={() => void handleDelete(page)}>
+                    <MenuItem
+                      danger
+                      disabled={isBusy}
+                      onSelect={() => setConfirm({ kind: 'delete', page })}
+                    >
                       削除
                     </MenuItem>
                   </Menu>

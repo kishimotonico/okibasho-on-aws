@@ -116,6 +116,25 @@ describe('pages-s3', () => {
     vi.useRealTimers();
   });
 
+  it('1ファイルアップロードの onProgress は total に metadata を含めず最後は (1, 1)', async () => {
+    const client = createFakeS3Client();
+    const progress: Array<[number, number]> = [];
+
+    await uploadPage(
+      client,
+      bucket,
+      email,
+      'q3-report',
+      [{ path: 'index.html', file: new Blob(['<html></html>'], { type: 'text/html' }) }],
+      { retention: 'temporary' },
+      (completed, total) => {
+        progress.push([completed, total]);
+      },
+    );
+
+    expect(progress).toEqual([[1, 1]]);
+  });
+
   it('新規アップロードでファイルと metadata を書き、URL を返せる', async () => {
     const client = createFakeS3Client();
     const createdAt = new Date('2026-08-26T00:00:00.000Z');

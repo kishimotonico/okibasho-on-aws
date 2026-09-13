@@ -197,7 +197,7 @@ async function putFilesWithConcurrency(
         }),
       );
       completed++;
-      onProgress?.(completed, files.length + 1);
+      onProgress?.(completed, files.length);
     }
   }
 
@@ -296,7 +296,6 @@ export async function uploadPage(
       ContentType: 'application/json',
     }),
   );
-  onProgress?.(files.length + 1, files.length + 1);
 
   return metadata;
 }

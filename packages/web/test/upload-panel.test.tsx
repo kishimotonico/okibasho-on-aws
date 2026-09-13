@@ -1,13 +1,23 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UploadPanel } from '~/components/UploadPanel';
 
+const generateRandomSlug = vi.fn();
 const getPageMetadata = vi.fn();
 const uploadPage = vi.fn();
+const deletePage = vi.fn();
+
+vi.mock('@cli/page', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@cli/page')>();
+  return {
+    ...actual,
+    generateRandomSlug: () => generateRandomSlug(),
+  };
+});
 
 vi.mock('~/auth/auth-context', () => ({
   useAuth: () => ({
@@ -41,6 +51,7 @@ vi.mock('~/lib/pages-s3', async (importOriginal) => {
     ...actual,
     getPageMetadata: (...args: unknown[]) => getPageMetadata(...args),
     uploadPage: (...args: unknown[]) => uploadPage(...args),
+    deletePage: (...args: unknown[]) => deletePage(...args),
   };
 });
 
@@ -58,37 +69,38 @@ function fileInput() {
   return input;
 }
 
+function slugInput() {
+  return screen.getByRole('textbox', { name: /公開URL/ });
+}
+
 describe('UploadPanel', () => {
   beforeEach(() => {
+    generateRandomSlug.mockReset();
+    generateRandomSlug.mockReturnValueOnce('1111111111').mockReturnValue('2222222222');
     getPageMetadata.mockReset();
     uploadPage.mockReset();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    deletePage.mockReset();
+    vi.spyOn(window, 'confirm');
   });
 
-  it('composer に箱・ブランド・フォルダ文言・公開URL・保存期間を一塊で出す', () => {
-    const onUploaded = vi.fn();
-    render(<UploadPanel onUploaded={onUploaded} />);
-
+  it('初期表示から slug が 10 文字入っている', () => {
+    render(<UploadPanel onUploaded={vi.fn()} />);
     expect(screen.getByText('okibasho')).toBeInTheDocument();
-    expect(screen.getByText('ファイルまたはフォルダをドロップ')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'フォルダを選択' })).toBeInTheDocument();
-    expect(screen.queryByText('ディレクトリを選択')).toBeNull();
-    expect(screen.queryByText('URL を指定する（任意）')).toBeNull();
-    expect(screen.getByText('https://pages.example.com/tanaka/')).toBeInTheDocument();
-    expect(screen.getByText('保存期間')).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: '公開URL' })).toHaveAttribute(
-      'placeholder',
-      'my-page',
-    );
-    expect(screen.getByRole('button', { name: 'ファイルを選択' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('ファイルを選択')).toBeNull();
-
-    const submit = screen.getByRole('button', { name: 'アップロード' });
-    expect(submit).toBeDisabled();
-    expect(submit).toBeVisible();
+    expect(slugInput()).toHaveValue('1111111111');
   });
 
-  it('ファイル選択後にアップロードでき、成功結果と onUploaded を渡す', async () => {
+  it('CTA と選択ボタンがなく、フォルダを選ぶリンクがある', () => {
+    render(<UploadPanel onUploaded={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'アップロード' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'ファイルを選択' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'フォルダを選択' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'フォルダを選ぶ' })).toBeInTheDocument();
+    expect(screen.getByText('ここにドロップして公開')).toBeInTheDocument();
+    expect(screen.getByText('保存期間')).toBeInTheDocument();
+  });
+
+  it('ファイル選択だけで uploadPage が走る', async () => {
     const user = userEvent.setup();
     const onUploaded = vi.fn();
     getPageMetadata.mockResolvedValue(null);
@@ -96,32 +108,45 @@ describe('UploadPanel', () => {
 
     render(<UploadPanel onUploaded={onUploaded} />);
 
+    await user.clear(slugInput());
+    await user.type(slugInput(), 'q3-report');
     await user.upload(fileInput(), htmlFile());
-    expect(screen.getByText('index.html を選択しました')).toBeInTheDocument();
-    await user.type(screen.getByRole('textbox', { name: '公開URL' }), 'q3-report');
-    await user.click(screen.getByRole('button', { name: 'アップロード' }));
 
-    expect(uploadPage).toHaveBeenCalledOnce();
+    await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
     expect(onUploaded).toHaveBeenCalledWith({
       slug: 'q3-report',
       viewUrl: 'https://pages.example.com/tanaka/q3-report/',
       isReupload: false,
     });
-    expect(screen.getByText('アップロードしました')).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: 'https://pages.example.com/tanaka/q3-report/' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'URLをコピー' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'ページを開く' })).toHaveAttribute(
-      'href',
-      'https://pages.example.com/tanaka/q3-report/',
-    );
-    expect(screen.queryByText('index.html を選択しました')).toBeNull();
-    expect(screen.getByRole('button', { name: 'アップロード' })).toBeDisabled();
-    expect(screen.getByRole('textbox', { name: '公開URL' })).toHaveValue('');
   });
 
-  it('再アップロードでは slug が固定で保存期間は出さず、isReupload になる', async () => {
+  it('新規で既存 slug なら吹き出しが出て、差し替えるまで uploadPage を呼ばない', async () => {
+    const user = userEvent.setup();
+    getPageMetadata.mockResolvedValue({
+      slug: 'taken-slug',
+      owner: 'tanaka@example.jp',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      expiresAt: null,
+    });
+
+    render(<UploadPanel onUploaded={vi.fn()} />);
+
+    await user.clear(slugInput());
+    await user.type(slugInput(), 'taken-slug');
+    await user.upload(fileInput(), htmlFile());
+
+    expect(
+      screen.getByText('taken-slug はもうあるよ。差し替える？ 保存期間はそのまま'),
+    ).toBeInTheDocument();
+    expect(uploadPage).not.toHaveBeenCalled();
+
+    uploadPage.mockResolvedValue({});
+    await user.click(screen.getByRole('button', { name: '差し替える' }));
+
+    await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
+  });
+
+  it('再アップロードは confirm なしで uploadPage する', async () => {
     const user = userEvent.setup();
     const onUploaded = vi.fn();
     getPageMetadata.mockResolvedValue({
@@ -134,51 +159,223 @@ describe('UploadPanel', () => {
 
     render(<UploadPanel initialSlug="keep-me" onUploaded={onUploaded} />);
 
-    expect(screen.getByRole('textbox', { name: '公開URL' })).toHaveAttribute('readOnly');
     expect(screen.queryByText('保存期間')).toBeNull();
-    expect(screen.getByRole('button', { name: '再アップロード' })).toBeDisabled();
-
     await user.upload(fileInput(), htmlFile());
-    await user.click(screen.getByRole('button', { name: '再アップロード' }));
 
-    expect(window.confirm).toHaveBeenCalledOnce();
+    await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
+    expect(window.confirm).not.toHaveBeenCalled();
     expect(onUploaded).toHaveBeenCalledWith({
       slug: 'keep-me',
       viewUrl: 'https://pages.example.com/tanaka/keep-me/',
       isReupload: true,
     });
-    expect(screen.getByRole('textbox', { name: '公開URL' })).toHaveValue('keep-me');
-    expect(screen.getByText('アップロードしました')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '再アップロード' })).toBeDisabled();
+    expect(slugInput()).toHaveValue('keep-me');
   });
 
-  it('HTML 以外の単一ファイルは受け付けない', async () => {
+  it('HTML 以外は吹き出しで HTML 以外は置けません', async () => {
     const user = userEvent.setup();
     render(<UploadPanel onUploaded={vi.fn()} />);
 
     await user.upload(fileInput(), new File(['x'], 'notes.txt', { type: 'text/plain' }));
 
-    expect(
-      screen.getByText('単一ファイル選択では HTML ファイルのみアップロードできます'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'アップロード' })).toBeDisabled();
+    expect(screen.getByText('HTML 以外は置けません')).toBeInTheDocument();
+    expect(uploadPage).not.toHaveBeenCalled();
   });
 
-  it('ネットワークエラーは日本語の案内にする', async () => {
+  it('ネットワークエラーは吹き出しに出す', async () => {
     const user = userEvent.setup();
     getPageMetadata.mockResolvedValue(null);
     uploadPage.mockRejectedValue(new TypeError('Failed to fetch'));
 
     render(<UploadPanel onUploaded={vi.fn()} />);
+    await user.upload(fileInput(), htmlFile());
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('つながりません。接続を確かめて、もう一度どうぞ。'),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Failed to fetch')).toBeNull();
+  });
+
+  it('getPageMetadata が reject しても lock が外れ、再選択で upload できる', async () => {
+    const user = userEvent.setup();
+    getPageMetadata.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    getPageMetadata.mockResolvedValue(null);
+    uploadPage.mockResolvedValue({});
+
+    render(<UploadPanel onUploaded={vi.fn()} />);
+    await user.upload(fileInput(), htmlFile());
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('つながりません。接続を確かめて、もう一度どうぞ。'),
+      ).toBeInTheDocument(),
+    );
+    expect(uploadPage).not.toHaveBeenCalled();
 
     await user.upload(fileInput(), htmlFile());
-    await user.click(screen.getByRole('button', { name: 'アップロード' }));
+
+    await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
+  });
+
+  it('成功後 slug が変わり、結果が残る', async () => {
+    const user = userEvent.setup();
+    getPageMetadata.mockResolvedValue(null);
+    uploadPage.mockResolvedValue({});
+
+    render(<UploadPanel onUploaded={vi.fn()} />);
+
+    await user.upload(fileInput(), htmlFile());
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('link', { name: 'https://pages.example.com/tanaka/1111111111/' }),
+      ).toBeInTheDocument(),
+    );
+    expect(slugInput()).toHaveValue('2222222222');
+  });
+
+  it('このページを消すで deletePage を呼ぶ', async () => {
+    const user = userEvent.setup();
+    const onDeleted = vi.fn();
+    getPageMetadata.mockResolvedValue(null);
+    uploadPage.mockResolvedValue({});
+    deletePage.mockResolvedValue(undefined);
+
+    render(<UploadPanel onUploaded={vi.fn()} onDeleted={onDeleted} />);
+    await user.upload(fileInput(), htmlFile());
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'このページを消す' })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole('button', { name: 'このページを消す' }));
+
+    await waitFor(() => expect(deletePage).toHaveBeenCalledOnce());
+    expect(onDeleted).toHaveBeenCalledWith('1111111111');
+    expect(screen.queryByRole('button', { name: 'このページを消す' })).toBeNull();
+  });
+
+  it('メタデータ確認中は2回目の選択を無視する', async () => {
+    const user = userEvent.setup();
+    let resolveMetadata: ((value: null) => void) | undefined;
+    getPageMetadata.mockImplementation(
+      () =>
+        new Promise<null>((resolve) => {
+          resolveMetadata = resolve;
+        }),
+    );
+    uploadPage.mockResolvedValue({});
+
+    render(<UploadPanel onUploaded={vi.fn()} />);
+
+    await user.upload(fileInput(), htmlFile());
+    expect(getPageMetadata).toHaveBeenCalledTimes(1);
+    expect(uploadPage).not.toHaveBeenCalled();
+
+    await user.upload(fileInput(), htmlFile());
+    expect(getPageMetadata).toHaveBeenCalledTimes(1);
+    expect(uploadPage).not.toHaveBeenCalled();
+
+    resolveMetadata!(null);
+    await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
+  });
+
+  it('slug が空なら generateRandomSlug で uploadPage する', async () => {
+    const user = userEvent.setup();
+    getPageMetadata.mockResolvedValue(null);
+    uploadPage.mockResolvedValue({});
+
+    render(<UploadPanel onUploaded={vi.fn()} />);
+    await user.clear(slugInput());
+    await user.upload(fileInput(), htmlFile());
+
+    await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
+    expect(uploadPage).toHaveBeenCalledWith(
+      expect.anything(),
+      'pages-bucket',
+      'tanaka@example.jp',
+      '2222222222',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('不正 slug では吹き出しを出して uploadPage しない', async () => {
+    const user = userEvent.setup();
+    render(<UploadPanel onUploaded={vi.fn()} />);
+
+    await user.clear(slugInput());
+    await user.type(slugInput(), 'ABC');
+    await user.upload(fileInput(), htmlFile());
 
     expect(
-      screen.getByText(
-        'アップロードできませんでした。ネットワーク接続を確認して、もう一度お試しください。',
-      ),
+      screen.getByText('slug は小文字英数字とハイフン、アンダースコアだけです'),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Failed to fetch')).toBeNull();
+    expect(uploadPage).not.toHaveBeenCalled();
+  });
+
+  it('既存 slug の確認中に slug を変えて HTML を選ぶと新しい slug で upload する', async () => {
+    const user = userEvent.setup();
+    getPageMetadata.mockResolvedValue({
+      slug: 'taken-slug',
+      owner: 'tanaka@example.jp',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      expiresAt: null,
+    });
+    uploadPage.mockResolvedValue({});
+
+    render(<UploadPanel onUploaded={vi.fn()} />);
+
+    await user.clear(slugInput());
+    await user.type(slugInput(), 'taken-slug');
+    await user.upload(fileInput(), htmlFile());
+
+    expect(
+      screen.getByText('taken-slug はもうあるよ。差し替える？ 保存期間はそのまま'),
+    ).toBeInTheDocument();
+    expect(uploadPage).not.toHaveBeenCalled();
+
+    getPageMetadata.mockResolvedValue(null);
+    await user.type(slugInput(), '2');
+
+    expect(
+      screen.queryByText('taken-slug はもうあるよ。差し替える？ 保存期間はそのまま'),
+    ).toBeNull();
+
+    await user.upload(fileInput(), htmlFile());
+
+    await waitFor(() => expect(getPageMetadata).toHaveBeenCalledTimes(2));
+    expect(getPageMetadata).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'pages-bucket',
+      'tanaka@example.jp',
+      'taken-slug2',
+    );
+    await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
+    expect(uploadPage).toHaveBeenCalledWith(
+      expect.anything(),
+      'pages-bucket',
+      'tanaka@example.jp',
+      'taken-slug2',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('HTML 以外のあと HTML を選ぶと吹き出しが消え uploadPage する', async () => {
+    const user = userEvent.setup();
+    getPageMetadata.mockResolvedValue(null);
+    uploadPage.mockResolvedValue({});
+
+    render(<UploadPanel onUploaded={vi.fn()} />);
+    await user.upload(fileInput(), new File(['x'], 'notes.txt', { type: 'text/plain' }));
+    expect(screen.getByText('HTML 以外は置けません')).toBeInTheDocument();
+
+    await user.upload(fileInput(), htmlFile());
+    expect(screen.queryByText('HTML 以外は置けません')).toBeNull();
+    await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
   });
 });

@@ -38,6 +38,8 @@ export type UploadBoxIconProps = {
   forceHover?: boolean;
   /** ハーネス用。未指定なら prefers-reduced-motion。 */
   reducedMotion?: boolean;
+  /** spin のあと（uploading 以外）に呼ぶ。ファイル選択ダイアログ用。 */
+  onActivate?: () => void;
 };
 
 type Pool = Map<string, SVGElement>;
@@ -186,7 +188,10 @@ function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
 }
 
 export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>(
-  function UploadBoxIcon({ phase, dragging, size = 96, forceHover = false, reducedMotion }, ref) {
+  function UploadBoxIcon(
+    { phase, dragging, size = 96, forceHover = false, reducedMotion, onActivate },
+    ref,
+  ) {
     const rootRef = useRef<HTMLDivElement>(null);
     const svgRef = useRef<SVGSVGElement>(null);
     const phaseRef = useRef(phase);
@@ -315,6 +320,9 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
       event.preventDefault();
       event.stopPropagation();
       spinFnRef.current?.();
+      if (phaseRef.current !== 'uploading') {
+        onActivate?.();
+      }
     };
 
     return (

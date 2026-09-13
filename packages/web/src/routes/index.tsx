@@ -34,6 +34,10 @@ function HomePage() {
     void myPagesListRef.current?.reload();
   }, []);
 
+  const handleDeleted = useCallback(() => {
+    void myPagesListRef.current?.reload();
+  }, []);
+
   if (auth.isLoading) {
     return (
       <div className="page">
@@ -49,7 +53,12 @@ function HomePage() {
   return (
     <div className="page">
       <div ref={uploadSectionRef} className="upload-section">
-        <UploadPanel ref={uploadPanelRef} initialSlug={slug} onUploaded={handleUploaded} />
+        <UploadPanel
+          ref={uploadPanelRef}
+          initialSlug={slug}
+          onUploaded={handleUploaded}
+          onDeleted={handleDeleted}
+        />
       </div>
 
       <section className="pages-section" aria-labelledby="uploaded-pages-heading">
