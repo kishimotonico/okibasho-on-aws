@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
 import { render, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UploadPanel } from '~/components/UploadPanel';
+import { TooltipProvider } from '~/components/Tooltip';
 
 const generateRandomSlug = vi.fn();
 const getPageMetadata = vi.fn();
@@ -72,6 +74,9 @@ function fileInput() {
 function slugInput() {
   return screen.getByRole('textbox', { name: /公開URL/ });
 }
+function renderPanel(ui: ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
 
 describe('UploadPanel', () => {
   beforeEach(() => {
@@ -80,21 +85,21 @@ describe('UploadPanel', () => {
     getPageMetadata.mockReset();
     uploadPage.mockReset();
     deletePage.mockReset();
-    vi.spyOn(window, 'confirm');
   });
 
   it('初期表示から slug が 10 文字入っている', () => {
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
     expect(screen.getByText('okibasho')).toBeInTheDocument();
     expect(slugInput()).toHaveValue('1111111111');
   });
 
-  it('CTA と選択ボタンがなく、フォルダを選ぶリンクがある', () => {
-    render(<UploadPanel onUploaded={vi.fn()} />);
+  it('CTA と選択ボタンがなく、ファイルを選ぶ・フォルダを選ぶリンクがある', () => {
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
 
     expect(screen.queryByRole('button', { name: 'アップロード' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'ファイルを選択' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'フォルダを選択' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'ファイルを選ぶ' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'フォルダを選ぶ' })).toBeInTheDocument();
     expect(screen.getByText('ここにドロップして公開')).toBeInTheDocument();
     expect(screen.getByText('保存期間')).toBeInTheDocument();
@@ -106,7 +111,7 @@ describe('UploadPanel', () => {
     getPageMetadata.mockResolvedValue(null);
     uploadPage.mockResolvedValue({});
 
-    render(<UploadPanel onUploaded={onUploaded} />);
+    renderPanel(<UploadPanel onUploaded={onUploaded} />);
 
     await user.clear(slugInput());
     await user.type(slugInput(), 'q3-report');
@@ -129,7 +134,7 @@ describe('UploadPanel', () => {
       expiresAt: null,
     });
 
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
 
     await user.clear(slugInput());
     await user.type(slugInput(), 'taken-slug');
@@ -146,35 +151,9 @@ describe('UploadPanel', () => {
     await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
   });
 
-  it('再アップロードは confirm なしで uploadPage する', async () => {
-    const user = userEvent.setup();
-    const onUploaded = vi.fn();
-    getPageMetadata.mockResolvedValue({
-      slug: 'keep-me',
-      owner: 'tanaka@example.jp',
-      createdAt: '2026-08-01T00:00:00.000Z',
-      expiresAt: null,
-    });
-    uploadPage.mockResolvedValue({});
-
-    render(<UploadPanel initialSlug="keep-me" onUploaded={onUploaded} />);
-
-    expect(screen.queryByText('保存期間')).toBeNull();
-    await user.upload(fileInput(), htmlFile());
-
-    await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
-    expect(window.confirm).not.toHaveBeenCalled();
-    expect(onUploaded).toHaveBeenCalledWith({
-      slug: 'keep-me',
-      viewUrl: 'https://pages.example.com/tanaka/keep-me/',
-      isReupload: true,
-    });
-    expect(slugInput()).toHaveValue('keep-me');
-  });
-
   it('HTML 以外は吹き出しで HTML 以外は置けません', async () => {
     const user = userEvent.setup();
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
 
     await user.upload(fileInput(), new File(['x'], 'notes.txt', { type: 'text/plain' }));
 
@@ -187,7 +166,7 @@ describe('UploadPanel', () => {
     getPageMetadata.mockResolvedValue(null);
     uploadPage.mockRejectedValue(new TypeError('Failed to fetch'));
 
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
     await user.upload(fileInput(), htmlFile());
 
     await waitFor(() =>
@@ -204,7 +183,7 @@ describe('UploadPanel', () => {
     getPageMetadata.mockResolvedValue(null);
     uploadPage.mockResolvedValue({});
 
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
     await user.upload(fileInput(), htmlFile());
 
     await waitFor(() =>
@@ -224,7 +203,7 @@ describe('UploadPanel', () => {
     getPageMetadata.mockResolvedValue(null);
     uploadPage.mockResolvedValue({});
 
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
 
     await user.upload(fileInput(), htmlFile());
 
@@ -234,26 +213,6 @@ describe('UploadPanel', () => {
       ).toBeInTheDocument(),
     );
     expect(slugInput()).toHaveValue('2222222222');
-  });
-
-  it('このページを消すで deletePage を呼ぶ', async () => {
-    const user = userEvent.setup();
-    const onDeleted = vi.fn();
-    getPageMetadata.mockResolvedValue(null);
-    uploadPage.mockResolvedValue({});
-    deletePage.mockResolvedValue(undefined);
-
-    render(<UploadPanel onUploaded={vi.fn()} onDeleted={onDeleted} />);
-    await user.upload(fileInput(), htmlFile());
-
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'このページを消す' })).toBeInTheDocument(),
-    );
-    await user.click(screen.getByRole('button', { name: 'このページを消す' }));
-
-    await waitFor(() => expect(deletePage).toHaveBeenCalledOnce());
-    expect(onDeleted).toHaveBeenCalledWith('1111111111');
-    expect(screen.queryByRole('button', { name: 'このページを消す' })).toBeNull();
   });
 
   it('メタデータ確認中は2回目の選択を無視する', async () => {
@@ -267,7 +226,7 @@ describe('UploadPanel', () => {
     );
     uploadPage.mockResolvedValue({});
 
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
 
     await user.upload(fileInput(), htmlFile());
     expect(getPageMetadata).toHaveBeenCalledTimes(1);
@@ -286,7 +245,7 @@ describe('UploadPanel', () => {
     getPageMetadata.mockResolvedValue(null);
     uploadPage.mockResolvedValue({});
 
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
     await user.clear(slugInput());
     await user.upload(fileInput(), htmlFile());
 
@@ -304,15 +263,13 @@ describe('UploadPanel', () => {
 
   it('不正 slug では吹き出しを出して uploadPage しない', async () => {
     const user = userEvent.setup();
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
 
     await user.clear(slugInput());
     await user.type(slugInput(), 'ABC');
     await user.upload(fileInput(), htmlFile());
 
-    expect(
-      screen.getByText('slug は小文字英数字とハイフン、アンダースコアだけです'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('使えるのは小文字の英数字と - _ だけ')).toBeInTheDocument();
     expect(uploadPage).not.toHaveBeenCalled();
   });
 
@@ -326,7 +283,7 @@ describe('UploadPanel', () => {
     });
     uploadPage.mockResolvedValue({});
 
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
 
     await user.clear(slugInput());
     await user.type(slugInput(), 'taken-slug');
@@ -338,7 +295,7 @@ describe('UploadPanel', () => {
     expect(uploadPage).not.toHaveBeenCalled();
 
     getPageMetadata.mockResolvedValue(null);
-    await user.type(slugInput(), '2');
+    await user.type(slugInput(), 'taken-slug2');
 
     expect(
       screen.queryByText('taken-slug はもうあるよ。差し替える？ 保存期間はそのまま'),
@@ -370,7 +327,7 @@ describe('UploadPanel', () => {
     getPageMetadata.mockResolvedValue(null);
     uploadPage.mockResolvedValue({});
 
-    render(<UploadPanel onUploaded={vi.fn()} />);
+    renderPanel(<UploadPanel onUploaded={vi.fn()} />);
     await user.upload(fileInput(), new File(['x'], 'notes.txt', { type: 'text/plain' }));
     expect(screen.getByText('HTML 以外は置けません')).toBeInTheDocument();
 

@@ -9,12 +9,14 @@ export function Menu({
   align = 'end',
   trigger,
   children,
+  onCloseAutoFocus,
 }: {
   label: string;
   tooltip?: string;
   align?: 'start' | 'center' | 'end';
   trigger: ReactNode;
   children: ReactNode;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [tooltipOpen, setTooltipOpen] = useState(false);
@@ -61,6 +63,7 @@ export function Menu({
           sideOffset={6}
           collisionPadding={8}
           loop
+          onCloseAutoFocus={onCloseAutoFocus}
         >
           {children}
         </DropdownMenu.Content>

@@ -1,5 +1,13 @@
 import { Check, Copy, EllipsisVertical, SquareArrowOutUpRight } from 'lucide-react';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { useAuth } from '~/auth/auth-context';
 import { ConfirmAlertDialog } from '~/components/AlertDialog';
@@ -50,6 +58,7 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
     gen: number;
   } | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const skipCloseAutoFocusRef = useRef(false);
 
   const loadPages = useCallback(async () => {
     if (!auth.idToken || !auth.email) {
@@ -218,6 +227,13 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
     };
   })();
 
+  const handleCloseAutoFocus = useCallback((event: Event) => {
+    if (skipCloseAutoFocusRef.current) {
+      event.preventDefault();
+      skipCloseAutoFocusRef.current = false;
+    }
+  }, []);
+
   return (
     <div>
       {confirmDialog ? (
@@ -325,8 +341,15 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
                     label={`${page.slug}の操作`}
                     tooltip="その他の操作"
                     trigger={<EllipsisVertical size={16} strokeWidth={1.75} aria-hidden />}
+                    onCloseAutoFocus={handleCloseAutoFocus}
                   >
-                    <MenuItem disabled={isBusy} onSelect={() => onReupload(page.slug)}>
+                    <MenuItem
+                      disabled={isBusy}
+                      onSelect={() => {
+                        skipCloseAutoFocusRef.current = true;
+                        onReupload(page.slug);
+                      }}
+                    >
                       再アップロード
                     </MenuItem>
                     {page.retention === 'temporary' ? (

@@ -14,11 +14,17 @@ export function Tooltip({
   children,
   open,
   onOpenChange,
+  side = 'bottom',
+  align = 'center',
+  avoidCollisions = true,
 }: {
   label: string;
   children: ReactElement;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  side?: 'top' | 'right' | 'bottom' | 'left';
+  align?: 'start' | 'center' | 'end';
+  avoidCollisions?: boolean;
 }) {
   return (
     <TooltipPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -26,11 +32,14 @@ export function Tooltip({
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content
           className="ui-tooltip"
-          side="bottom"
+          side={side}
+          align={align}
           sideOffset={6}
           collisionPadding={8}
+          avoidCollisions={avoidCollisions}
         >
           {label}
+          <TooltipPrimitive.Arrow className="ui-tooltip__arrow" width={10} height={5} />
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>
