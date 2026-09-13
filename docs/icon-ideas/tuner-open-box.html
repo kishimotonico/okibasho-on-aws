@@ -1,0 +1,497 @@
+<title>okibasho 箱チューナー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+:root{
+  --ground:#eef0f2;--paper:#ffffff;--line:#d3d6db;--ink:#1a1d21;--muted:#5b6169;
+  --accent:#1f7a4d;--accent-soft:#e3f1e9;--well:#f7f8f9;
+  --font:'Noto Sans JP','Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic UI',sans-serif;
+  --radius:10px;--shadow:0 8px 20px rgba(26,29,33,.08);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#15181b;--paper:#1f2327;--line:#353b42;--ink:#e8eaed;--muted:#9aa1a9;
+  --accent:#4fb87f;--accent-soft:#1d3a2a;--well:#262b30;--shadow:0 8px 20px rgba(0,0,0,.35);
+}}
+:root[data-theme="dark"]{
+  --ground:#15181b;--paper:#1f2327;--line:#353b42;--ink:#e8eaed;--muted:#9aa1a9;
+  --accent:#4fb87f;--accent-soft:#1d3a2a;--well:#262b30;--shadow:0 8px 20px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.6;padding-inline:16px;padding-block:0 4rem}
+h1,h2,h3{margin:0;line-height:1.35;text-wrap:balance}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85em}
+a{color:inherit}
+.wrap{max-width:1180px;margin:0 auto}
+.intro{padding-block:1.75rem 1rem;max-width:44rem}
+.intro h1{font-size:1.5rem}
+.intro p{margin:.5rem 0 0;color:var(--muted)}
+.eyebrow{font-size:.75rem;font-weight:600;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin:0 0 .3rem}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:1.25rem;align-items:start}
+@media (max-width:860px){.layout{grid-template-columns:minmax(0,1fr)}}
+
+/* controls */
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:1rem}
+.panel h2{font-size:.95rem;margin-bottom:.5rem}
+.group{padding-block:.6rem;border-top:1px solid var(--line)}
+.group:first-of-type{border-top:none;padding-top:0}
+.group h3{font-size:.8rem;color:var(--muted);letter-spacing:.04em;margin-bottom:.3rem}
+.ctl{display:grid;grid-template-columns:7.5em minmax(0,1fr) 3.4em;gap:.5rem;align-items:center;font-size:.82rem;padding:.15rem 0}
+.ctl label{white-space:nowrap}
+.ctl input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+.ctl output{font-variant-numeric:tabular-nums;text-align:right;color:var(--muted);font-size:.78rem}
+.ctl input[type=checkbox]{accent-color:var(--accent);justify-self:start}
+.presets{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.6rem}
+.chip{border:1px solid var(--line);background:var(--well);color:var(--ink);border-radius:999px;padding:.2rem .7rem;font:inherit;font-size:.78rem;cursor:pointer}
+.chip:hover{border-color:var(--ink)}
+.chip:focus-visible,.seg button:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* preview */
+.stage-wrap{display:grid;gap:1rem}
+.statebar{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+.statebar-l{font-size:.8rem;font-weight:600;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--ink);border-radius:6px;overflow:hidden;background:var(--paper)}
+.seg button{border:none;background:none;font:inherit;font-size:.82rem;font-weight:500;padding:.3rem .75rem;color:var(--ink);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--ink);color:var(--ground)}
+.previews{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:1rem}
+@media (max-width:640px){.previews{grid-template-columns:minmax(0,1fr)}}
+.dz{background:var(--paper);border:1px solid var(--ink);border-radius:var(--radius);box-shadow:var(--shadow);min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;transition:background .25s,border-color .25s;padding:1.5rem}
+.dz-text{margin:0;font-size:.85rem;font-weight:500;color:var(--muted)}
+.dz[data-state="hover"]{background:var(--well)}
+.dz[data-state="drag"]{background:var(--accent-soft);border-color:var(--accent);border-style:dashed}
+.dz[data-state="success"]{border-color:var(--accent)}
+.dz[data-state="success"] .dz-text{color:var(--accent)}
+.sizes{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:1rem;display:grid;gap:.9rem;align-content:start}
+.size{display:flex;align-items:center;gap:.8rem}
+.size-l{font-size:.7rem;color:var(--muted);width:2.4em;font-variant-numeric:tabular-nums}
+.brand{display:inline-flex;align-items:center;gap:.35rem;font-weight:700;font-size:.85rem;padding:.25rem .55rem;border:1px solid var(--line);border-radius:6px}
+.brand span{white-space:nowrap}
+.ico{display:block;flex:none;color:var(--ink)}
+.ico svg{display:block;overflow:visible;width:100%;height:100%}
+.tab-mock{display:inline-flex;align-items:center;gap:.4rem;background:var(--ground);border:1px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;padding:.25rem .6rem;font-size:.72rem;color:var(--muted)}
+
+/* export */
+.export{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:1rem}
+.export h2{font-size:.95rem;margin-bottom:.4rem}
+.export p{margin:0 0 .5rem;font-size:.8rem;color:var(--muted)}
+textarea{width:100%;min-height:150px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;line-height:1.45;border:1px solid var(--line);border-radius:6px;padding:.5rem;background:var(--well);color:var(--ink);resize:vertical}
+.btnrow{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
+.btn{border:1px solid var(--ink);background:var(--ink);color:var(--ground);border-radius:6px;padding:.35rem .8rem;font:inherit;font-size:.8rem;cursor:pointer}
+.btn--ghost{background:var(--paper);color:var(--ink)}
+.note{font-size:.78rem;color:var(--muted);margin-top:.5rem}
+@media (prefers-reduced-motion:reduce){.dz,.seg button{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <p class="eyebrow">Icon tuner · iso-open-box</p>
+    <h1>okibasho 箱チューナー</h1>
+    <p>等角の開いた箱をスライダーで調整する。フラップの長さと角度、線の太さ、紙、床の円い置き場所（任意）を変えると、5 状態のアニメーションと 96 / 48 / 24 / 16px の見え方が同時に更新される。箱は毎フレーム 3D 座標から描いているので、クリックすると本当に一回転する。決まったら下の SVG とパラメータをコピーして使う。</p>
+  </header>
+
+  <div class="layout">
+    <aside class="panel" id="controls">
+      <h2>パラメータ</h2>
+      <div class="presets" id="presets"></div>
+      <div id="groups"></div>
+    </aside>
+
+    <div class="stage-wrap">
+      <div class="statebar">
+        <span class="statebar-l">状態</span>
+        <div class="seg" role="group" aria-label="状態" id="states">
+          <button type="button" data-state="idle" class="on">idle</button>
+          <button type="button" data-state="hover">hover</button>
+          <button type="button" data-state="drag">drag over</button>
+          <button type="button" data-state="uploading">uploading</button>
+          <button type="button" data-state="success">success</button>
+        </div>
+        <button type="button" class="chip" id="spinBtn">一回転</button><span class="note">ドロップ領域にマウスを乗せると hover、押すと drag、離すと success。アイコンをクリックすると一回転</span>
+      </div>
+      <div class="previews">
+        <div class="dz" id="dz" data-state="idle">
+          <div class="ico" id="hero" style="width:140px;height:140px;cursor:pointer" title="クリックで一回転"></div>
+          <p class="dz-text" id="dzText">ファイルまたはディレクトリをドロップ</p>
+        </div>
+        <div class="sizes">
+          <div class="size"><span class="size-l">96</span><div class="ico sz" style="width:96px;height:96px"></div></div>
+          <div class="size"><span class="size-l">48</span><div class="ico sz" style="width:48px;height:48px"></div></div>
+          <div class="size"><span class="size-l">24</span><div class="ico sz" style="width:24px;height:24px"></div></div>
+          <div class="size"><span class="size-l">16</span><div class="ico sz" style="width:16px;height:16px"></div><span class="tab-mock"><span class="ico sz" style="width:16px;height:16px"></span>okibasho</span></div>
+          <div class="size"><span class="size-l">ロゴ</span><span class="brand"><span class="ico sz" style="width:20px;height:20px"></span><span>okibasho</span></span></div>
+        </div>
+      </div>
+
+      <section class="export">
+        <div class="panel">
+          <h2>SVG（現在の状態のフレーム）</h2>
+          <p>idle で書き出すのが基本。色は CSS 変数（--accent など）で参照しているので、埋め込み先で定義するか置換する。</p>
+          <textarea id="svgOut" readonly spellcheck="false"></textarea>
+          <div class="btnrow"><button type="button" class="btn" id="copySvg">SVG をコピー</button></div>
+        </div>
+        <div class="panel">
+          <h2>パラメータ</h2>
+          <p>この JSON を貼ればいつでも同じ形を再現できる。URL にも同じ内容を持たせているので、リンクを共有すればそのまま開ける。</p>
+          <textarea id="jsonOut" spellcheck="false"></textarea>
+          <div class="btnrow">
+            <button type="button" class="btn" id="copyJson">JSON をコピー</button>
+            <button type="button" class="btn btn--ghost" id="applyJson">JSON を適用</button>
+            <button type="button" class="btn btn--ghost" id="copyUrl">共有 URL をコピー</button>
+          </div>
+          <p class="note" id="msg"></p>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+// ---------------------------------------------------------------- パラメータ定義
+const DEF = [
+  ['箱', [
+    ['h',      '高さ',            0.45, 1.2,  0.01, 0.9,  '底面の辺を 1 としたときの高さ'],
+    ['shade',  '面の陰影',        0,    1,    0.01, 0.45, '側面をどれだけ暗くするか'],
+    ['inner',  '内側の暗さ',      0,    1,    0.01, 0.45, '箱の中（開口部）の暗さ'],
+  ]],
+  ['手前のフラップ', [
+    ['fLen',   '長さ',            0,    0.6,  0.01, 0.45, '辺を 1 としたときの見かけの長さ。閉じるときは 0.5 まで伸びて中央で合う'],
+    ['fAng',   '角度',            150,  270,  1,    210,  '180 = 水平に外へ、270 = 真下に垂れる'],
+  ]],
+  ['奥のフラップ', [
+    ['bLen',   '長さ',            0,    0.6,  0.01, 0.5,  ''],
+    ['bAng',   '角度',            60,   200,  1,    145,  '90 = 垂直に立つ、180 = 水平に外へ'],
+  ]],
+  ['線', [
+    ['wOut',   '外形',            0.5,  4,    0.1,  1.5,  '箱とフラップのシルエット'],
+    ['wIn',    '内側の稜線',      0.3,  3,    0.1,  1.2,  '折り目・手前の縦の稜線・開口部・蓋の合わせ目'],
+    ['round',  '角を丸める',      0,    1,    1,    1,    'stroke-linejoin round'],
+  ]],
+  ['紙', [
+    ['sSize',  '大きさ',          0.2,  0.8,  0.01, 0.7,  ''],
+    ['sFloat', '浮く高さ',        0,    0.8,  0.01, 0.42, '上面からの距離'],
+    ['wSheet', '線の太さ',        0.5,  3,    0.1,  1.8,  ''],
+    ['sLines', '中の線',          0,    1,    1,    1,    '紙の中の 2 本線'],
+  ]],
+  ['円い置き場所（任意）', [
+    ['ring',   '表示',            0,    1,    1,    1,    '床に描いた円の目印'],
+    ['rR',     '半径',            0.7,  1.6,  0.01, 1.0,  '箱の底面の中心から。0.71 で底面の角に接する'],
+    ['wRing',  '線の太さ',        0.3,  3,    0.1,  2.0,  ''],
+    ['rFill',  '成功時に塗る',    0,    1,    1,    1,    ''],
+    ['rDash',  '破線の数',        6,    24,   1,    12,   'アップロード中に円が破線になって回る。その分割数'],
+  ]],
+  ['動き', [
+    ['bobAmp', 'hover の浮遊',    0,    0.3,  0.01, 0.1,  'hover 時に紙が上下する振幅（辺 = 1 基準）'],
+    ['spinMs', '一回転の時間',    400,  2000, 50,   900,  'アイコンをクリックしたときの一回転（ミリ秒）'],
+    ['upMs',   '落下ループ',      600,  2400, 50,   1200, 'アップロード中に紙が落ち続ける 1 周期（ミリ秒）'],
+  ]],
+  ['全体', [
+    ['pad',    '余白',            0,    6,    0.1,  2,    'viewBox の余白（線の太さ分は自動で足す）'],
+  ]],
+];
+const FLAT = DEF.flatMap(([, rows]) => rows);
+const P = Object.fromEntries(FLAT.map((r) => [r[0], r[5]]));
+
+const PRESETS = {
+  '採用候補 (9/12)': { bobAmp: .1, h: .9, shade: .45, inner: .45, fLen: .45, fAng: 210, bLen: .5, bAng: 145, wOut: 1.5, wIn: 1.2, round: 1, sSize: .7, sFloat: .42, wSheet: 1.8, sLines: 1, ring: 1, rR: 1, wRing: 2, rFill: 1, pad: 2 },
+  '円なし':          { ring: 0 },
+  '手前を大きく':    { fLen: .5, fAng: 200, bLen: .5, bAng: 108, wOut: 2.0, wIn: 1.3 },
+  '線を太く':        { wOut: 2.4, wIn: 1.4, wSheet: 1.6 },
+  '水平に開く':      { fLen: .5, fAng: 182, bLen: .5, bAng: 170 },
+  '均一な線':        { wOut: 1.6, wIn: 1.6 },
+};
+
+// ---------------------------------------------------------------- 幾何
+// 等角投影。カメラは (1,1,1) 方向から見下ろす。奥行き = x + y（大きいほど手前）
+const C30 = Math.cos(Math.PI / 6), S30 = 0.5;
+const SC = 16; // 底面の辺の長さ（viewBox 単位）
+const proj = ([x, y, z]) => [(x - y) * C30 * SC, (x + y) * S30 * SC - z * SC];
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const r2 = (n) => Math.round(n * 100) / 100;
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
+const ease = (t) => { t = clamp01(t); return t * t * (3 - 2 * t); };
+const easeInOut = (t) => { t = clamp01(t); return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+const mix = (c1, c2, t) => `color-mix(in srgb, ${c1} ${Math.round((1 - t) * 100)}%, ${c2})`;
+
+// 底面の角（反時計回り）と 4 側面。side i は corner[i] → corner[i+1] の辺に立つ
+const CORNERS = [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]];
+const SIDES = [
+  { a: 0, b: 1, n: [0, -1, 0], key: 'br' }, // 奥右
+  { a: 1, b: 2, n: [1, 0, 0],  key: 'fr' }, // 手前右
+  { a: 2, b: 3, n: [0, 1, 0],  key: 'fl' }, // 手前左
+  { a: 3, b: 0, n: [-1, 0, 0], key: 'bl' }, // 奥左
+];
+// 閉じるとき: bl/fr（x 方向の対）が先に倒れ、br/fl（y 方向の対）がその上に重なって中央に合わせ目ができる
+const PAIR_B = { br: 1, fl: 1 };
+
+const path = (pts, close) => pts.map((p, i) => (i ? 'L' : 'M') + r2(p[0]) + ' ' + r2(p[1])).join('') + (close ? 'Z' : '');
+
+// st: アニメーション状態ベクトル
+function build(p, st) {
+  const h = p.h, closed = st.closed, th = (st.spin || 0) * Math.PI / 180;
+  const cs = Math.cos(th), sn = Math.sin(th);
+  const rot = ([x, y, z]) => [x * cs - y * sn, x * sn + y * cs, z];
+  const P3 = (pt) => proj(rot(pt));
+  const depthOf = (pts3) => pts3.reduce((s, q) => { const r = rot(q); return s + r[0] + r[1]; }, 0) / pts3.length;
+  const join = p.round ? 'round' : 'miter';
+  const innerC = mix('var(--paper)', 'var(--ink)', 0.25 + p.inner * 0.45);
+
+  const items = []; // { d, svg }
+  const pts = [];   // bbox 用（画面座標）
+  const push = (arr) => arr.forEach((q) => pts.push(q));
+  let ring = '';
+
+  // 床の円
+  if (p.ring) {
+    const rx = Math.SQRT2 * C30 * p.rR * SC, ry = Math.SQRT2 * S30 * p.rR * SC;
+    const per = Math.PI * (3 * (rx + ry) - Math.sqrt((3 * rx + ry) * (rx + 3 * ry)));
+    const stroke = st.ringT > 0 ? mix('var(--line)', 'var(--accent)', st.ringT) : 'var(--line)';
+    const fill = p.rFill && st.ringFill > 0.001 ? 'var(--accent-soft)' : 'none';
+    const seg = per / (p.rDash * 2);
+    const dash = st.ringDash > 0.001 ? ` stroke-dasharray="${r2(seg)} ${r2(seg)}" stroke-dashoffset="${r2(-st.dashOff * per)}"` : '';
+    ring = `<ellipse class="ring" cx="0" cy="0" rx="${r2(rx)}" ry="${r2(ry)}" fill="${fill}" fill-opacity="${r2(st.ringFill)}" stroke="${stroke}" stroke-width="${p.wRing}"${dash}/>`;
+    push([[-rx, -ry], [rx, ry]]);
+  }
+
+  // 側面の可視判定: 回転後の法線が (1,1) 側を向いていれば見える
+  const vis = SIDES.map(({ n }) => { const r = rot(n); return r[0] + r[1] > 1e-6; });
+  const top3 = CORNERS.map(([x, y]) => [x, y, h]);
+  const top = top3.map(P3);
+  push(top);
+
+  // 側面（見えるものだけ）。縦の稜線は隣の面も見えていれば内側の線、そうでなければ外形
+  SIDES.forEach((s, i) => {
+    if (!vis[i]) return;
+    const ca = CORNERS[s.a], cb = CORNERS[s.b];
+    const q3 = [[ca[0], ca[1], h], [cb[0], cb[1], h], [cb[0], cb[1], 0], [ca[0], ca[1], 0]];
+    const q = q3.map(P3);
+    push([q[2], q[3]]);
+    const r = rot(s.n);
+    const t = 0.22 + 0.16 * clamp01((r[0] - r[1] + 1) / 2); // 右を向くほど暗い
+    const fill = mix('var(--paper)', 'var(--ink)', p.shade * t);
+    const prev = vis[(i + 3) % 4], next = vis[(i + 1) % 4];
+    const wA = prev ? p.wIn : p.wOut, wB = next ? p.wIn : p.wOut;
+    const svg = `<g class="face face-${s.key}"><path d="${path(q, true)}" fill="${fill}" stroke="none"/>` +
+      `<path d="${path([q[0], q[3]])}" stroke-width="${r2(wA)}"/>` +
+      `<path d="${path([q[3], q[2]])}" stroke-width="${r2(p.wOut)}"/>` +
+      `<path d="${path([q[2], q[1]])}" stroke-width="${r2(wB)}"/></g>`;
+    items.push({ d: depthOf(q3), svg });
+  });
+
+  // 開口部（奥の面の後、手前の面の前）
+  items.push({ d: -0.45, svg: `<path class="inner" d="${path(top, true)}" fill="${innerC}" stroke-width="${r2(p.wIn)}"/>` });
+
+  // 紙（箱の中では手前の面に隠れ、閉じたフラップの下に入る）
+  if (st.sheetOp > 0.01) {
+    const q = p.sSize / 2, z = h + st.sheetZ;
+    // 紙は箱と一緒に回さない（回転は箱だけ）
+    const s3 = [[-q, -q, z], [q, -q, z], [q, q, z], [-q, q, z]];
+    const s = s3.map(proj);
+    const l1 = [proj([-q * .55, -q * .25, z]), proj([q * .35, -q * .25, z])];
+    const l2 = [proj([-q * .55, q * .2, z]), proj([q * .35, q * .2, z])];
+    const lines = p.sLines ? `<path d="${path(l1)}${path(l2)}" stroke-width="${r2(p.wSheet * 0.8)}"/>` : '';
+    items.push({ d: -0.44, svg: `<g class="sheet" opacity="${r2(st.sheetOp)}" stroke="var(--accent)"><path d="${path(s, true)}" fill="var(--accent-soft)" stroke-width="${p.wSheet}"/>${lines}</g>` });
+    if (st.sheetZ >= p.sFloat - 1e-6) push(s);
+  }
+
+  // フラップ。角度 a: 0 = 内側に倒れて閉じる、90 = 垂直、180 = 水平に外、270 = 真下
+  const fAng = lerp(p.fAng + st.dFront, 0, closed), bAng = lerp(p.bAng + st.dBack, 0, closed);
+  const bLen = lerp(p.bLen, 0.5, closed), fLen = lerp(p.fLen, 0.5, closed);
+  const lidFill = st.lidOp > 0 ? mix('var(--paper)', 'var(--accent-soft)', st.lidOp) : 'var(--paper)';
+  SIDES.forEach((s) => {
+    const back = s.key === 'bl' || s.key === 'br';
+    const len = back ? bLen : fLen, ang = (back ? bAng : fAng) * Math.PI / 180;
+    const d = [-s.n[0] * Math.cos(ang), -s.n[1] * Math.cos(ang), Math.sin(ang)];
+    const ca = CORNERS[s.a], cb = CORNERS[s.b];
+    const h1 = [ca[0], ca[1], h], h2 = [cb[0], cb[1], h];
+    const q3 = [h1, h2, add(h2, mul(d, len)), add(h1, mul(d, len))];
+    const q = q3.map(P3);
+    push(q);
+    const wFar = lerp(p.wOut, p.wIn, closed);
+    const svg = `<g class="flap flap-${s.key}"><path d="${path(q, true)}" fill="${closed > 0.5 ? lidFill : 'var(--paper)'}" stroke="none"/>` +
+      `<path d="${path([q[1], q[2]])}" stroke-width="${r2(p.wOut)}"/><path d="${path([q[2], q[3]])}" stroke-width="${r2(wFar)}"/><path d="${path([q[3], q[0]])}" stroke-width="${r2(p.wOut)}"/>` +
+      `<path d="${path([q[0], q[1]])}" stroke-width="${r2(p.wIn)}"/></g>`;
+    items.push({ d: depthOf(q3) + (PAIR_B[s.key] ? 1.0 * closed : 0), svg });
+  });
+
+  // 蓋のアクセント（閉じ切ったあと、上面の輪郭を緑で）
+  if (st.lidOp > 0.01) {
+    items.push({ d: 9, svg: `<path class="lid" d="${path(top, true)}" fill="none" stroke="var(--accent)" stroke-width="${r2(p.wOut)}" opacity="${r2(st.lidOp)}"/>` });
+  }
+
+  items.sort((a, b) => a.d - b.d);
+  return { inner: (ring ? ring + '\n' : '') + items.map((i) => i.svg).join('\n'), pts, join };
+}
+
+// viewBox は idle の形で固定（状態が変わっても位置が動かないように）
+function viewBoxFor(p) {
+  const { pts } = build(p, IDLE(p));
+  const w = Math.max(p.wOut, p.wIn, p.wSheet, p.wRing) / 2 + p.pad;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  pts.forEach(([x, y]) => { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; });
+  minX -= w; maxX += w; minY -= w; maxY += w;
+  const size = Math.max(maxX - minX, maxY - minY);
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  return [r2(cx - size / 2), r2(cy - size / 2), r2(size), r2(size)];
+}
+function svgFor(p, st, vb) {
+  const { inner, join } = build(p, st);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(' ')}" fill="none" stroke="currentColor" stroke-linejoin="${join}" stroke-linecap="round">\n${inner}\n</svg>`;
+}
+
+// ---------------------------------------------------------------- 状態
+const IDLE = (p) => ({ sheetZ: p.sFloat, sheetOp: 1, dFront: 0, dBack: 0, closed: 0, lidOp: 0, ringT: 0, ringFill: 0, ringDash: 0, dashOff: 0, spin: 0 });
+let state = 'idle', stateT0 = performance.now(), spinT0 = -1e9;
+let cur = IDLE(P);
+let vb = viewBoxFor(P);
+
+// 各状態の目標値。t は状態に入ってからの経過ミリ秒
+function target(p, s, t) {
+  const g = IDLE(p);
+  if (s === 'hover') { g.sheetZ = p.sFloat + p.bobAmp * Math.sin(t / 300); g.dBack = -3; }
+  if (s === 'drag') { g.sheetZ = 0.06; g.dFront = 6; g.dBack = -8; g.ringT = 1; }
+  if (s === 'uploading') {
+    // 紙が落ち続け、円は破線になって回る。塗りはしない（success との違い）
+    const ph = (t / p.upMs) % 1;
+    g.sheetZ = lerp(p.sFloat, -0.6 * p.h, ease(ph / 0.7));
+    g.sheetOp = ph < 0.7 ? 1 : 1 - (ph - 0.7) / 0.3;
+    g.dFront = 4 + 2 * Math.sin(t / 180); g.dBack = -6 + 2 * Math.sin(t / 220);
+    g.ringT = 1; g.ringDash = 1; g.dashOff = (t / 1600) % 1;
+  }
+  if (s === 'success') {
+    const u = t / 1000;
+    g.sheetZ = lerp(p.sFloat, -0.6 * p.h, ease(u / 0.45));
+    g.sheetOp = u < 0.4 ? 1 : Math.max(0, 1 - (u - 0.4) / 0.25);
+    g.closed = ease((u - 0.35) / 0.55);
+    g.lidOp = ease((u - 0.85) / 0.35);
+    g.ringT = 1; g.ringFill = ease((u - 0.6) / 0.4);
+  }
+  return g;
+}
+
+// ---------------------------------------------------------------- DOM
+const $ = (s, el) => (el || document).querySelector(s);
+const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
+const hero = $('#hero'), sizes = $$('.sz'), dz = $('#dz'), dzText = $('#dzText');
+const svgOut = $('#svgOut'), jsonOut = $('#jsonOut'), msg = $('#msg');
+const TEXT = { idle: 'ファイルまたはディレクトリをドロップ', hover: 'ファイルまたはディレクトリをドロップ', drag: 'ここに置く', uploading: 'アップロード中 3 / 7', success: 'URL を発行しました' };
+
+// コントロール生成
+const groups = $('#groups');
+DEF.forEach(([title, rows]) => {
+  const g = document.createElement('div'); g.className = 'group';
+  g.innerHTML = `<h3>${title}</h3>`;
+  rows.forEach(([key, label, min, max, step, def, hint]) => {
+    const isBool = min === 0 && max === 1 && step === 1;
+    const row = document.createElement('div'); row.className = 'ctl';
+    const id = 'c-' + key;
+    row.innerHTML = isBool
+      ? `<label for="${id}" title="${hint}">${label}</label><input type="checkbox" id="${id}" data-key="${key}"><output for="${id}"></output>`
+      : `<label for="${id}" title="${hint}">${label}</label><input type="range" id="${id}" data-key="${key}" min="${min}" max="${max}" step="${step}"><output for="${id}"></output>`;
+    g.appendChild(row);
+  });
+  groups.appendChild(g);
+});
+const inputs = $$('#groups input');
+function syncInputs() {
+  inputs.forEach((el) => {
+    const k = el.dataset.key; const out = el.parentElement.querySelector('output');
+    if (el.type === 'checkbox') { el.checked = !!P[k]; out.textContent = P[k] ? 'on' : 'off'; }
+    else { el.value = P[k]; out.textContent = String(P[k]); }
+  });
+}
+inputs.forEach((el) => el.addEventListener('input', () => {
+  const k = el.dataset.key;
+  P[k] = el.type === 'checkbox' ? (el.checked ? 1 : 0) : parseFloat(el.value);
+  el.parentElement.querySelector('output').textContent = el.type === 'checkbox' ? (P[k] ? 'on' : 'off') : String(P[k]);
+  onParamsChanged();
+}));
+
+// プリセット
+const presetsEl = $('#presets');
+Object.entries(PRESETS).forEach(([name, vals]) => {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = name;
+  b.addEventListener('click', () => { Object.assign(P, vals); syncInputs(); onParamsChanged(); flash(`プリセット「${name}」を適用`); });
+  presetsEl.appendChild(b);
+});
+const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'chip'; reset.textContent = '初期値に戻す';
+reset.addEventListener('click', () => { FLAT.forEach((r) => { P[r[0]] = r[5]; }); syncInputs(); onParamsChanged(); });
+presetsEl.appendChild(reset);
+
+// 状態
+$$('#states button').forEach((b) => b.addEventListener('click', () => setState(b.dataset.state)));
+function setState(s) {
+  state = s; stateT0 = performance.now();
+  $$('#states button').forEach((x) => x.classList.toggle('on', x.dataset.state === s));
+  dz.dataset.state = s; dzText.textContent = TEXT[s];
+}
+// ドロップ領域での直接操作。アイコン自体のクリックは一回転
+let pressed = false;
+dz.addEventListener('pointerenter', () => { if (state === 'idle') setState('hover'); });
+dz.addEventListener('pointerleave', () => { if (state === 'hover' || state === 'drag') setState('idle'); pressed = false; });
+dz.addEventListener('pointerdown', (e) => { if (e.target.closest('#hero')) return; pressed = true; setState('drag'); });
+dz.addEventListener('pointerup', (e) => { if (e.target.closest('#hero')) return; if (pressed) setState('success'); pressed = false; });
+hero.addEventListener('click', () => { spinT0 = performance.now(); });
+$('#spinBtn').addEventListener('click', () => { spinT0 = performance.now(); });
+
+// レンダリング
+function render(now) {
+  const t = now - stateT0;
+  const g = target(P, state, t);
+  const k = 1 - Math.pow(0.001, 16 / 260); // 約 .26s で収束
+  for (const key in g) {
+    if (key === 'spin') continue;
+    if (state === 'uploading' || state === 'success' || (key === 'sheetZ' && state === 'hover')) cur[key] = g[key];
+    else cur[key] = lerp(cur[key], g[key], k);
+  }
+  const su = (now - spinT0) / P.spinMs;
+  cur.spin = su < 1 ? 360 * easeInOut(su) : 0;
+  const svg = svgFor(P, cur, vb);
+  hero.innerHTML = svg;
+  sizes.forEach((el) => { el.innerHTML = svg; });
+  requestAnimationFrame(render);
+}
+function onParamsChanged() {
+  vb = viewBoxFor(P);
+  updateExport();
+  try { localStorage.setItem('okibasho-box-tuner', JSON.stringify(P)); } catch (e) {}
+  try { history.replaceState(null, '', '#p=' + encodeURIComponent(JSON.stringify(P))); } catch (e) {}
+}
+function updateExport() {
+  const st = state === 'idle' ? IDLE(P) : Object.assign({}, cur, { spin: 0 });
+  svgOut.value = `<!-- okibasho iso-open-box · ${state} -->\n<!-- 色: --accent --accent-soft --paper --ink --line を埋め込み先で定義する -->\n` + svgFor(P, st, vb);
+  jsonOut.value = JSON.stringify(P, null, 1).replace(/\n\s*/g, ' ');
+}
+setInterval(updateExport, 500);
+
+// エクスポート操作
+function flash(text) { msg.textContent = text; setTimeout(() => { if (msg.textContent === text) msg.textContent = ''; }, 2500); }
+async function copy(text, label) {
+  try { await navigator.clipboard.writeText(text); flash(label + 'をコピーしました'); }
+  catch (e) { flash('コピーできませんでした。テキストを選択して手動でコピーしてください'); }
+}
+$('#copySvg').addEventListener('click', () => copy(svgOut.value, 'SVG '));
+$('#copyJson').addEventListener('click', () => copy(jsonOut.value, 'JSON '));
+$('#copyUrl').addEventListener('click', () => copy(location.href, '共有 URL '));
+$('#applyJson').addEventListener('click', () => {
+  try { const v = JSON.parse(jsonOut.value); Object.assign(P, v); syncInputs(); onParamsChanged(); flash('JSON を適用しました'); }
+  catch (e) { flash('JSON を読めませんでした: ' + e.message); }
+});
+
+// 起動: URL → localStorage → 初期値
+(function boot() {
+  let loaded = null;
+  try { const m = location.hash.match(/#p=(.+)/); if (m) loaded = JSON.parse(decodeURIComponent(m[1])); } catch (e) {}
+  if (!loaded) { try { loaded = JSON.parse(localStorage.getItem('okibasho-box-tuner') || 'null'); } catch (e) {} }
+  if (loaded && typeof loaded === 'object') Object.keys(P).forEach((k) => { if (typeof loaded[k] === 'number') P[k] = loaded[k]; });
+  syncInputs();
+  vb = viewBoxFor(P);
+  cur = IDLE(P);
+  updateExport();
+  requestAnimationFrame(render);
+})();
+})();
+</script>

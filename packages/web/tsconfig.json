@@ -14,5 +14,5 @@
       "@cli/page": ["../cli/src/page/index.ts"]
     }
   },
-  "include": ["src", "test", "vitest.config.ts", "vite.config.ts", "src/vite-env.d.ts"]
+  "include": ["src", "test", "dev", "vitest.config.ts", "vite.config.ts", "src/vite-env.d.ts"]
 }

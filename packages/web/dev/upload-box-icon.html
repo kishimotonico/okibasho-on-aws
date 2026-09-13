@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>okibasho · 箱アイコン ハーネス</title>
+    <link rel="stylesheet" href="/src/styles/app.css" />
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+      }
+      .harness {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 3rem;
+      }
+      .harness h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1.05rem;
+      }
+      .harness__note {
+        margin: 0 0 1.5rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .harness__stage {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 10rem;
+        margin-bottom: 1.5rem;
+        background: var(--well);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+      }
+      .harness fieldset {
+        border: 0;
+        margin: 0 0 1rem;
+        padding: 0;
+      }
+      .harness legend {
+        margin: 0 0 0.4rem;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .harness__row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      .harness button {
+        font: inherit;
+        color: var(--text);
+        background: var(--well);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.3rem 0.7rem;
+        cursor: pointer;
+      }
+      .harness button[aria-pressed='true'] {
+        border-color: var(--text);
+      }
+      .harness label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/dev/upload-box-icon-main.tsx"></script>
+  </body>
+</html>

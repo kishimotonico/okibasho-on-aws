@@ -7,6 +7,7 @@
   --text: #1a1d21;
   --muted: #5b6169;
   --emerald: #1f7a4d;
+  --emerald-soft: color-mix(in srgb, var(--emerald) 14%, var(--well));
   --danger: #b42318;
   --danger-soft: #fbf3f2;
   --font: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Noto Sans JP', sans-serif;
@@ -559,5 +560,77 @@ code {
 
   .page-row__actions {
     justify-content: flex-start;
+  }
+}
+
+.upload-box-icon {
+  --upload-box-icon-size: 96px;
+  display: inline-block;
+  width: var(--upload-box-icon-size);
+  height: var(--upload-box-icon-size);
+  line-height: 0;
+  color: var(--text);
+  user-select: none;
+}
+
+.upload-box-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.upload-box-icon [data-role='outline'],
+.upload-box-icon [data-role='ring'] {
+  transition: stroke 320ms ease;
+}
+
+.upload-box-icon[data-error-fx] [data-role='outline'],
+.upload-box-icon[data-error-fx] [data-role='ring'] {
+  stroke: var(--danger);
+  transition: none;
+}
+
+.upload-box-icon[data-error-fx='shake'] {
+  animation: upload-box-icon-shake 300ms ease-in-out 1;
+}
+
+@keyframes upload-box-icon-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  8.333% {
+    transform: translateX(3px);
+  }
+  16.667% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  33.333% {
+    transform: translateX(0);
+  }
+  41.667% {
+    transform: translateX(3px);
+  }
+  50% {
+    transform: translateX(0);
+  }
+  58.333% {
+    transform: translateX(-3px);
+  }
+  66.667% {
+    transform: translateX(0);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+  83.333% {
+    transform: translateX(0);
+  }
+  91.667% {
+    transform: translateX(-3px);
   }
 }
