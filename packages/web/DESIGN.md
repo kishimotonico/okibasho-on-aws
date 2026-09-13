@@ -1,6 +1,6 @@
 ---
 name: okibasho
-description: 社内チャットに URL を貼る直前の下書き。明るいコンポーザーとリンク展開カード。
+description: 社内チャットに URL を貼る直前の下書き。箱アイコンを中心にしたアップロードと、その下のページ一覧。
 colors:
   ground: '#eef0f2'
   paper: '#ffffff'
@@ -8,6 +8,7 @@ colors:
   ink: '#1a1d21'
   muted: '#5b6169'
   emerald: '#1f7a4d'
+  emerald-soft: '#e0ece6'
   danger: '#b42318'
   danger-soft: '#fbf3f2'
 typography:
@@ -52,11 +53,6 @@ components:
     textColor: '{colors.ground}'
     rounded: '{rounded.control}'
     padding: '0.5rem 1rem'
-  button-primary-hover:
-    backgroundColor: '{colors.ink}'
-    textColor: '{colors.ground}'
-    rounded: '{rounded.control}'
-    padding: '0.5rem 1rem'
   button-ghost:
     backgroundColor: '{colors.ground}'
     textColor: '{colors.ink}'
@@ -71,7 +67,7 @@ components:
     backgroundColor: '{colors.paper}'
     textColor: '{colors.ink}'
     rounded: '{rounded.surface}'
-    padding: '2rem 1rem'
+    padding: '1.5rem 1.25rem'
 ---
 
 # Design System: okibasho
@@ -80,40 +76,41 @@ components:
 
 **Creative North Star: "The Composer Well"（明るいコンポーザー）**
 
-管理画面は、社内チャットに URL を貼る直前の下書きである。蛍光灯のオフィスで開く明るいコンポーザー。地は薄いグレー、本文は白いウェル、成果物はリンクの展開カード。ダッシュボードでもマーケでも5列表でもない。
+管理画面は、社内チャットに URL を貼る直前の下書きである。蛍光灯のオフィスで開く明るいコンポーザー。地は薄いグレー、本文は白いウェル。ダッシュボードでもマーケでも5列表でもない。
 
-操作の主役はドロップゾーン（composer）。ファイルを置いてから保存期間を選び、アップロードする。成功したときだけウェル下に展開カード（unfurl）が生える。下の My Pages は密な行で、同じ URL のコピー・差し替え・保存期間・削除を繰り返す。
+操作の主役はアップロードフォーム（composer）。中央の開いた箱がブランドマークであり、「ここにファイルを置く」アフォーダンスであり、状態のフィードバックでもある。選ぶ → 必要なら公開URLと保存期間を決める → アップロード、の順に視線が流れる。成功するとフォーム内に URL とコピー／開くが残り、下の「アップロード済みページ」の該当行が数秒ハイライトされる。
 
 **Key Characteristics:**
 
 - 明るい単一カラム（最大 45rem）。地 #EEF0F2、紙 #FFFFFF、罫 #D3D6DB、墨 #1A1D21
-- 本文ウェルが画面の重心。墨の 1px 枠と軽い影で「書く場所」を示す
-- エメラルド #1F7A4D はコピー成功だけ。ラベンダー・旧ブルー #0B5FFF は使わない
-- 展開カードはアップロード成功時のみ。一覧は密な行
+- 本文ウェルが画面の重心。罫 1px と composer だけの影で「置く場所」を示す
+- エメラルド #1F7A4D は箱アイコン（紙・成功時の蓋と床の円）と成功フィードバック（アップロード成功・コピー成功）だけ
+- 一覧はカードにしない。下線だけのフラットな行
 - 日本語の敬体。キッカー（eyebrow / 小見出しラベル）禁止
 - フォーカスは墨の 2px リング。テキスト選択は罫色（`var(--line)`）
 
 ## Colors
 
-蛍光灯のオフィス。暖色アクセントはなく、墨と罫で構造を示し、成功の瞬間だけエメラルドが光る。
+蛍光灯のオフィス。暖色アクセントはなく、墨と罫で構造を示し、箱と成功の瞬間だけエメラルドが光る。
 
 ### Primary
 
-- **Copy Emerald** (#1F7A4D): アップロード成功後の「URL をコピー」ボタン、コピー成功フィードバック（`.copy-feedback`）、一覧の「コピーしました」テキスト（`.text-button--copied`）のみ。それ以外の UI 要素に使わない。
+- **Copy Emerald** (#1F7A4D / `--emerald`): 箱アイコンの紙・成功時の蓋と床の円、成功結果の「URLをコピー」、コピー成功フィードバック。リンク・選択・フォーカス・通常の CTA には使わない。
+- **Copy Emerald Soft** (`--emerald-soft`: `color-mix(in srgb, var(--emerald) 14%, var(--well))`): 紙の塗り、閉じた蓋、成功時の床の円の塗り、一覧ハイライトの地。実色はおおよそ #E0ECE6。
 
 ### Neutral
 
-- **Office Ground** (#EEF0F2 / `--bg`): ページ地、composer のドラッグ中背景、ゴーストボタン背景、読み取り専用入力背景
-- **Copy Paper** (#FFFFFF / `--raised`, `--well`): ヘッダー、composer 本文ウェル、入力・セグメント・行カード・展開カードの面
-- **Rule Line** (#D3D6DB / `--line`): 罫線、入力枠、チップ枠、テキスト選択背景（`::selection`）
-- **Office Ink** (#1A1D21 / `--text`): 本文・見出し・リンク・プライマリボタン背景・フォーカスリング・セグメント選択状態
-- **Muted Label** (#5B6169 / `--muted`): 補助ラベル、ログアウト、テキストボタン、プレースホルダー、空状態・警告文
-- **Alert Red** (#B42318 / `--danger`): エラーメッセージ、削除ボタン、期限切れメタ
-- **Expired Wash** (#FBF3F2 / `--danger-soft`): 期限切れ行の背景
+- **Office Ground** (#EEF0F2 / `--bg`): ページ地、ゴーストボタン背景、読み取り専用入力背景、公開URLの固定部分
+- **Copy Paper** (#FFFFFF / `--raised`, `--well`): composer 本文ウェル、入力・セグメント・メニューの面
+- **Rule Line** (#D3D6DB / `--line`): 罫線、入力枠、ドロップ領域の破線、テキスト選択背景（`::selection`）
+- **Office Ink** (#1A1D21 / `--text`): 本文・見出し・リンク・プライマリボタン背景・フォーカスリング
+- **Muted Label** (#5B6169 / `--muted`): 補助ラベル、プレースホルダー、空状態、セクション見出し、URL 副表示
+- **Alert Red** (#B42318 / `--danger`): エラーメッセージ、削除、期限切れメタ、アイコン error のフラッシュ
+- **Expired Wash** (#FBF3F2 / `--danger-soft`): メニューの danger hover 地。期限切れ行の背景には使わない
 
 ### Named Rules
 
-**The Emerald-Only Rule.** エメラルドはコピー成功の瞬間だけ。リンク色・アクセント・選択ハイライト・フォーカスには使わない。選択色は `var(--line)`。
+**The Emerald-Only Rule.** エメラルドは箱アイコン（ブランドマーク）と成功フィードバック（アップロード成功・コピー成功）だけ。リンク色・選択状態・フォーカス・通常の CTA には使わない。選択色は `var(--line)`。
 
 **The No Accent Blue Rule.** ラベンダー、旧ブルー #0B5FFF、およびそれに類する鮮やかな補色アクセントは使わない。インタラクティブ要素は墨と罫で足りる。
 
@@ -128,91 +125,101 @@ components:
 ### Hierarchy
 
 - **Display** (700, 1.25rem, 1.5): ページ見出し（h1）。404 など例外画面のみ
-- **Headline** (600, 0.95rem, 1.5): セクション見出し（h2、例: My Pages）
-- **Title** (600, 0.88rem, 1.5): 行の slug（page-row h3）、展開カード見出し
-- **Body** (400–500, 1rem / 0.875rem, 1.5): 本文、composer 案内、メッセージ。コンテナ最大 45rem（約 65–72ch）
-- **Label** (600, 0.85rem, 1.5): フィールドラベル、details summary
-- **Action** (400–600, 0.8rem, 1.5): 一覧のテキストボタン、メタ行（0.75rem）
+- **Headline** (600, 0.95rem, 1.5): セクション見出し（h2、「アップロード済みページ」）。muted
+- **Title** (600, 0.88rem, 1.5): 行の slug（page-row h3）、成功結果の見出し
+- **Body** (400–500, 1rem / 0.875rem, 1.5): 本文、composer 案内、メッセージ。コンテナ最大 45rem
+- **Label** (600, 0.85rem, 1.5): フィールドラベル（公開URL、保存期間）
+- **Action** (400–600, 0.8rem, 1.5): メタ行（0.75rem）、成功結果の URL
 
 ### Named Rules
 
-**The Keigo Rule.** UI 文言は簡潔な日本語の敬体（「〜です」「〜してください」）。用語は slug・保存期間・30日・無期限・閲覧 URL・My Pages・再アップロードで統一する。
+**The Keigo Rule.** UI 文言は簡潔な日本語の敬体（「〜です」「〜してください」）。用語は slug・保存期間・30日・無期限・公開URL・アップロード済みページ・フォルダ・再アップロードで揃える。
 
 **The No Kicker Rule.** 画面上部やセクション直前に装飾用小見出し（kicker / eyebrow）を置かない。見出しは h1/h2 のみ。
 
 ## Layout
 
-単一カラム、中央寄せ、最大幅 45rem（720px）。ヘッダーは全幅の細い帯（高さ 3rem）、メインは上下 1.75rem / 4rem の余白。
+単一カラム、中央寄せ、最大幅 45rem（720px）。ヘッダー帯はない。ログアウトは右上の小さなユーティリティメニュー。メインは上下 1.75rem / 4rem の余白。狭い画面ではメニューと重ならないよう上余白を足す。
 
-縦の流れ: ヘッダー → composer（本文ウェル）→ details（slug、初期は閉）→ ツールバー（保存期間セグメント + アップロード）→ 展開カード（成功時）→ My Pages セクション（上マージン 2.25rem）。
+縦の流れ: composer（箱 → ドロップ領域 → 公開URL → 保存期間 → アップロード → 成功結果）→ アップロード済みページ。
 
-一覧行は 2 カラム grid（slug + アクション）。40rem 以下では 1 カラムに積み、ツールバーのアップロードボタンは全幅。
+40rem 以下では公開URL入力を縦積み（入力欄は通常の高さ）、保存期間とアップロードは全幅、一覧行は情報と操作を縦に積む。
 
 ## Elevation & Depth
 
-影は composer ウェルだけが持つ（`0 8px 20px rgba(26, 29, 33, 0.08)`）。それ以外は罫線と面色の差で層を示す。展開カードは罫のみ、入場時に短い translateY アニメーション。
+影は2種類だけ。カード・行・入力は平面。ホバーで影を足さない。
 
 ### Shadow Vocabulary
 
-- **Composer lift** (`0 8px 20px rgba(26, 29, 33, 0.08)`): 本文ウェル（`.composer`）のみ。画面の主役を浮かせる
+- **Composer lift** (`0 8px 20px rgba(26, 29, 33, 0.08)` / `--shadow`): 本文ウェル（`.composer`）のみ。画面の主役を浮かせる
+- **Overlay lift** (`0 4px 12px rgba(26, 29, 33, 0.08)` / `--shadow-overlay`): メニューと tooltip などの浮遊レイヤー。composer より弱い
 
 ### Named Rules
 
-**The Flat-By-Default Rule.** カード・行・入力は平面。影は composer ウェルに限定し、ホバーで影を足さない。
+**The Flat-By-Default Rule.** カード・行・入力は平面。影は composer ウェルと浮遊レイヤーに限定する。
 
 ## Shapes
 
-角丸は 10px（composer）と 6px（ボタン・入力・セグメント・行・展開カード）の二段。ファイルチップは pill（999px）。composer は墨 1px の実線枠（罫色ではない）で「書く場所」を強調する。
+角丸は 10px（composer・ドロップ領域）と 6px（ボタン・入力・セグメント・メニュー・ハイライト）の二段。ファイルチップは pill（999px）。composer は罫 1px。ドロップ領域は罫色の破線とごく薄い面で、設定部分と分ける。
 
-入力は全幅、6px 角、罫 1px。セグメントは外枠 1px で内包し、選択肢は墨塗りの反転表示。
+入力は全幅、6px 角、罫 1px。公開URLは固定部分と slug 入力を一体の枠に入れる。セグメントの選択は薄い墨の塗り（強い黒の反転は使わない）。
 
 ## Components
 
-### Header
+### Utility menu
 
-- **Shape:** 全幅、下罫 1px、高さ 3rem
-- **Background:** 紙（`--raised`）
-- **Logo:** 📦 okibasho、太字、リンク色は inherit（ホバーで色変化なし）
-- **Logout:** テキストボタン、muted → ink on hover
+- **Placement:** 画面右上の固定。アップロード UI より目立たせない
+- **Trigger:** `CircleUser` の icon button。hover では開かない
+- **Menu:** いまはログアウトのみ。項目を足せる構造。Esc・外側クリック・矢印キー、閉じたらトリガーへフォーカス復帰
+- **Tooltip:** hover と focus-visible の両方。操作自体は hover 前提にしない
 
 ### Composer（本文ウェル）
 
-- **Shape:** 10px 角、墨 1px 枠、min-height 12.5rem（モバイル 10rem）
-- **Background:** 紙（`--well`）。ドラッグ中は地（`--bg`）
-- **Shadow:** composer lift
-- **Content:** 中央寄せ。案内文（500）、ファイルチップ列、ゴースト選択ボタン2つ
+- **Shape:** 10px 角、罫 1px、composer lift
+- **Brand:** 中央に箱アイコン（概ね 96px）と `okibasho` を一度だけ
+- **Drop:** アイコン・案内・選択ボタンを破線の領域にまとめる。案内は「ファイルまたはフォルダをドロップ」（タッチは「選択」）。drag over はアイコンが主役で、領域の枠が少し濃くなる程度
+- **CTA:** フォーム内の終点。未選択時は disabled だが消えない。成功後は選択を空にして再び disabled
 
-### Toolbar
+### 公開URL
 
-- **Retention segment:** 30日 / 無期限。再アップロード時は非表示
-- **Upload button:** プライマリ（墨）、右端（`margin-left: auto`）。モバイルは全幅
+- **Label:** 公開URL。固定部分（`https://…/<user>/`）と slug 入力を一体表示
+- **Empty:** 空欄なら自動生成。プレースホルダは例（`my-page`）
+- **Reupload:** slug は readOnly。保存期間は出さない
 
-### Slug details
+### 保存期間
 
-- **Summary:** 「URL を指定する（任意）」— 初期は閉じる。再アップロードで開き、slug は readOnly
-- **Hint:** 空欄なら自動生成。再アップロードでは「URL は変わりません」
+- **Label:** 保存期間。30日 / 無期限のセグメント。選択は薄い墨
+
+### Success result
+
+- **When:** アップロード成功。次のファイル選択まで残す。モーダル・トーストは使わない
+- **Content:** 「アップロードしました」、URL、URLをコピー、開く
+- **Copy:** エメラルドのコピーボタンと短い成功フィードバック
+
+### アップロード済みページ
+
+- **Heading:** 「アップロード済みページ」。フォームより弱いセクション
+- **Row:** 下線だけ。主表示は slug、副表示は URL と有効期限
+- **Direct:** 「ページを開く」「URLをコピー」（icon button + tooltip + aria-label）
+- **Overflow:** 再アップロード / 無期限に変更（または 30日に戻す）/ 削除は kebab。削除は danger
+- **Order:** 作成日時（`createdAt`）の新しい順。同時刻は slug 昇順
+- **Highlight:** 新規は先頭に出て数秒。再アップロードは並びを変えずその行だけ。reduced-motion では色だけの静止ハイライト
+
+### Box icon
+
+- **Role:** ブランドマーク、ドロップのアフォーダンス、状態フィードバック（idle / hover / drag / uploading / success / error）
+- **Motion:** チューナーの幾何を rAF 1本で描く。目標に収束し時間駆動がなければループを止める
+- **Error:** idle 形状へ戻る + 短いシェイクと `--danger` のフラッシュ。reduced-motion では色だけ
+- **Click spin:** idle/hover のみ。reduced-motion では無効。ファイル選択は開かない
+- **Favicon:** idle の静的 SVG。CSS 変数は使わずライトパレットの実色を焼き込む
 
 ### Buttons
 
 - **Primary:** 墨背景・地色文字、6px 角、600、hover は brightness(1.08)
 - **Ghost / Secondary:** 地背景・墨文字・罫 1px、hover は紙背景
 - **Copy:** エメラルド背景・#f4f7f5 文字、hover #19653f
-- **Danger:** 赤背景（一覧では text-button--danger）
-- **Text button:** 枠なし、0.8rem、muted → ink。コピー成功時 emerald + 600
-
-### Unfurl（展開カード）
-
-- **When:** アップロード成功（`phase === 'success'`）のみ
-- **Shape:** 8px 角、罫 1px、紙背景
-- **Content:** slug 見出し、URL リンク、コピーフィードバック、エメラルドのコピーボタン
-- **Motion:** unfurl-in 280ms cubic-bezier(0.16, 1, 0.3, 1)
-
-### My Pages 行
-
-- **Shape:** 8px 角、罫 1px、密な padding（0.55rem 0.75rem）
-- **Grid:** slug + メタ | アクション列
-- **Expired:** danger-soft 背景、メタは danger 色
-- **Actions:** コピー / 再アップロード / 保存期間切替 / 削除（テキストボタン）
+- **Danger:** メニュー項目は danger 色
+- **Icon button:** 枠なし、muted → ink。コピー成功時は emerald
 
 ### Inputs
 
@@ -225,20 +232,21 @@ components:
 ### Do:
 
 - **Do** ドロップゾーン（composer）を画面の最大要素として扱う
-- **Do** slug を `<details class="field--details">` の「URL を指定する（任意）」に置き、初期は閉じる
-- **Do** 保存期間（30日/無期限）とアップロードを composer 直下のツールバーに置く
-- **Do** コピー成功だけエメラルド（#1F7A4D）を使う
-- **Do** フォーカスを墨 2px リング（`outline: 2px solid var(--text); outline-offset: 2px`）で示す
-- **Do** テキスト選択を罫色（`background: var(--line)`）にする
-- **Do** 一覧を密な行（page-row）で、テキストボタンで操作する
-- **Do** 日本語敬体で、簡潔な文言にする
+- **Do** 公開URLを固定部分と slug 入力の一体 UI にする
+- **Do** 保存期間ラベルを明示し、アップロードをフォーム内の終点に置く
+- **Do** エメラルドを箱アイコンと成功フィードバックにだけ使う
+- **Do** フォーカスを墨 2px リングで示す
+- **Do** 一覧をフラットな行にし、直接操作は開くとコピー、ほかは kebab にまとめる
+- **Do** 日本語敬体で、フォルダ・公開URL・アップロード済みページの用語に揃える
 
 ### Don't:
 
 - **Don't** キッカー（eyebrow / 装飾ラベル）を使う
 - **Don't** ラベンダー・旧ブルー #0B5FFF・鮮やかな補色アクセントを使う
 - **Don't** エメラルドをリンク色・選択色・一般アクセントに使う
-- **Don't** slug をツールバーに置く
-- **Don't** 展開カードを成功以外（アップロード前・エラー時）に表示する
+- **Don't** slug を `<details>` に折りたたむ
+- **Don't** 成功表示にモーダルやトーストを使う
+- **Don't** 一覧をフォームと同じ強さのカードにする
 - **Don't** ダッシュボード風の多列レイアウト・マーケティング的なヒーローを作る
 - **Don't** MVP 外の概念（チーム、履歴、公開設定など）を UI に予告する
+- **Don't** 不要な gradient / glass / 大量の影 / 強すぎる枠 / 過剰な animation を足す

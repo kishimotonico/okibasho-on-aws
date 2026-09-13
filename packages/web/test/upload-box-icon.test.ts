@@ -1,11 +1,16 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   ANIM_CONVERGE_K,
+  BOX_ICON_BAKED_COLORS,
   BOX_ICON_PARAMS,
   C30,
   S30,
   SC,
+  bakePaint,
+  boxIconAnimNeedsFrames,
   build,
   ease,
   easeInOut,
@@ -16,6 +21,7 @@ import {
   proj,
   rot,
   stepBoxIconAnim,
+  svgForIdleFavicon,
   target,
   viewBoxFor,
   type FaceNode,
@@ -435,5 +441,107 @@ describe('stepBoxIconAnim', () => {
     expect(ok.lidOp).toBe(1);
     expect(ok.sheetOp).toBe(0);
     expect(ok.ringFill).toBe(1);
+  });
+});
+
+describe('boxIconAnimNeedsFrames', () => {
+  const base = {
+    params: P,
+    nowMs: 0,
+    spinStartedAt: -1e9,
+    reducedMotion: false,
+  } as const;
+
+  it('idle で目標にいるときは止めてよい', () => {
+    expect(
+      boxIconAnimNeedsFrames({
+        ...base,
+        cur: idleAnim(P),
+        motion: 'idle',
+        elapsedMs: 1000,
+      }),
+    ).toBe(false);
+  });
+
+  it('hover / uploading は時間駆動なので止めない', () => {
+    expect(
+      boxIconAnimNeedsFrames({
+        ...base,
+        cur: idleAnim(P),
+        motion: 'hover',
+        elapsedMs: 0,
+      }),
+    ).toBe(true);
+    expect(
+      boxIconAnimNeedsFrames({
+        ...base,
+        cur: target(P, 'uploading', 400),
+        motion: 'uploading',
+        elapsedMs: 400,
+      }),
+    ).toBe(true);
+  });
+
+  it('success はシーケンス中だけ回し、完了後は止める', () => {
+    const mid = target(P, 'success', 600);
+    expect(
+      boxIconAnimNeedsFrames({
+        ...base,
+        cur: mid,
+        motion: 'success',
+        elapsedMs: 600,
+      }),
+    ).toBe(true);
+    const done = target(P, 'success', 1200);
+    expect(
+      boxIconAnimNeedsFrames({
+        ...base,
+        cur: done,
+        motion: 'success',
+        elapsedMs: 1200,
+      }),
+    ).toBe(false);
+  });
+
+  it('spin 中は idle でも回す', () => {
+    expect(
+      boxIconAnimNeedsFrames({
+        ...base,
+        cur: idleAnim(P),
+        motion: 'idle',
+        elapsedMs: 0,
+        nowMs: 100,
+        spinStartedAt: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it('reduced-motion の静止ポーズでは止められる', () => {
+    const pose = { ...poseForReducedMotion(P, 'uploading'), spin: 0 };
+    expect(
+      boxIconAnimNeedsFrames({
+        ...base,
+        cur: pose,
+        motion: 'uploading',
+        elapsedMs: 800,
+        reducedMotion: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('svgForIdleFavicon', () => {
+  it('CSS 変数と color-mix を実色に焼き込む', () => {
+    expect(bakePaint('var(--emerald)')).toBe('#1f7a4d');
+    expect(bakePaint('color-mix(in srgb, var(--emerald) 14%, var(--well))')).toBe(
+      BOX_ICON_BAKED_COLORS.emeraldSoft,
+    );
+    const svg = svgForIdleFavicon();
+    expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
+    expect(svg).not.toMatch(/var\(--/);
+    expect(svg).not.toContain('color-mix');
+    expect(svg).toContain(BOX_ICON_BAKED_COLORS.text);
+    expect(svg).toContain(BOX_ICON_BAKED_COLORS.emerald);
+    expect(readFileSync(new URL('../public/favicon.svg', import.meta.url), 'utf8')).toBe(svg);
   });
 });

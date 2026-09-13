@@ -10,6 +10,7 @@ import {
 import {
   BOX_ICON_PARAMS,
   build,
+  boxIconAnimNeedsFrames,
   effectiveMotion,
   idleAnim,
   stepBoxIconAnim,
@@ -194,6 +195,7 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
     const reducedMotionRef = useRef(reducedMotion);
     const hoverRef = useRef(false);
     const spinFnRef = useRef<(() => void) | null>(null);
+    const kickRef = useRef<() => void>(() => {});
 
     phaseRef.current = phase;
     draggingRef.current = dragging;
@@ -237,11 +239,8 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
         }
         spinT0 = performance.now();
       };
-      spinFnRef.current = triggerSpin;
-
-      applyScene(svg, build(BOX_ICON_PARAMS, cur), pool);
-
       const frame = (now: number) => {
+        raf = 0;
         const nextMotion = effectiveMotion(phaseRef.current, draggingRef.current, hovering());
         if (nextMotion !== motion) {
           motion = nextMotion;
@@ -254,7 +253,7 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
             }, ERROR_FX_MS);
           }
         }
-        cur = stepBoxIconAnim({
+        const input = {
           cur,
           params: BOX_ICON_PARAMS,
           motion,
@@ -262,20 +261,55 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
           nowMs: now,
           spinStartedAt: spinT0,
           reducedMotion: reduced(),
-        });
+        };
+        cur = stepBoxIconAnim(input);
         applyScene(svg, build(BOX_ICON_PARAMS, cur), pool);
+        if (boxIconAnimNeedsFrames({ ...input, cur })) {
+          raf = requestAnimationFrame(frame);
+        }
+      };
+
+      const ensureRunning = () => {
+        if (raf) {
+          return;
+        }
         raf = requestAnimationFrame(frame);
       };
-      raf = requestAnimationFrame(frame);
+      spinFnRef.current = () => {
+        triggerSpin();
+        ensureRunning();
+      };
+      kickRef.current = ensureRunning;
+
+      applyScene(svg, build(BOX_ICON_PARAMS, cur), pool);
+      ensureRunning();
+
+      const onMotionPref = () => {
+        ensureRunning();
+      };
+      const onVisibility = () => {
+        if (document.visibilityState === 'visible') {
+          ensureRunning();
+        }
+      };
+      mq.addEventListener('change', onMotionPref);
+      document.addEventListener('visibilitychange', onVisibility);
 
       return () => {
         cancelAnimationFrame(raf);
         window.clearTimeout(errorTimer);
+        mq.removeEventListener('change', onMotionPref);
+        document.removeEventListener('visibilitychange', onVisibility);
         spinFnRef.current = null;
+        kickRef.current = () => {};
         svg.replaceChildren();
         root.removeAttribute('data-error-fx');
       };
     }, []);
+
+    useEffect(() => {
+      kickRef.current();
+    }, [phase, dragging, forceHover, reducedMotion]);
 
     const onClick = (event: MouseEvent<HTMLDivElement>) => {
       event.preventDefault();
@@ -291,9 +325,11 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
         style={{ '--upload-box-icon-size': `${size}px` } as CSSProperties}
         onPointerEnter={() => {
           hoverRef.current = true;
+          kickRef.current();
         }}
         onPointerLeave={() => {
           hoverRef.current = false;
+          kickRef.current();
         }}
         onClick={onClick}
       >

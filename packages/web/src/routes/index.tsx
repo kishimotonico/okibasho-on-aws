@@ -4,7 +4,11 @@ import { useCallback, useRef } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
 import { MyPagesList, type MyPagesListHandle } from '~/components/MyPagesList';
-import { UploadPanel, type UploadPanelHandle } from '~/components/UploadPanel';
+import {
+  UploadPanel,
+  type UploadPanelHandle,
+  type UploadedPageInfo,
+} from '~/components/UploadPanel';
 
 export const Route = createFileRoute('/')({
   validateSearch: (search: Record<string, unknown>): { slug?: string } => ({
@@ -25,7 +29,8 @@ function HomePage() {
     uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  const handleUploaded = useCallback(() => {
+  const handleUploaded = useCallback((info: UploadedPageInfo) => {
+    myPagesListRef.current?.highlight(info.slug);
     void myPagesListRef.current?.reload();
   }, []);
 
@@ -47,8 +52,8 @@ function HomePage() {
         <UploadPanel ref={uploadPanelRef} initialSlug={slug} onUploaded={handleUploaded} />
       </div>
 
-      <section className="pages-section" aria-labelledby="my-pages-heading">
-        <h2 id="my-pages-heading">My Pages</h2>
+      <section className="pages-section" aria-labelledby="uploaded-pages-heading">
+        <h2 id="uploaded-pages-heading">アップロード済みページ</h2>
         <MyPagesList ref={myPagesListRef} onReupload={handleReupload} />
       </section>
     </div>

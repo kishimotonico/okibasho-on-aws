@@ -1,8 +1,12 @@
+import { Check, Copy, EllipsisVertical, SquareArrowOutUpRight } from 'lucide-react';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
+import { Menu, MenuItem } from '~/components/Menu';
+import { Tooltip } from '~/components/Tooltip';
 import { getWebConfig } from '~/config/env';
 import { getExpirationStatus } from '~/lib/expiration-status';
+import { PAGE_HIGHLIGHT_MS, sortPagesByCreatedAt } from '~/lib/page-list-highlight';
 import {
   deletePage,
   listPages,
@@ -15,11 +19,14 @@ import { createPagesS3Client } from '~/lib/s3-client';
 
 export interface MyPagesListHandle {
   reload: () => Promise<void>;
+  highlight: (slug: string) => void;
 }
 
 interface MyPagesListProps {
   onReupload: (slug: string) => void;
 }
+
+const COPY_FEEDBACK_MS = 2000;
 
 export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(function MyPagesList(
   { onReupload },
@@ -33,6 +40,10 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
   const [actionError, setActionError] = useState<string | null>(null);
   const [copySlug, setCopySlug] = useState<string | null>(null);
   const [busySlug, setBusySlug] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<{
+    slug: string;
+    gen: number;
+  } | null>(null);
 
   const loadPages = useCallback(async () => {
     if (!auth.idToken || !auth.email) {
@@ -45,7 +56,7 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
     try {
       const client = createPagesS3Client(config, auth.idToken);
       const result = await listPages(client, config.pagesBucket, auth.email, config.pagesBaseUrl);
-      setPages(result);
+      setPages(sortPagesByCreatedAt(result));
     } catch (error) {
       const message = error instanceof Error ? error.message : '一覧の取得に失敗しました';
       setLoadError(message);
@@ -54,7 +65,19 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
     }
   }, [auth.email, auth.idToken, config]);
 
-  useImperativeHandle(ref, () => ({ reload: loadPages }), [loadPages]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      reload: loadPages,
+      highlight: (slug) => {
+        setHighlight((current) => ({
+          slug,
+          gen: (current?.gen ?? 0) + 1,
+        }));
+      },
+    }),
+    [loadPages],
+  );
 
   useEffect(() => {
     if (auth.isAuthenticated && auth.idToken) {
@@ -62,10 +85,37 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
     }
   }, [auth.isAuthenticated, auth.idToken, loadPages]);
 
+  const highlightVisible = highlight != null && pages.some((page) => page.slug === highlight.slug);
+
+  useEffect(() => {
+    if (!highlight || !highlightVisible) {
+      return;
+    }
+
+    const id = window.setTimeout(() => {
+      setHighlight(null);
+    }, PAGE_HIGHLIGHT_MS);
+
+    return () => window.clearTimeout(id);
+  }, [highlight, highlightVisible]);
+
+  useEffect(() => {
+    if (!copySlug) {
+      return;
+    }
+
+    const id = window.setTimeout(() => {
+      setCopySlug(null);
+    }, COPY_FEEDBACK_MS);
+
+    return () => window.clearTimeout(id);
+  }, [copySlug]);
+
   const handleCopyUrl = async (page: ListedPage) => {
     try {
       await navigator.clipboard.writeText(page.viewUrl);
       setCopySlug(page.slug);
+      setActionError(null);
     } catch {
       setCopySlug(null);
       setActionError('URL のコピーに失敗しました');
@@ -160,7 +210,7 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
 
       {actionError ? <pre className="message message--error">{actionError}</pre> : null}
 
-      {isLoading ? <p className="loading-note">一覧を読み込み中...</p> : null}
+      {isLoading && pages.length === 0 ? <p className="loading-note">一覧を読み込み中...</p> : null}
 
       {!isLoading && !loadError && pages.length === 0 ? (
         <p className="empty-note">
@@ -168,22 +218,31 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
         </p>
       ) : null}
 
-      {!isLoading && pages.length > 0 ? (
+      {pages.length > 0 ? (
         <ul className="page-stack">
           {pages.map((page) => {
             const expiration = getExpirationStatus(page.expiresAt);
             const isBusy = busySlug === page.slug;
             const copied = copySlug === page.slug;
+            const highlighted = highlight?.slug === page.slug;
+            const copyLabel = copied ? 'コピーしました' : 'URLをコピー';
+            const rowClass = [
+              'page-row',
+              expiration.kind === 'expired' ? 'page-row--expired' : '',
+              highlighted ? 'page-row--highlight' : '',
+            ]
+              .filter(Boolean)
+              .join(' ');
 
             return (
               <li
                 key={page.slug}
-                className={
-                  expiration.kind === 'expired' ? 'page-row page-row--expired' : 'page-row'
-                }
+                className={rowClass}
+                data-highlighted={highlighted ? 'true' : undefined}
               >
-                <div>
+                <div className="page-row__info">
                   <h3>{page.slug}</h3>
+                  <p className="page-row__url">{page.viewUrl}</p>
                   <p
                     className={
                       expiration.kind === 'expired'
@@ -195,49 +254,59 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
                   </p>
                 </div>
                 <div className="page-row__actions">
-                  <button
-                    type="button"
-                    className={copied ? 'text-button text-button--copied' : 'text-button'}
-                    disabled={isBusy}
-                    onClick={() => void handleCopyUrl(page)}
-                  >
-                    {copied ? 'コピーしました' : 'コピー'}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-button"
-                    disabled={isBusy}
-                    onClick={() => onReupload(page.slug)}
-                  >
-                    再アップロード
-                  </button>
-                  {page.retention === 'temporary' ? (
+                  <Tooltip label="ページを開く">
+                    <a
+                      className="icon-button"
+                      href={page.viewUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="ページを開く"
+                    >
+                      <SquareArrowOutUpRight size={16} strokeWidth={1.75} aria-hidden />
+                    </a>
+                  </Tooltip>
+                  <Tooltip label={copyLabel}>
                     <button
                       type="button"
-                      className="text-button"
+                      className={copied ? 'icon-button icon-button--copied' : 'icon-button'}
+                      aria-label={copyLabel}
                       disabled={isBusy}
-                      onClick={() => void handleRetentionChange(page, 'permanent')}
+                      onClick={() => void handleCopyUrl(page)}
                     >
-                      無期限にする
+                      {copied ? (
+                        <Check size={16} strokeWidth={1.75} aria-hidden />
+                      ) : (
+                        <Copy size={16} strokeWidth={1.75} aria-hidden />
+                      )}
                     </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="text-button"
-                      disabled={isBusy}
-                      onClick={() => void handleRetentionChange(page, 'temporary')}
-                    >
-                      30日に戻す
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="text-button text-button--danger"
-                    disabled={isBusy}
-                    onClick={() => void handleDelete(page)}
+                  </Tooltip>
+                  <Menu
+                    label={`${page.slug}の操作`}
+                    tooltip="その他の操作"
+                    trigger={<EllipsisVertical size={16} strokeWidth={1.75} aria-hidden />}
                   >
-                    削除
-                  </button>
+                    <MenuItem disabled={isBusy} onSelect={() => onReupload(page.slug)}>
+                      再アップロード
+                    </MenuItem>
+                    {page.retention === 'temporary' ? (
+                      <MenuItem
+                        disabled={isBusy}
+                        onSelect={() => void handleRetentionChange(page, 'permanent')}
+                      >
+                        無期限に変更
+                      </MenuItem>
+                    ) : (
+                      <MenuItem
+                        disabled={isBusy}
+                        onSelect={() => void handleRetentionChange(page, 'temporary')}
+                      >
+                        30日に戻す
+                      </MenuItem>
+                    )}
+                    <MenuItem danger disabled={isBusy} onSelect={() => void handleDelete(page)}>
+                      削除
+                    </MenuItem>
+                  </Menu>
                 </div>
               </li>
             );

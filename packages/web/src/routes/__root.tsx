@@ -3,8 +3,9 @@ import { createRootRoute, HeadContent, Scripts } from '@tanstack/react-router';
 
 import { AuthGate } from '~/auth/AuthGate';
 import { AuthProvider } from '~/auth/auth-context';
-import { AppHeader } from '~/components/AppHeader';
 import { NotFoundPage } from '~/components/NotFoundPage';
+import { TooltipProvider } from '~/components/Tooltip';
+import { UtilityMenu } from '~/components/UtilityMenu';
 import appCss from '~/styles/app.css?url';
 
 export const Route = createRootRoute({
@@ -14,7 +15,10 @@ export const Route = createRootRoute({
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { title: 'okibasho' },
     ],
-    links: [{ rel: 'stylesheet', href: appCss }],
+    links: [
+      { rel: 'stylesheet', href: appCss },
+      { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+    ],
   }),
   notFoundComponent: NotFoundPage,
   shellComponent: RootDocument,
@@ -28,10 +32,12 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         <AuthProvider>
-          <AuthGate>
-            <AppHeader />
-            <main className="main">{children}</main>
-          </AuthGate>
+          <TooltipProvider>
+            <AuthGate>
+              <UtilityMenu />
+              <main className="main">{children}</main>
+            </AuthGate>
+          </TooltipProvider>
         </AuthProvider>
         <Scripts />
       </body>

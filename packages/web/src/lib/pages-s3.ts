@@ -14,7 +14,6 @@ import {
   ownerPrefix,
   pageObjectKey,
   pagePrefix,
-  pageViewPath,
   type PageMetadata,
 } from '@cli/page';
 
@@ -149,7 +148,6 @@ export async function listPages(
     continuationToken = listResult.IsTruncated ? listResult.NextContinuationToken : undefined;
   } while (continuationToken);
 
-  const base = pagesBaseUrl.replace(/\/$/, '');
   const pages = await Promise.all(
     slugs.map(async (slug) => {
       const metadata = await getPageMetadata(client, bucket, email, slug);
@@ -162,7 +160,7 @@ export async function listPages(
         createdAt: metadata.createdAt,
         expiresAt: metadata.expiresAt,
         retention: retentionFromExpiresAt(metadata.expiresAt),
-        viewUrl: `${base}${pageViewPath(emailLocalPart(email), slug)}`,
+        viewUrl: buildViewUrl(pagesBaseUrl, email, slug),
       };
     }),
   );
@@ -374,9 +372,14 @@ export async function deletePage(
   );
 }
 
-export function buildViewUrl(pagesBaseUrl: string, email: string, slug: string): string {
+/** 公開URLの固定部分。末尾は `/`（slug 入力の直前） */
+export function buildViewUrlPrefix(pagesBaseUrl: string, email: string): string {
   const base = pagesBaseUrl.replace(/\/$/, '');
-  return `${base}${pageViewPath(emailLocalPart(email), slug)}`;
+  return `${base}/${emailLocalPart(email)}/`;
+}
+
+export function buildViewUrl(pagesBaseUrl: string, email: string, slug: string): string {
+  return `${buildViewUrlPrefix(pagesBaseUrl, email)}${slug}/`;
 }
 
 function isNoSuchKeyError(error: unknown): boolean {

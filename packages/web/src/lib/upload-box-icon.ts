@@ -400,6 +400,40 @@ export function stepBoxIconAnim(input: StepBoxIconAnimInput): BoxIconAnim {
   return next;
 }
 
+export function boxIconAnimNearlyEqual(a: BoxIconAnim, b: BoxIconAnim, eps = 1e-4): boolean {
+  if (Math.abs(a.spin - b.spin) > 0.25) {
+    return false;
+  }
+  for (const key of INTERP_KEYS) {
+    if (Math.abs(a[key] - b[key]) > eps) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * rAF を続けるか。hover / uploading の時間駆動、success シーケンス、spin、
+ * 指数補間の途中だけ true。収束したら false。
+ */
+export function boxIconAnimNeedsFrames(input: StepBoxIconAnimInput): boolean {
+  const { motion, reducedMotion, nowMs, spinStartedAt, params, elapsedMs, cur } = input;
+  if (!reducedMotion) {
+    if (motion === 'hover' || motion === 'uploading') {
+      return true;
+    }
+    if (motion === 'success' && elapsedMs < 1200) {
+      return true;
+    }
+    const spinElapsed = nowMs - spinStartedAt;
+    if (spinElapsed >= 0 && spinElapsed < params.spinMs) {
+      return true;
+    }
+  }
+  const next = stepBoxIconAnim(input);
+  return !boxIconAnimNearlyEqual(cur, next);
+}
+
 function add(a: Vec3, b: Vec3): Vec3 {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 }
@@ -640,4 +674,131 @@ export function viewBoxFor(p: BoxIconParams): readonly [number, number, number, 
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
   return [round2(cx - size / 2), round2(cy - size / 2), round2(size), round2(size)];
+}
+
+export const BOX_ICON_BAKED_COLORS = {
+  text: '#1a1d21',
+  emerald: '#1f7a4d',
+  well: '#ffffff',
+  line: '#d3d6db',
+  emeraldSoft: '#e0ece6',
+} as const;
+
+const BAKE_VARS: ReadonlyArray<readonly [string, string]> = [
+  ['var(--emerald-soft)', BOX_ICON_BAKED_COLORS.emeraldSoft],
+  ['var(--emerald)', BOX_ICON_BAKED_COLORS.emerald],
+  ['var(--text)', BOX_ICON_BAKED_COLORS.text],
+  ['var(--well)', BOX_ICON_BAKED_COLORS.well],
+  ['var(--line)', BOX_ICON_BAKED_COLORS.line],
+];
+
+function parseHex(hex: string): readonly [number, number, number] {
+  return [
+    Number.parseInt(hex.slice(1, 3), 16),
+    Number.parseInt(hex.slice(3, 5), 16),
+    Number.parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
+function mixHex(a: string, b: string, tTowardB: number): string {
+  const pa = parseHex(a);
+  const pb = parseHex(b);
+  const ch = (i: number) =>
+    Math.round(pa[i]! * (1 - tTowardB) + pb[i]! * tTowardB)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${ch(0)}${ch(1)}${ch(2)}`;
+}
+
+export function bakePaint(value: string): string {
+  if (value === 'none') {
+    return value;
+  }
+  let out = value;
+  for (const [token, hex] of BAKE_VARS) {
+    out = out.replaceAll(token, hex);
+  }
+  const mix = /^color-mix\(in srgb, (#(?:[0-9a-fA-F]{6})) (\d+)%, (#(?:[0-9a-fA-F]{6}))\)$/.exec(
+    out,
+  );
+  if (mix) {
+    return mixHex(mix[1]!, mix[3]!, 1 - Number(mix[2]) / 100);
+  }
+  return out;
+}
+
+/** 16px favicon 向け。線を少し太くし、紙の中の2本線は省く。 */
+export function faviconBoxParams(): BoxIconParams {
+  return {
+    ...BOX_ICON_PARAMS,
+    wOut: 2,
+    wIn: 1.6,
+    wSheet: 2.2,
+    wRing: 2.6,
+    sLines: 0,
+  };
+}
+
+export function sceneToStaticSvg(
+  scene: BoxIconScene,
+  viewBox: readonly [number, number, number, number],
+): string {
+  const parts: string[] = [];
+  const path = (d: string, attrs: string) => {
+    parts.push(`<path d="${d}"${attrs}/>`);
+  };
+
+  if (scene.ring) {
+    const ring = scene.ring;
+    const fill = bakePaint(ring.fill);
+    const fillOpacity = fill === 'none' ? '' : ` fill-opacity="${ring.fillOpacity}"`;
+    parts.push(
+      `<ellipse cx="${ring.cx}" cy="${ring.cy}" rx="${ring.rx}" ry="${ring.ry}" fill="${fill}"${fillOpacity} stroke="${bakePaint(ring.stroke)}" stroke-width="${ring.strokeWidth}"/>`,
+    );
+  }
+
+  for (const item of scene.items) {
+    if (item.type === 'face') {
+      path(item.fillPath, ` fill="${bakePaint(item.fill)}" stroke="none"`);
+      for (const edge of item.edges) {
+        path(edge.d, ` fill="none" stroke-width="${edge.strokeWidth}"`);
+      }
+      continue;
+    }
+    if (item.type === 'inner') {
+      path(item.d, ` fill="${bakePaint(item.fill)}" stroke-width="${item.strokeWidth}"`);
+      continue;
+    }
+    if (item.type === 'sheet') {
+      path(
+        item.fillPath,
+        ` fill="${bakePaint(item.fill)}" stroke="${bakePaint(item.stroke)}" stroke-width="${item.strokeWidth}" opacity="${item.opacity}"`,
+      );
+      if (item.linesPath) {
+        path(
+          item.linesPath,
+          ` fill="none" stroke="${bakePaint(item.stroke)}" stroke-width="${item.linesStrokeWidth}" opacity="${item.opacity}"`,
+        );
+      }
+      continue;
+    }
+    if (item.type === 'flap') {
+      path(item.fillPath, ` fill="${bakePaint(item.fill)}" stroke="none"`);
+      for (const edge of item.edges) {
+        path(edge.d, ` fill="none" stroke-width="${edge.strokeWidth}"`);
+      }
+      continue;
+    }
+    path(
+      item.d,
+      ` fill="none" stroke="${bakePaint(item.stroke)}" stroke-width="${item.strokeWidth}" opacity="${item.opacity}"`,
+    );
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox.join(' ')}" fill="none" stroke="${BOX_ICON_BAKED_COLORS.text}" stroke-linecap="round" stroke-linejoin="${scene.join}">${parts.join('')}</svg>\n`;
+}
+
+export function svgForIdleFavicon(): string {
+  const params = faviconBoxParams();
+  return sceneToStaticSvg(build(params, idleAnim(params)), viewBoxFor(params));
 }

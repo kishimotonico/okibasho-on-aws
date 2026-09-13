@@ -10,7 +10,7 @@ web
 
 社員約 30 名の会社の全社員。職種を問わず、開発者も非開発職も同じくらいの頻度で管理 UI（web）を使う想定（ユーザー確認済み）。
 
-- 非開発職（企画・営業・デザイナーなど）: ブラウザで HTML やディレクトリをドラッグ＆ドロップして共有する。CLI は使わない
+- 非開発職（企画・営業・デザイナーなど）: ブラウザで HTML やフォルダをドラッグ＆ドロップして共有する。CLI は使わない
 - 開発者: Claude Code / Codex などの AI エージェントや自分の手で CLI（`okiba`）からアップロードし、管理 UI では一覧確認・URL コピー・保存期間変更・削除を行う
 - AI エージェント: CLI 経由でアップロードする。管理 UI は使わない
 - 閲覧者: 同じ会社の社員。共有 URL を開き、未ログインなら Google ログインを挟んで HTML を見る
@@ -33,9 +33,9 @@ AI エージェントや開発者が生成した HTML（分析レポート、説
 ## Operating Context
 
 - 規模: 全ユーザー合計で 10〜100 request/hour 程度。高負荷・高可用性・低レイテンシは求めない
-- 2 つのホスト: `app.<service-domain>`（trusted。ログイン・アップロード・My Pages・Signed Cookie 発行）と `pages.<service-domain>`（untrusted。アップロードされた HTML を配信）。実際のドメイン名は未確定
+- 2 つのホスト: `app.<service-domain>`（trusted。ログイン・アップロード・アップロード済みページ・Signed Cookie 発行）と `pages.<service-domain>`（untrusted。アップロードされた HTML を配信）。実際のドメイン名は未確定
 - 共有 URL は `https://pages.<service-domain>/<user>/<slug>/`。`<user>` はメールアドレスのローカル部（`@` より前）
-- 典型フロー（Web）: 管理アプリを開く（未ログインなら即 Managed Login にリダイレクト） → Google ログイン → `/` の上部で HTML またはディレクトリを drop → 保存期間（30 日 / 無期限）を選んで Upload（slug は省略可。省略時は自動生成） → 下部の自分のページ一覧に表示された URL を共有
+- 典型フロー（Web）: 管理アプリを開く（未ログインなら即 Managed Login にリダイレクト） → Google ログイン → `/` の箱に HTML またはフォルダを置く → 必要なら公開URL（slug）と保存期間（30 日 / 無期限）を決めてアップロード（slug は省略可。省略時は自動生成） → 発行された URL をコピーして共有
 - 典型フロー（CLI）: `okiba login` → `okiba ./report/ --name q3-report [--permanent]` → URL が表示される。`list` / `rm` もある
 - 認証は Cognito Managed Login（ログイン画面は自作しない）。web は Authorization Code + PKCE（`oidc-client-ts`）
 - 現状: CloudFront のデフォルトドメインで初回デプロイ済み。独自ドメインと閲覧認証はまだ入っていない
@@ -46,8 +46,8 @@ MVP の機能（管理 UI）:
 
 - 全ページログイン必須。未ログインで開くと即 Cognito Managed Login にリダイレクトする（SPA のルート直下の認証ゲート）。ログイン画面やログインボタンは持たない
 - ルートは `/` と `/callback`（ログインコールバック処理。未ログインでも到達できる唯一の例外）と 404 のみ
-- `/`: 上にアップロード（単一 HTML / ディレクトリ / ドラッグ＆ドロップ。保存期間の選択（30 日がデフォルト、無期限に変更可）。slug の指定は任意で、省略すると乱数の slug を自動生成する）、下に自分のページ一覧（閲覧 URL のコピー、保存期間の変更（30 日 ⇄ 無期限）、削除）
-- 同じ slug への再アップロード（内容の差し替え。保存期間は変わらない。参照できるのは常に最新版）。一覧の「再アップロード」はフォームに slug をセットし、「URL を指定する（任意）」を開いた状態でスクロールする
+- `/`: 上にアップロード（単一 HTML / フォルダ / ドラッグ＆ドロップ。保存期間の選択（30 日がデフォルト、無期限に変更可）。公開URL の slug 指定は任意で、省略すると乱数の slug を自動生成する）、下にアップロード済みページ（ページを開く、公開URL のコピー、保存期間の変更（30 日 ⇄ 無期限）、削除）
+- 同じ slug への再アップロード（内容の差し替え。保存期間は変わらない。参照できるのは常に最新版）。一覧の「再アップロード」はフォームに slug をセットしてスクロールする。公開URL は読み取り専用になり、保存期間は出さない
 
 MVP でやらないこと（UI に匂わせない）: 管理者ロール・RBAC、他人のページ編集・owner 変更、組織・チーム、コメント、履歴・過去バージョン参照・切り戻し、社外公開、analytics・全文検索・アクセスログ、パスワード共有・共有相手の限定、MCP server、CI/CD 連携、slug のリネーム。
 
@@ -58,16 +58,16 @@ MVP でやらないこと（UI に匂わせない）: 管理者ロール・RBAC�
 - ページ直下に `index.html` が必須。dotfile などの無効なパスはスキップされる。単一ファイル選択では HTML のみ
 - 保存期間: temporary（作成から 30 日固定。変更時刻ではなく `createdAt` 起点）と permanent（無期限）。無期限から 30 日へ戻すと、作成から 30 日以上経過している場合は即座に期限切れになる
 - ページごとの `.metadata.json`: `{ slug, owner, createdAt, expiresAt }`。`expiresAt` が null なら無期限
-- 一覧は S3 ListObjectsV2 の CommonPrefixes から取得し、各ページの `.metadata.json` を並列取得する。ページ数が増えると一覧はその分遅くなる
+- 一覧は S3 ListObjectsV2 の CommonPrefixes から取得し、各ページの `.metadata.json` を並列取得する。ページ数が増えると一覧はその分遅くなる。管理 UI の表示順は作成日時（`createdAt`）の新しい順で、S3 の取得順そのものは変えない。再アップロードでは `createdAt` が変わらないので並びも変わらない
 - UI 言語は日本語のみ。i18n は前提にしない（ユーザー確認済み）
 - 技術: TanStack Start（React 19）の SPA モード + prerender。SSR もサーバー関数も使わない。成果物は静的ファイルのみで S3 + CloudFront から配信。AWS SDK for JavaScript v3 でブラウザから直接 S3 を操作。slug 規則・上限・S3 キー組み立ては `packages/cli/src/page` を `@cli/page` として web から参照する
 - ブラウザ操作には pages バケットの CORS が必要（Phase 4）
 
 ## Brand Commitments
 
-- プロダクト名は okibasho。UI の表示名は「📦 okibasho」（ヘッダーのロゴ）、パッケージは `@okibasho/*`、CLI 名は `okiba`。リポジトリ名だけ `internal-page-share` のまま残っている
-- 📦 の絵文字以外にロゴはなく、社名・ブランドカラーも存在しない。会社を特定する要素を発明しない
-- 既存 UI の文言は簡潔な日本語の敬体（「〜です」「〜してください」）。用語は「slug」「保存期間」「30日」「無期限」「閲覧 URL」「My Pages」「再アップロード」で web と CLI が揃っている
+- プロダクト名は okibasho。管理 UI ではアップロードフォーム中央の箱アイコンと `okibasho` の文字で一度見せる。パッケージは `@okibasho/*`、CLI 名は `okiba`。リポジトリ名だけ `internal-page-share` のまま残っている
+- 箱アイコン以外にロゴはなく、社名を特定する要素を発明しない。エメラルドは箱と成功フィードバックにだけ使う
+- 既存 UI の文言は簡潔な日本語の敬体（「〜です」「〜してください」）。用語は「slug」「保存期間」「30日」「無期限」「公開URL」「アップロード済みページ」「フォルダ」「再アップロード」で揃える。CLI の引数名は従来どおり
 
 ## Evidence on Hand
 
