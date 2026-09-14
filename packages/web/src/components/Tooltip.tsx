@@ -38,8 +38,8 @@ export function Tooltip({
           collisionPadding={8}
           avoidCollisions={avoidCollisions}
         >
+          <span className="ui-tooltip__arrow" aria-hidden="true" />
           {label}
-          <TooltipPrimitive.Arrow className="ui-tooltip__arrow" width={10} height={5} />
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>

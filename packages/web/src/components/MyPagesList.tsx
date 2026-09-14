@@ -33,6 +33,7 @@ export interface MyPagesListHandle {
 
 interface MyPagesListProps {
   onReupload: (slug: string) => void;
+  onDeleted?: (slug: string) => void;
 }
 
 const COPY_FEEDBACK_MS = 2000;
@@ -42,7 +43,7 @@ type ConfirmState =
   | { kind: 'retention'; page: ListedPage; nextRetention: Retention };
 
 export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(function MyPagesList(
-  { onReupload },
+  { onReupload, onDeleted },
   ref,
 ) {
   const auth = useAuth();
@@ -186,6 +187,7 @@ export const MyPagesList = forwardRef<MyPagesListHandle, MyPagesListProps>(funct
       const client = createPagesS3Client(config, auth.idToken);
       await deletePage(client, config.pagesBucket, auth.email, page.slug);
       setPages((current) => current.filter((item) => item.slug !== page.slug));
+      onDeleted?.(page.slug);
     } catch (error) {
       const message = error instanceof Error ? error.message : '削除に失敗しました';
       setActionError(message);

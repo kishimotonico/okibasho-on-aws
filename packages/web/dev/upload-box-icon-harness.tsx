@@ -6,7 +6,7 @@ import type { BoxIconMotion, BoxIconPhase } from '~/lib/upload-box-icon';
 
 const MOTIONS: BoxIconMotion[] = ['idle', 'hover', 'drag', 'uploading', 'success', 'error'];
 
-const BUBBLE_KINDS = ['closed', 'info', 'error', 'confirm'] as const;
+const BUBBLE_KINDS = ['closed', 'info', 'error', 'confirm', 'success'] as const;
 
 const SIZES = [96, 48, 24] as const;
 
@@ -14,6 +14,7 @@ const BUBBLE_MESSAGES: Record<BoxBubbleKind, string> = {
   info: 'PNG または JPEG を選べます。',
   error: 'ファイルサイズが大きすぎます（上限 10MB）。',
   confirm: '別のファイルに差し替えますか？',
+  success: '公開しました',
 };
 
 function phaseOf(motion: BoxIconMotion): BoxIconPhase {

@@ -1,9 +1,13 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { useEffect, useId, useRef } from 'react';
 
-export type BoxBubbleKind = 'info' | 'error' | 'confirm';
+export type BoxBubbleKind = 'info' | 'error' | 'confirm' | 'success';
 
 const AUTO_CLOSE_MS = 6000;
+
+function autoClosableKind(kind: BoxBubbleKind) {
+  return kind === 'error' || kind === 'info' || kind === 'success';
+}
 
 export function BoxBubble({
   kind,
@@ -78,7 +82,7 @@ export function BoxBubble({
   };
 
   useEffect(() => {
-    if (!open || kind === 'confirm' || persist || (kind !== 'error' && kind !== 'info')) {
+    if (!open || persist || !autoClosableKind(kind)) {
       clearTimer();
       pausedRef.current = false;
       return;
@@ -96,7 +100,8 @@ export function BoxBubble({
     event.stopPropagation();
   };
 
-  const role = kind === 'error' ? 'alert' : kind === 'info' ? 'status' : 'dialog';
+  const role = kind === 'error' ? 'alert' : kind === 'confirm' ? 'dialog' : 'status';
+  const clickToClose = kind === 'error' || kind === 'info' || kind === 'success';
 
   return (
     <div className="box-bubble">
@@ -106,57 +111,49 @@ export function BoxBubble({
         aria-hidden={!open}
         inert={!open}
       >
-        <div className="box-bubble__reveal-inner">
-          <div
-            className={`box-bubble__panel box-bubble__panel--${kind}`}
-            role={open ? role : undefined}
-            aria-labelledby={open && kind === 'confirm' ? messageId : undefined}
-            onClick={stopBubble}
-            onPointerDown={stopBubble}
-            onPointerEnter={pauseTimer}
-            onPointerLeave={resumeTimer}
-          >
-            <div className="box-bubble__body">
-              <p id={messageId} className="box-bubble__message">
-                {message}
-              </p>
+        <div
+          className={`box-bubble__panel box-bubble__panel--${kind}${
+            clickToClose ? ' box-bubble__panel--clickable' : ''
+          }`}
+          role={open ? role : undefined}
+          aria-labelledby={open && kind === 'confirm' ? messageId : undefined}
+          onClick={(event) => {
+            stopBubble(event);
+            if (clickToClose) {
+              onClose();
+            }
+          }}
+          onPointerDown={stopBubble}
+          onPointerEnter={pauseTimer}
+          onPointerLeave={resumeTimer}
+        >
+          <p id={messageId} className="box-bubble__message">
+            {message}
+          </p>
+          {kind === 'confirm' ? (
+            <div className="box-bubble__actions">
               <button
                 type="button"
-                className="box-bubble__close"
-                aria-label="閉じる"
+                className="button"
                 onClick={(event) => {
                   stopBubble(event);
-                  onClose();
+                  onReplace?.();
                 }}
               >
-                ×
+                差し替える
+              </button>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={(event) => {
+                  stopBubble(event);
+                  (onCancel ?? onClose)();
+                }}
+              >
+                やめる
               </button>
             </div>
-            {kind === 'confirm' ? (
-              <div className="box-bubble__actions">
-                <button
-                  type="button"
-                  className="button"
-                  onClick={(event) => {
-                    stopBubble(event);
-                    onReplace?.();
-                  }}
-                >
-                  差し替える
-                </button>
-                <button
-                  type="button"
-                  className="button button--ghost"
-                  onClick={(event) => {
-                    stopBubble(event);
-                    (onCancel ?? onClose)();
-                  }}
-                >
-                  やめる
-                </button>
-              </div>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
     </div>

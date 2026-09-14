@@ -1,5 +1,5 @@
 import { emailLocalPart, generateRandomSlug, isValidSlug, type PageMetadata } from '@cli/page';
-import { Trash2 } from 'lucide-react';
+import { Check, Copy, Trash2 } from 'lucide-react';
 import {
   forwardRef,
   useCallback,
@@ -11,6 +11,7 @@ import {
   type ChangeEvent,
   type FocusEvent,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
@@ -40,6 +41,8 @@ import { validateUploadFiles } from '~/lib/validate-upload';
 export interface UploadPanelHandle {
   /** 一覧の「再アップロード」から呼ばれ、フォームの slug を差し替える */
   setSlug: (slug: string) => void;
+  /** 一覧からページを消したあと、その slug がフォームに残っていれば乱数に戻す */
+  notifyPageDeleted: (slug: string) => void;
 }
 
 export type UploadedPageInfo = {
@@ -58,10 +61,14 @@ type UploadPhase = 'idle' | 'uploading' | 'success' | 'error';
 
 type BubbleState =
   | { kind: 'error'; message: string; persist?: boolean }
-  | { kind: 'confirm'; message: string; targetSlug: string };
+  | { kind: 'confirm'; message: string; targetSlug: string }
+  | { kind: 'success'; message: string };
 
 const DEFAULT_RETENTION: Retention = 'temporary';
 const INVALID_SLUG_MESSAGE = '使えるのは小文字の英数字と - _ だけ';
+const DRAG_STALE_MS = 2000;
+const COPY_FEEDBACK_MS = 2000;
+const UPLOADED_MESSAGE = '公開しました';
 
 function validationBubbleMessage(errors: readonly { code: string; message: string }[]): string {
   const missingIndex = errors.find((error) => error.code === 'missing_index_html');
@@ -104,17 +111,64 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [slugTooltipOpen, setSlugTooltipOpen] = useState(false);
-  const [slugInputFocused, setSlugInputFocused] = useState(false);
+  const slugJustFocusedRef = useRef(false);
+  const phaseRef = useRef<UploadPhase>('idle');
   const urlOrigin = config.pagesBaseUrl.replace(/\/$/, '');
   const userPath = auth.email ? `/${emailLocalPart(auth.email)}/` : '';
   const urlPrefix = auth.email ? `${urlOrigin}${userPath}` : '';
   const slugAriaLabel = urlPrefix ? `公開URL ${urlPrefix}${slug}` : '公開URL';
+  const slugRef = useRef(slug);
+  slugRef.current = slug;
+  const successResultRef = useRef(successResult);
+  successResultRef.current = successResult;
+  const pendingOverwriteRef = useRef(pendingOverwrite);
+  pendingOverwriteRef.current = pendingOverwrite;
+  phaseRef.current = phase;
+
+  useEffect(() => {
+    if (phase !== 'idle' || bubble) {
+      setSlugTooltipOpen(false);
+    }
+  }, [phase, bubble]);
+
+  useEffect(() => {
+    if (!copyMessage) {
+      return;
+    }
+    const id = window.setTimeout(() => setCopyMessage(null), COPY_FEEDBACK_MS);
+    return () => window.clearTimeout(id);
+  }, [copyMessage]);
 
   const dismissBubble = useCallback(() => {
     setBubble(null);
     setPendingOverwrite(null);
     setHighlightSlug(null);
   }, []);
+
+  const resetAfterDeletedPage = useCallback(
+    (deletedSlug: string) => {
+      if (slugRef.current === deletedSlug) {
+        const nextSlug = generateRandomSlug();
+        setSlug(nextSlug);
+        slugFocusValueRef.current = nextSlug;
+      }
+
+      if (successResultRef.current?.slug === deletedSlug) {
+        setSuccessResult(null);
+        setCopyMessage(null);
+        setPhase('idle');
+        setDeleteConfirmOpen(false);
+        dismissBubble();
+      }
+
+      if (pendingOverwriteRef.current?.targetSlug === deletedSlug) {
+        lockedRef.current = false;
+        dismissBubble();
+        setPhase('idle');
+      }
+    },
+    [dismissBubble],
+  );
 
   useImperativeHandle(
     ref,
@@ -130,8 +184,11 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
           slugInputRef.current?.focus();
         }, 0);
       },
+      notifyPageDeleted: (deletedSlug: string) => {
+        resetAfterDeletedPage(deletedSlug);
+      },
     }),
-    [dismissBubble],
+    [dismissBubble, resetAfterDeletedPage],
   );
 
   const showError = useCallback((message: string, options?: { persist?: boolean }) => {
@@ -178,6 +235,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
         setSlug(generateRandomSlug());
         setSuccessResult({ slug: targetSlug, viewUrl: nextViewUrl });
         setPhase('success');
+        setBubble({ kind: 'success', message: UPLOADED_MESSAGE });
         onUploaded({
           slug: targetSlug,
           viewUrl: nextViewUrl,
@@ -273,7 +331,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   );
 
   const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    if (lockedRef.current) {
+    if (lockedRef.current || phase === 'success') {
       event.preventDefault();
       event.target.value = '';
       return;
@@ -285,6 +343,9 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   };
 
   const handleFilePick = () => {
+    if (phase === 'success') {
+      return;
+    }
     if (bubble?.kind === 'confirm' || pendingOverwrite) {
       lockedRef.current = false;
     }
@@ -293,6 +354,9 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   };
 
   const handleDirectoryPick = () => {
+    if (phase === 'success') {
+      return;
+    }
     if (bubble?.kind === 'confirm' || pendingOverwrite) {
       lockedRef.current = false;
     }
@@ -304,7 +368,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
     async (event: DragEvent) => {
       event.preventDefault();
       setIsDragging(false);
-      if (lockedRef.current) {
+      if (lockedRef.current || phaseRef.current === 'success') {
         return;
       }
       dismissBubble();
@@ -322,12 +386,28 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
 
   useEffect(() => {
     let dragDepth = 0;
+    let staleTimer: number | null = null;
 
     const isFileDrag = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false;
 
+    const clearStaleTimer = () => {
+      if (staleTimer != null) {
+        window.clearTimeout(staleTimer);
+        staleTimer = null;
+      }
+    };
+
     const resetDragging = () => {
       dragDepth = 0;
+      clearStaleTimer();
       setIsDragging(false);
+    };
+
+    const armStaleTimer = () => {
+      clearStaleTimer();
+      staleTimer = window.setTimeout(() => {
+        resetDragging();
+      }, DRAG_STALE_MS);
     };
 
     const onDragEnter = (event: DragEvent) => {
@@ -335,8 +415,12 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
         return;
       }
       event.preventDefault();
+      if (phaseRef.current === 'success') {
+        return;
+      }
       dragDepth += 1;
       setIsDragging(true);
+      armStaleTimer();
     };
 
     const onDragLeave = (event: DragEvent) => {
@@ -344,6 +428,10 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
         return;
       }
       event.preventDefault();
+      if (event.relatedTarget == null) {
+        resetDragging();
+        return;
+      }
       dragDepth -= 1;
       if (dragDepth <= 0) {
         resetDragging();
@@ -355,6 +443,10 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
         return;
       }
       event.preventDefault();
+      if (phaseRef.current === 'success') {
+        return;
+      }
+      armStaleTimer();
     };
 
     const onDrop = (event: DragEvent) => {
@@ -363,10 +455,17 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
       }
       event.preventDefault();
       resetDragging();
+      if (phaseRef.current === 'success') {
+        return;
+      }
       void handleDrop(event);
     };
 
     const onDragEnd = () => {
+      resetDragging();
+    };
+
+    const onBlur = () => {
       resetDragging();
     };
 
@@ -375,13 +474,16 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
     window.addEventListener('dragover', onDragOver);
     window.addEventListener('drop', onDrop);
     window.addEventListener('dragend', onDragEnd);
+    window.addEventListener('blur', onBlur);
 
     return () => {
+      clearStaleTimer();
       window.removeEventListener('dragenter', onDragEnter);
       window.removeEventListener('dragleave', onDragLeave);
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('drop', onDrop);
       window.removeEventListener('dragend', onDragEnd);
+      window.removeEventListener('blur', onBlur);
     };
   }, [handleDrop]);
 
@@ -406,10 +508,21 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   }, []);
 
   const handleBoxActivate = () => {
-    if (lockedRef.current || phase === 'uploading') {
+    if (lockedRef.current || phase === 'uploading' || phase === 'success') {
       return;
     }
     fileInputRef.current?.click();
+  };
+
+  const handleUploadAnother = () => {
+    const nextSlug = generateRandomSlug();
+    setSlug(nextSlug);
+    slugFocusValueRef.current = nextSlug;
+    setRetention(DEFAULT_RETENTION);
+    setSuccessResult(null);
+    setCopyMessage(null);
+    setPhase('idle');
+    dismissBubble();
   };
 
   const handleReplace = () => {
@@ -458,10 +571,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
       const client = createPagesS3Client(config, auth.idToken);
       await deletePage(client, config.pagesBucket, auth.email, successResult.slug);
       const deletedSlug = successResult.slug;
-      setSuccessResult(null);
-      setCopyMessage(null);
-      setPhase('idle');
-      setDeleteConfirmOpen(false);
+      resetAfterDeletedPage(deletedSlug);
       onDeleted?.(deletedSlug);
     } catch (error) {
       showError(formatUploadError(error).message);
@@ -505,12 +615,15 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   const handleSlugFocus = (event: FocusEvent<HTMLInputElement>) => {
     slugFocusValueRef.current = slug;
     event.currentTarget.select();
-    setSlugInputFocused(true);
+    slugJustFocusedRef.current = true;
     setSlugTooltipOpen(false);
   };
 
-  const handleSlugBlur = () => {
-    setSlugInputFocused(false);
+  const handleSlugMouseUp = (event: ReactMouseEvent<HTMLInputElement>) => {
+    if (slugJustFocusedRef.current) {
+      event.preventDefault();
+      slugJustFocusedRef.current = false;
+    }
   };
 
   const handleSlugKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -570,7 +683,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
       >
         <div className="composer-drop">
           <BoxBubble
-            kind={bubble?.kind === 'confirm' ? 'confirm' : 'error'}
+            kind={bubble?.kind ?? 'error'}
             open={bubble !== null}
             message={bubble?.message ?? ''}
             persist={bubble?.kind === 'error' ? bubble.persist : false}
@@ -599,10 +712,17 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
               <div className="upload-result__actions">
                 <button
                   type="button"
-                  className="button button--copy"
+                  className={`button button--copy${
+                    copyMessage === 'コピーしました' ? ' button--copy-success' : ''
+                  }`}
                   onClick={() => void handleCopyUrl()}
                 >
-                  {copyButtonLabel}
+                  {copyMessage === 'コピーしました' ? (
+                    <Check size={16} strokeWidth={1.75} aria-hidden />
+                  ) : (
+                    <Copy size={16} strokeWidth={1.75} aria-hidden />
+                  )}
+                  <span>{copyButtonLabel}</span>
                 </button>
                 <Tooltip label="削除">
                   <button
@@ -616,101 +736,113 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
                   </button>
                 </Tooltip>
               </div>
+              <button
+                type="button"
+                className="button button--ghost upload-result__another"
+                onClick={handleUploadAnother}
+              >
+                次のファイルを置く
+              </button>
             </div>
           ) : (
-            <p className="composer-lead">
-              {busy ? (
-                <span className="composer-progress">{progressLabel}</span>
-              ) : (
-                'ここにドロップして公開'
-              )}
-            </p>
+            <>
+              <p className="composer-lead">
+                {busy ? (
+                  <span className="composer-progress">{progressLabel}</span>
+                ) : (
+                  'ここにドロップして公開'
+                )}
+              </p>
+              <div className="composer-pick-links">
+                <button
+                  type="button"
+                  className="text-link"
+                  disabled={busy}
+                  onClick={handleFilePick}
+                >
+                  ファイルを選ぶ
+                </button>
+                <span className="composer-pick-links__sep" aria-hidden="true">
+                  {' '}
+                  ·{' '}
+                </span>
+                <button
+                  type="button"
+                  className="text-link"
+                  disabled={busy}
+                  onClick={handleDirectoryPick}
+                >
+                  フォルダを選ぶ
+                </button>
+              </div>
+            </>
           )}
-          <div className="composer-pick-links">
-            <button type="button" className="text-link" disabled={busy} onClick={handleFilePick}>
-              ファイルを選ぶ
-            </button>
-            <span className="composer-pick-links__sep" aria-hidden="true">
-              {' '}
-              ·{' '}
-            </span>
-            <button
-              type="button"
-              className="text-link"
-              disabled={busy}
-              onClick={handleDirectoryPick}
-            >
-              フォルダを選ぶ
-            </button>
-          </div>
         </div>
 
-        <div className="url-field">
-          <label className="field-label visually-hidden" htmlFor="public-url-slug">
-            公開URL
-          </label>
-          <div className={`url-input${highlightSlug ? ' url-input--overwrite' : ''}`} tabIndex={-1}>
-            {auth.email ? (
-              <span className="url-input__prefix" aria-hidden="true">
-                <span className="url-input__host">{urlOrigin}</span>
-                <span className="url-input__user">{userPath}</span>
+        {!successResult ? (
+          <>
+            <div className="url-field">
+              <label className="field-label visually-hidden" htmlFor="public-url-slug">
+                公開URL
+              </label>
+              <div
+                className={`url-input${highlightSlug ? ' url-input--overwrite' : ''}`}
+                tabIndex={-1}
+              >
+                {auth.email ? (
+                  <span className="url-input__prefix" aria-hidden="true">
+                    <span className="url-input__host">{urlOrigin}</span>
+                    <span className="url-input__user">{userPath}</span>
+                  </span>
+                ) : null}
+                <Tooltip label="クリックして名前を付け直せる" side="top" open={slugTooltipOpen}>
+                  <input
+                    ref={slugInputRef}
+                    id="public-url-slug"
+                    type="text"
+                    value={slug}
+                    onChange={handleSlugChange}
+                    onFocus={handleSlugFocus}
+                    onMouseUp={handleSlugMouseUp}
+                    onPointerEnter={() => setSlugTooltipOpen(true)}
+                    onPointerLeave={() => setSlugTooltipOpen(false)}
+                    onKeyDown={handleSlugKeyDown}
+                    disabled={busy}
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-label={slugAriaLabel}
+                  />
+                </Tooltip>
+              </div>
+            </div>
+
+            <div className="retention-field">
+              <span className="field-label visually-hidden" id="retention-label">
+                保存期間
               </span>
-            ) : null}
-            <Tooltip
-              label="クリックして名前を付け直せる"
-              side="top"
-              align="end"
-              avoidCollisions={false}
-              open={slugInputFocused ? false : slugTooltipOpen}
-              onOpenChange={(next) => {
-                if (!slugInputFocused) {
-                  setSlugTooltipOpen(next);
-                }
-              }}
-            >
-              <input
-                ref={slugInputRef}
-                id="public-url-slug"
-                type="text"
-                value={slug}
-                onChange={handleSlugChange}
-                onFocus={handleSlugFocus}
-                onBlur={handleSlugBlur}
-                onKeyDown={handleSlugKeyDown}
-                disabled={busy}
-                autoComplete="off"
-                spellCheck={false}
-                aria-label={slugAriaLabel}
-              />
-            </Tooltip>
-          </div>
-        </div>
-
-        <div className="retention-field">
-          <span className="field-label visually-hidden" id="retention-label">
-            保存期間
-          </span>
-          <div className="seg" role="group" aria-labelledby="retention-label">
-            <button
-              type="button"
-              className={retention === 'temporary' ? 'on' : undefined}
-              aria-pressed={retention === 'temporary'}
-              disabled={busy}
-              onClick={() => setRetention('temporary')}
-            >
-              30日
-            </button>
-            <button
-              type="button"
-              className={retention === 'permanent' ? 'on' : undefined}
-              aria-pressed={retention === 'permanent'}
-              disabled={busy}
-              onClick={() => setRetention('permanent')}
-            >
-              無期限
-            </button>
-          </div>
-        </div>
+              <div className="seg" role="group" aria-labelledby="retention-label">
+                <button
+                  type="button"
+                  className={retention === 'temporary' ? 'on' : undefined}
+                  aria-pressed={retention === 'temporary'}
+                  disabled={busy}
+                  onClick={() => setRetention('temporary')}
+                >
+                  30日
+                </button>
+                <button
+                  type="button"
+                  className={retention === 'permanent' ? 'on' : undefined}
+                  aria-pressed={retention === 'permanent'}
+                  disabled={busy}
+                  onClick={() => setRetention('permanent')}
+                >
+                  無期限
+                </button>
+              </div>
+            </div>
+          </>
+        ) : null}
 
         <input
           ref={fileInputRef}

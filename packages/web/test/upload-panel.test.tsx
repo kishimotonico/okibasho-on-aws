@@ -198,7 +198,7 @@ describe('UploadPanel', () => {
     await waitFor(() => expect(uploadPage).toHaveBeenCalledOnce());
   });
 
-  it('成功後 slug が変わり、結果が残る', async () => {
+  it('成功後は結果だけが残り、フォームは隠れる', async () => {
     const user = userEvent.setup();
     getPageMetadata.mockResolvedValue(null);
     uploadPage.mockResolvedValue({});
@@ -212,7 +212,13 @@ describe('UploadPanel', () => {
         screen.getByRole('link', { name: 'https://pages.example.com/tanaka/1111111111/' }),
       ).toBeInTheDocument(),
     );
+    expect(screen.queryByRole('textbox', { name: /公開URL/ })).toBeNull();
+    expect(screen.getByRole('button', { name: '次のファイルを置く' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '次のファイルを置く' }));
+
     expect(slugInput()).toHaveValue('2222222222');
+    expect(screen.getByRole('button', { name: 'ファイルを選ぶ' })).toBeInTheDocument();
   });
 
   it('メタデータ確認中は2回目の選択を無視する', async () => {

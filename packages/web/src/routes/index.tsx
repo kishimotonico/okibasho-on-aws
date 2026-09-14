@@ -38,6 +38,10 @@ function HomePage() {
     void myPagesListRef.current?.reload();
   }, []);
 
+  const handleListDeleted = useCallback((deletedSlug: string) => {
+    uploadPanelRef.current?.notifyPageDeleted(deletedSlug);
+  }, []);
+
   if (auth.isLoading) {
     return (
       <div className="page">
@@ -63,7 +67,11 @@ function HomePage() {
 
       <section className="pages-section" aria-labelledby="uploaded-pages-heading">
         <h2 id="uploaded-pages-heading">アップロード済みページ</h2>
-        <MyPagesList ref={myPagesListRef} onReupload={handleReupload} />
+        <MyPagesList
+          ref={myPagesListRef}
+          onReupload={handleReupload}
+          onDeleted={handleListDeleted}
+        />
       </section>
     </div>
   );

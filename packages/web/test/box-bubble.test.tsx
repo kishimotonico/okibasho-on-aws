@@ -36,7 +36,7 @@ describe('BoxBubble', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('サイズが大きすぎます');
   });
 
-  it('× で onClose を呼ぶ', async () => {
+  it('info / error は吹き出しのクリックで onClose を呼ぶ', async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
 
@@ -46,7 +46,7 @@ describe('BoxBubble', () => {
       </BoxBubble>,
     );
 
-    await user.click(screen.getByRole('button', { name: '閉じる' }));
+    await user.click(screen.getByText('案内文'));
 
     expect(onClose).toHaveBeenCalledOnce();
   });
