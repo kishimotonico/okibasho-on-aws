@@ -11,7 +11,7 @@ import {
   prefixFromMetadataKey,
   serializeKvsValue,
   validateShare,
-} from '../lib/lambda/share-projector/validate.js';
+} from '../lib/lambda/page-maintenance/validate.js';
 
 const VALID_ID = 'AbCdEfGh12_-34567890Aa'; // 22文字
 const VALID_SALT = 'AbCdEfGh12_-34567890Bb';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeShareTag } from '../lib/lambda/share-projector/tag.js';
+import { computeShareTag } from '../lib/lambda/page-maintenance/tag.js';
 
 /**
  * 固定テストベクター。cli(packages/cli/test/tag.test.ts) / web と同じ値であることを確認する。

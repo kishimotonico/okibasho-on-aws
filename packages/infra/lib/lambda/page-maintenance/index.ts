@@ -203,5 +203,7 @@ async function mapWithConcurrency<T, R>(
 }
 
 function logPlan(plan: DiffPlan): void {
-  console.log(`share-projector reconcile: puts=${plan.puts.length} deletes=${plan.deletes.length}`);
+  console.log(
+    `page-maintenance reconcile: puts=${plan.puts.length} deletes=${plan.deletes.length}`,
+  );
 }

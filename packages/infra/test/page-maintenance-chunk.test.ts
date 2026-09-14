@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chunkPlan } from '../lib/lambda/share-projector/kvs-client.js';
+import { chunkPlan } from '../lib/lambda/page-maintenance/kvs-client.js';
 
 describe('chunkPlan', () => {
   it('puts と deletes の合計を 50 キーごとに分ける', () => {

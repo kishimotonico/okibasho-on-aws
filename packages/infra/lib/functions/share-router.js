@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import cf from 'cloudfront';
 
-// このKVSはPagesDeliveryが/s/*ビヘイビアに関連付ける。値はshare projectorが投影する
+// このKVSはPagesDeliveryが/s/*ビヘイビアに関連付ける。値はPageMaintenance Lambdaが投影する
 var kvsHandle = cf.kvs();
 
 var ERROR_BODY = 'Not Found';

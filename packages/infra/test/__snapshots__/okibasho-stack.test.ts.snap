@@ -1290,6 +1290,237 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Role",
     },
+    "PageMaintenanceMaintenanceFunction6D21CD03": {
+      "DependsOn": [
+        "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F",
+        "PageMaintenanceMaintenanceFunctionServiceRole249912DC",
+      ],
+      "Properties": {
+        "Architectures": [
+          "arm64",
+        ],
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "<asset-hash>.zip",
+        },
+        "Description": "page maintenance: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影し、期限切れページの削除・孤児回収も行う",
+        "Environment": {
+          "Variables": {
+            "KVS_ARN": {
+              "Fn::GetAtt": [
+                "PageMaintenanceShareKeyValueStoreAB6806D3",
+                "Arn",
+              ],
+            },
+            "PAGES_BUCKET": {
+              "Ref": "PagesStorageBucketDFEB6C7C",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "MemorySize": 1024,
+        "ReservedConcurrentExecutions": 1,
+        "Role": {
+          "Fn::GetAtt": [
+            "PageMaintenanceMaintenanceFunctionServiceRole249912DC",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 60,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "PageMaintenanceMaintenanceFunctionEventInvokeConfig2ADCBD5E": {
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PageMaintenanceMaintenanceFunction6D21CD03",
+        },
+        "MaximumEventAgeInSeconds": 300,
+        "MaximumRetryAttempts": 1,
+        "Qualifier": "$LATEST",
+      },
+      "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "PageMaintenanceMaintenanceFunctionServiceRole249912DC": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:GetObject",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "PagesStorageBucketDFEB6C7C",
+                        "Arn",
+                      ],
+                    },
+                    "/meta/*",
+                  ],
+                ],
+              },
+            },
+            {
+              "Action": "s3:DeleteObject",
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/pages/*",
+                    ],
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/meta/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": "s3:ListBucket",
+              "Condition": {
+                "StringLike": {
+                  "s3:prefix": [
+                    "meta/*",
+                    "pages/*",
+                  ],
+                },
+              },
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "PagesStorageBucketDFEB6C7C",
+                  "Arn",
+                ],
+              },
+            },
+            {
+              "Action": [
+                "cloudfront-keyvaluestore:DescribeKeyValueStore",
+                "cloudfront-keyvaluestore:ListKeys",
+                "cloudfront-keyvaluestore:UpdateKeys",
+                "cloudfront-keyvaluestore:GetKey",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "PageMaintenanceShareKeyValueStoreAB6806D3",
+                  "Arn",
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F",
+        "Roles": [
+          {
+            "Ref": "PageMaintenanceMaintenanceFunctionServiceRole249912DC",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "PageMaintenanceScheduleRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E3826B2363514": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PageMaintenanceMaintenanceFunction6D21CD03",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "PageMaintenanceScheduleRuleFAEEC66D",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "PageMaintenanceScheduleRuleFAEEC66D": {
+      "Properties": {
+        "Description": "安全網 + cleanup(期限切れ削除・孤児回収・KVS全件突き合わせ)を1時間毎に実行",
+        "ScheduleExpression": "rate(1 hour)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceShareKeyValueStoreAB6806D3": {
+      "Properties": {
+        "Comment": "/s/<share-id>/ -> pages S3キーの投影(正本はmeta/配下のmetadataのshareフィールド)",
+        "Name": "OkibashoPageMaintenanceShareKeyValueStore1FDA5F9B",
+      },
+      "Type": "AWS::CloudFront::KeyValueStore",
+    },
     "PagesDeliveryCachePolicy7BBA6710": {
       "Properties": {
         "CachePolicyConfig": {
@@ -1594,7 +1825,7 @@ function buildQueryString(querystring) {
         "FunctionCode": "import crypto from 'crypto';
 import cf from 'cloudfront';
 
-// このKVSはPagesDeliveryが/s/*ビヘイビアに関連付ける。値はshare projectorが投影する
+// このKVSはPagesDeliveryが/s/*ビヘイビアに関連付ける。値はPageMaintenance Lambdaが投影する
 var kvsHandle = cf.kvs();
 
 var ERROR_BODY = 'Not Found';
@@ -1849,7 +2080,7 @@ function buildQueryString(querystring) {
             {
               "KeyValueStoreARN": {
                 "Fn::GetAtt": [
-                  "ShareProjectionShareKeyValueStore1933799C",
+                  "PageMaintenanceShareKeyValueStoreAB6806D3",
                   "Arn",
                 ],
               },
@@ -1871,12 +2102,12 @@ function buildQueryString(querystring) {
       },
       "Type": "AWS::CloudFront::Function",
     },
-    "PagesStorageBucketAllowBucketNotificationsToOkibashoShareProjectionProjectorFunction0978B34C9F766793": {
+    "PagesStorageBucketAllowBucketNotificationsToOkibashoPageMaintenanceMaintenanceFunctionDC5E382603F84E21": {
       "Properties": {
         "Action": "lambda:InvokeFunction",
         "FunctionName": {
           "Fn::GetAtt": [
-            "ShareProjectionProjectorFunction873BDA55",
+            "PageMaintenanceMaintenanceFunction6D21CD03",
             "Arn",
           ],
         },
@@ -1960,7 +2191,7 @@ function buildQueryString(querystring) {
     },
     "PagesStorageBucketNotifications556F6CD5": {
       "DependsOn": [
-        "PagesStorageBucketAllowBucketNotificationsToOkibashoShareProjectionProjectorFunction0978B34C9F766793",
+        "PagesStorageBucketAllowBucketNotificationsToOkibashoPageMaintenanceMaintenanceFunctionDC5E382603F84E21",
         "PagesStorageBucketNotificationsHandlerPolicyF43DDC22",
         "PagesStorageBucketPolicy0CFFCC9C",
       ],
@@ -1991,7 +2222,7 @@ function buildQueryString(querystring) {
               },
               "LambdaFunctionArn": {
                 "Fn::GetAtt": [
-                  "ShareProjectionProjectorFunction873BDA55",
+                  "PageMaintenanceMaintenanceFunction6D21CD03",
                   "Arn",
                 ],
               },
@@ -2016,7 +2247,7 @@ function buildQueryString(querystring) {
               },
               "LambdaFunctionArn": {
                 "Fn::GetAtt": [
-                  "ShareProjectionProjectorFunction873BDA55",
+                  "PageMaintenanceMaintenanceFunction6D21CD03",
                   "Arn",
                 ],
               },
@@ -2294,237 +2525,6 @@ function buildQueryString(querystring) {
       },
       "Type": "Custom::CDKBucketDeployment",
       "UpdateReplacePolicy": "Delete",
-    },
-    "ShareProjectionProjectorFunction873BDA55": {
-      "DependsOn": [
-        "ShareProjectionProjectorFunctionServiceRoleDefaultPolicy6B9FBAA5",
-        "ShareProjectionProjectorFunctionServiceRoleBC8C3B11",
-      ],
-      "Properties": {
-        "Architectures": [
-          "arm64",
-        ],
-        "Code": {
-          "S3Bucket": {
-            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
-          },
-          "S3Key": "<asset-hash>.zip",
-        },
-        "Description": "share projector: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影し、期限切れページの削除・孤児回収も行う",
-        "Environment": {
-          "Variables": {
-            "KVS_ARN": {
-              "Fn::GetAtt": [
-                "ShareProjectionShareKeyValueStore1933799C",
-                "Arn",
-              ],
-            },
-            "PAGES_BUCKET": {
-              "Ref": "PagesStorageBucketDFEB6C7C",
-            },
-          },
-        },
-        "Handler": "index.handler",
-        "MemorySize": 1024,
-        "ReservedConcurrentExecutions": 1,
-        "Role": {
-          "Fn::GetAtt": [
-            "ShareProjectionProjectorFunctionServiceRoleBC8C3B11",
-            "Arn",
-          ],
-        },
-        "Runtime": "nodejs22.x",
-        "Timeout": 60,
-      },
-      "Type": "AWS::Lambda::Function",
-    },
-    "ShareProjectionProjectorFunctionEventInvokeConfigC65417B8": {
-      "Properties": {
-        "FunctionName": {
-          "Ref": "ShareProjectionProjectorFunction873BDA55",
-        },
-        "MaximumEventAgeInSeconds": 300,
-        "MaximumRetryAttempts": 1,
-        "Qualifier": "$LATEST",
-      },
-      "Type": "AWS::Lambda::EventInvokeConfig",
-    },
-    "ShareProjectionProjectorFunctionServiceRoleBC8C3B11": {
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Statement": [
-            {
-              "Action": "sts:AssumeRole",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "lambda.amazonaws.com",
-              },
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-        "ManagedPolicyArns": [
-          {
-            "Fn::Join": [
-              "",
-              [
-                "arn:",
-                {
-                  "Ref": "AWS::Partition",
-                },
-                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-              ],
-            ],
-          },
-        ],
-      },
-      "Type": "AWS::IAM::Role",
-    },
-    "ShareProjectionProjectorFunctionServiceRoleDefaultPolicy6B9FBAA5": {
-      "Properties": {
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Action": "s3:GetObject",
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "PagesStorageBucketDFEB6C7C",
-                        "Arn",
-                      ],
-                    },
-                    "/meta/*",
-                  ],
-                ],
-              },
-            },
-            {
-              "Action": "s3:DeleteObject",
-              "Effect": "Allow",
-              "Resource": [
-                {
-                  "Fn::Join": [
-                    "",
-                    [
-                      {
-                        "Fn::GetAtt": [
-                          "PagesStorageBucketDFEB6C7C",
-                          "Arn",
-                        ],
-                      },
-                      "/pages/*",
-                    ],
-                  ],
-                },
-                {
-                  "Fn::Join": [
-                    "",
-                    [
-                      {
-                        "Fn::GetAtt": [
-                          "PagesStorageBucketDFEB6C7C",
-                          "Arn",
-                        ],
-                      },
-                      "/meta/*",
-                    ],
-                  ],
-                },
-              ],
-            },
-            {
-              "Action": "s3:ListBucket",
-              "Condition": {
-                "StringLike": {
-                  "s3:prefix": [
-                    "meta/*",
-                    "pages/*",
-                  ],
-                },
-              },
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "PagesStorageBucketDFEB6C7C",
-                  "Arn",
-                ],
-              },
-            },
-            {
-              "Action": [
-                "cloudfront-keyvaluestore:DescribeKeyValueStore",
-                "cloudfront-keyvaluestore:ListKeys",
-                "cloudfront-keyvaluestore:UpdateKeys",
-                "cloudfront-keyvaluestore:GetKey",
-              ],
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "ShareProjectionShareKeyValueStore1933799C",
-                  "Arn",
-                ],
-              },
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-        "PolicyName": "ShareProjectionProjectorFunctionServiceRoleDefaultPolicy6B9FBAA5",
-        "Roles": [
-          {
-            "Ref": "ShareProjectionProjectorFunctionServiceRoleBC8C3B11",
-          },
-        ],
-      },
-      "Type": "AWS::IAM::Policy",
-    },
-    "ShareProjectionScheduleRule4041A7FB": {
-      "Properties": {
-        "Description": "安全網 + cleanup(期限切れ削除・孤児回収・KVS全件突き合わせ)を1時間毎に実行",
-        "ScheduleExpression": "rate(1 hour)",
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::GetAtt": [
-                "ShareProjectionProjectorFunction873BDA55",
-                "Arn",
-              ],
-            },
-            "Id": "Target0",
-          },
-        ],
-      },
-      "Type": "AWS::Events::Rule",
-    },
-    "ShareProjectionScheduleRuleAllowEventRuleOkibashoShareProjectionProjectorFunction0978B34C3FCDAC39": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "ShareProjectionProjectorFunction873BDA55",
-            "Arn",
-          ],
-        },
-        "Principal": "events.amazonaws.com",
-        "SourceArn": {
-          "Fn::GetAtt": [
-            "ShareProjectionScheduleRule4041A7FB",
-            "Arn",
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "ShareProjectionShareKeyValueStore1933799C": {
-      "Properties": {
-        "Comment": "/s/<share-id>/ -> pages S3キーの投影(正本はmeta/配下のmetadataのshareフィールド)",
-        "Name": "OkibashoShareProjectionShareKeyValueStore19382CBF",
-      },
-      "Type": "AWS::CloudFront::KeyValueStore",
     },
   },
   "Rules": {

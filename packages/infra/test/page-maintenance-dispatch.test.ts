@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractS3Records } from '../lib/lambda/share-projector/dispatch.js';
+import { extractS3Records } from '../lib/lambda/page-maintenance/dispatch.js';
 
 describe('extractS3Records', () => {
   it('S3イベント(Records配列、各要素にs3キー)ならレコード配列を返す', () => {

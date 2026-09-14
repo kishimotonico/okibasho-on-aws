@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeDiff } from '../lib/lambda/share-projector/plan.js';
+import { computeDiff } from '../lib/lambda/page-maintenance/plan.js';
 
 const TAG_A = 'AAAAAAAAAAA';
 const TAG_B = 'BBBBBBBBBBB';

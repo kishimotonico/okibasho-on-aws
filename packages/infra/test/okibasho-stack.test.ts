@@ -298,11 +298,11 @@ describe('OkibashoStack', () => {
     });
   });
 
-  describe('ShareProjection', () => {
-    it('projector LambdaはS3への読み取りがmeta/配下に絞られ、削除はpages/・meta/両方に、KVSへは必要な操作だけを許可する', () => {
+  describe('PageMaintenance', () => {
+    it('PageMaintenance LambdaはS3への読み取りがmeta/配下に絞られ、削除はpages/・meta/両方に、KVSへは必要な操作だけを許可する', () => {
       const template = synth();
 
-      // projector(share投影 + cleanup)本体Lambdaに加えて、S3通知配線用のCDK管理Lambda(BucketNotificationsHandler)が1つ増える
+      // PageMaintenance(share投影 + cleanup)本体Lambdaに加えて、S3通知配線用のCDK管理Lambda(BucketNotificationsHandler)が1つ増える
       template.resourceCountIs('AWS::Lambda::Function', 4);
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs22.x',
@@ -373,7 +373,7 @@ describe('OkibashoStack', () => {
         ScheduleExpression: 'rate(1 hour)',
       });
 
-      // pagesバケットのS3通知がprefix=meta/・suffix=.jsonのCreated/Removedをprojectorへ流す
+      // pagesバケットのS3通知がprefix=meta/・suffix=.jsonのCreated/RemovedをPageMaintenanceへ流す
       const notifications = Object.values(template.findResources('Custom::S3BucketNotifications'));
       expect(notifications).toHaveLength(1);
       const notificationConfig = notifications[0]?.Properties?.NotificationConfiguration as
