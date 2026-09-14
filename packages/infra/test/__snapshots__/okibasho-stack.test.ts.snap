@@ -1305,7 +1305,7 @@ def sort_filter_rules(json_obj):
           },
           "S3Key": "<asset-hash>.zip",
         },
-        "Description": "page maintenance: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影し、期限切れページの削除・孤児回収も行う",
+        "Description": "page maintenance: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影し、期限切れページの削除も行う",
         "Environment": {
           "Variables": {
             "KVS_ARN": {
@@ -1497,7 +1497,7 @@ def sort_filter_rules(json_obj):
     },
     "PageMaintenanceScheduleRuleFAEEC66D": {
       "Properties": {
-        "Description": "安全網 + cleanup(期限切れ削除・孤児回収・KVS全件突き合わせ)を1時間毎に実行",
+        "Description": "安全網 + cleanup(期限切れ削除・KVS全件突き合わせ)を1時間毎に実行",
         "ScheduleExpression": "rate(1 hour)",
         "State": "ENABLED",
         "Targets": [

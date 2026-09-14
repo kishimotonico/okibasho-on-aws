@@ -24,7 +24,7 @@
    S3（pages バケット・完全 private・Public Access Block）
         ▲
         │ meta/配下のJSONの作成・削除で該当ページだけ即時 / 1時間ごとの定期処理で
-        │ 期限切れ削除・孤児回収・KVS全件突き合わせ
+        │ 期限切れ削除・KVS全件突き合わせ
    Lambda（PageMaintenance、同時実行1。アラームは持たない）
         │ UpdateKeys（IfMatch）
         ▼
@@ -55,7 +55,7 @@ Lambda は次の 3 つ。どれも小さく独立している。API Gateway は�
 
 - Signed Cookie 発行（独自ドメイン導入後）
 - PreSignUp（メールドメイン制限。Google IdP 追加時）
-- PageMaintenance（`meta/` 配下の metadata の `share` を CloudFront KeyValueStore へ投影しつつ、期限切れページの削除・孤児回収も担う。詳細は「外部共有」節と「保存期間」節）
+- PageMaintenance（`meta/` 配下の metadata の `share` を CloudFront KeyValueStore へ投影しつつ、期限切れページの削除も担う。詳細は「外部共有」節と「保存期間」節）
 
 このほかに、CDK の `BucketDeployment`（pages バケットの `errors/` に固定ページを配置するためだけのカスタムリソース Lambda）が存在する。これは IAM の境界の外にある処理として次節で扱う。
 
@@ -131,7 +131,7 @@ authenticated role の権限ポリシーが唯一のセキュリティ境界で�
 
 IAM の境界の外にある処理が 2 つある。いずれもレビュー対象である。
 
-- PageMaintenance Lambda: `meta/` 配下の metadata を全件読める（Basic 認証のハッシュも含む）。`s3:GetObject` は `meta/*` に絞っており、ページ成果物本体は読めない。`s3:DeleteObject` は期限切れ削除・孤児回収のために `pages/*` と `meta/*` の両方に及ぶ、prefix 制限の無い削除権限を持つ。書き込みは CloudFront KeyValueStore の `UpdateKeys`（と確認用の `GetKey`）で、pages バケットへの書き込み権限（`PutObject`）は持たない
+- PageMaintenance Lambda: `meta/` 配下の metadata を全件読める（Basic 認証のハッシュも含む）。`s3:GetObject` は `meta/*` に絞っており、ページ成果物本体は読めない。`s3:DeleteObject` は期限切れ削除のために `pages/*` と `meta/*` の両方に及ぶ、prefix 制限の無い削除権限を持つ。書き込みは CloudFront KeyValueStore の `UpdateKeys`（と確認用の `GetKey`）で、pages バケットへの書き込み権限（`PutObject`）は持たない
 - エラーページ配置ロール（`BucketDeployment` のカスタムリソース Lambda）: `errors/` 配下にだけ書ける。CDK は destination バケット全体への書き込みを付与するため、bucket policy の Deny で絞っている
 
 これらは prefix を跨いで S3 を操作できる分、authenticated role より広い権限を持つ。デプロイ操作を行える者（PowerUser 相当のアクセス）は元々この構成の信頼境界の内側にいる前提であり、Lambda 実行ロールをユーザー単位・機能単位にこれ以上細分化することは目指さない。
@@ -285,17 +285,17 @@ slug の指定は任意。web は省略時に乱数（小文字英数字 10 文�
 ```text
 1. Cognito ログイン（Authorization Code + PKCE）→ id_token
 2. Identity Pool から一時 IAM クレデンシャルを取得
-3. ディレクトリを走査し、pages/<email>/<slug>/ 配下へ PutObject
-4. 同じ prefix を List し、今回のアップロードに含まれないキーを DeleteObjects
-5. meta/<email>/<slug>.json を最後に書く
+3. meta/<email>/<slug>.json を先に書く
+4. ディレクトリを走査し、pages/<email>/<slug>/ 配下へ PutObject
+5. 同じ prefix を List し、今回のアップロードに含まれないキーを DeleteObjects
 6. https://pages.share.example.jp/p/<user>/<slug>/ を表示
 ```
 
-metadata がページ成果物と別 prefix（`meta/`）にあるため、4 の孤児削除は成果物だけを見ればよく、「metadata は消さない」という除外は不要になった。
+metadata を先に書くのは、途中で失敗しても一覧に残り続けるようにするためである。成果物の Put や差分削除で失敗しても、metadata さえ書けていれば一覧から見え続け、利用者が消すか上げ直せる。metadata の Put 自体が失敗すれば新規ページとして一覧に現れないので、これも上げ直せば済む。
 
-再アップロードは同じ prefix を上書きする。バージョンディレクトリは持たない。ファイルが減ったり名前が変わったりしたときに古いオブジェクトが残ると、公開 URL からいつまでも読めてしまう。4 の差分削除がこれを防ぐ。metadata がある限り PageMaintenance の定期処理は孤児とみなさない。
+再アップロードは同じ prefix を上書きする。バージョンディレクトリは持たない。ファイルが減ったり名前が変わったりしたときに古いオブジェクトが残ると、公開 URL からいつまでも読めてしまう。5 の差分削除がこれを防ぐ。
 
-途中で失敗すると中途半端なファイルが残りうる。削除は冪等にし、metadata が無い孤児 prefix は PageMaintenance の定期処理が回収する（アップロード中のページを誤って消さないよう、その prefix の最終更新から 24 時間の猶予を置く。アップロードは成果物 → metadata の順に書くため、この猶予で足りる）。
+metadata の無い pages/ 配下のファイルは削除しない。metadata を先に書く順にしたことで「アップロード中の孤児」は原理的に生まれなくなったが、それとは別に、S3 にファイルを置くだけで共有する経路を今後検討しており、その場合は metadata の無いページが正規に存在しうる。孤児として消してよいかどうかの判断はその検討にあわせて別途決める。
 
 同じ slug への同時アップロードは想定しない。触れるのは所有者本人の prefix だけであり、自分で 2 箇所から同時に上げる状況はまず起きない。仮に起きても IAM 上は両方成功し、後から書いたオブジェクトが残る。
 
@@ -372,7 +372,7 @@ CloudFront KeyValueStore には、正本（metadataの `share`）から導出し
 投影は 2 つの経路から行う。実装は `packages/infra/lib/lambda/page-maintenance/`。
 
 - **S3 イベント（該当ページだけの即時反映）**: `meta/` 配下の JSON の作成・削除で起動する。イベントのキーをデコードして prefix を導出し、その prefix の現在の metadata を S3 から読み直して「あるべき状態」を決め、tag 1 件分だけ put / delete する。既存の KVS 値は読まない。他ページを巻き込まない 1 ページ単位の `UpdateKeys` なので、通常は数秒〜十数秒で反映される
-- **1 時間ごとの定期処理（全件突き合わせ）**: `meta/` 全件と KVS 全件を読み、あるべき状態と実際の差分だけを put / delete する。S3 通知の取りこぼしを最大 1 時間で拾う安全網であり、期限切れ削除・孤児回収（「保存期間」節）とあわせて 1 回のスケジュール実行で順に行う。`meta/` 配下の metadata は同時実行数 8 程度の並列で読む（1 回の所要時間がそのまま安全網の反映待ち時間になるため）
+- **1 時間ごとの定期処理（全件突き合わせ）**: `meta/` 全件と KVS 全件を読み、あるべき状態と実際の差分だけを put / delete する。S3 通知の取りこぼしを最大 1 時間で拾う安全網であり、期限切れ削除（「保存期間」節）とあわせて 1 回のスケジュール実行で順に行う。`meta/` 配下の metadata は同時実行数 8 程度の並列で読む（1 回の所要時間がそのまま安全網の反映待ち時間になるため）
 
 あるべき状態が無い（=削除対象）のは、metadata が無い / JSON 不正 / `expiresAt` が ISO 文字列でも `null` でもない（形式異常）/ `expiresAt` を過ぎている / `share` 無し / `share` の検証に失敗 / KVS 値が 1KB を超える、のいずれかである。
 
@@ -427,17 +427,15 @@ Lambda の失敗は CloudWatch Logs と Lambda の `Errors` メトリクスで�
 - EventBridge Rule が 1 時間ごとに PageMaintenance Lambda を起動する。この 1 時間ごとのスケジュールは「外部共有」節の KVS 全件突き合わせ（安全網）も兼ねており、Lambda は同じ 1 回の実行で次の順に処理する
   1. `meta/` 全件の metadata を読む（並列 8）
   2. `expiresAt` が現在時刻を過ぎているページを、成果物 → metadata の順に削除する（CLI / Web の削除と同じ順）
-  3. `pages/` 配下を走査し、オブジェクトはあるが対応する metadata が無い prefix（孤児）を削除する。アップロード中のページを誤って消さないよう、その prefix 配下の最終更新から 24 時間経っているものだけを対象にする（アップロードは成果物 → metadata の順に書くため、この猶予で足りる）
-  4. `meta/` 全件（1 で読んだもの）と KVS 全件を突き合わせ、差分を反映する
+  3. `meta/` 全件（1 で読んだもの）と KVS 全件を突き合わせ、差分を反映する
 - 削除処理は CLI / Web の削除と同じ考え方（成果物 → metadata の順）で書く。ロジックを 2 本持たない
-
-孤児回収は `pages/` を prefix ごとに集約して最終更新時刻を取り、metadata の無いものだけを対象にする。metadata キーだけを見る走査では、metadata が一度も書けていない孤児を見つけられない。
 
 期限切れから実際に消えるまで最大 1 時間のズレが出る。チーム向けツールとして十分であり、その間は URL を知っていればまだ見られる（社内向けの `/p/` がこの猶予まで見えるのと同じ許容範囲とする）。
 
-保存期間の変更は metadata の `expiresAt` を書き換えるだけである。オブジェクトタグも Lifecycle も追随させない。`createdAt` は初回アップロードの値を維持する。
+保存期間の起点は「最後にそのページを操作した時刻から 30 日」で統一する。オブジェクトタグも Lifecycle も追随させない。`createdAt` は初回アップロードの値を維持し、期限の計算にだけ使う保存期間変更・再アップロードの時刻とは別物である。
 
-再アップロード（同一 slug への上書き）では `expiresAt` を再計算する。temporary ページの期限は更新のたびにリセットされ、再共有し直したページが 30 日で消えない。permanent 化済みのページは `--permanent` を付けずに再アップロードしても permanent のまま維持する（temporary への変更は保存期間変更の操作で行う）。
+- アップロード（新規・再アップロードとも）: `expiresAt` はアップロード時刻から数え直す。ただし permanent 化済みのページは、`--permanent` を付けずに再アップロードしても permanent のまま維持する（temporary への変更は保存期間変更の操作で行う）
+- 保存期間の変更: temporary → permanent、permanent → temporary のどちらも変更時刻から数え直す。以前は permanent → temporary の起点が `createdAt` のままだったため、作成から 30 日以上経つと戻した瞬間に期限切れになる問題があったが、これで解消した
 
 ## 管理UI（web）
 
@@ -514,7 +512,7 @@ lib/
                              Response Headers Policy / Geo restriction
     page-maintenance.ts      CloudFront KeyValueStore + PageMaintenance Lambda
                              （S3 イベントでページ単位の投影 + 1 時間ごとの定期処理で
-                             期限切れ削除・孤児回収・KVS全件突き合わせ。アラームは持たない）
+                             期限切れ削除・KVS全件突き合わせ。アラームは持たない）
     app-delivery.ts          app バケット + Distribution + SPA 用 CloudFront Function
 ```
 
@@ -590,7 +588,7 @@ share-id・tag は credential として扱い、ログに全体を出さない�
 
 CloudFront Function は `node:vm` で handler を直接実行する。rewrite、`@` を含む user の 404、末尾スラッシュの 301、index.html 補完を確認する。share-router.js は KVS の get をモックし、id 形式、IP 制限、Basic 認証、rewrite の各分岐を確認する。
 
-PageMaintenance（`packages/infra/lib/lambda/page-maintenance/`）は S3 / KVS の SDK 呼び出しをモックせず、`validate.ts`（検証・期限切れ・KVS 値の直列化・孤児回収の猶予判定）と `plan.ts`（あるべき状態と実際の KVS の差分計算）、`dispatch.ts`（S3イベントかスケジュールかの判定）を純粋関数として単体テストする。
+PageMaintenance（`packages/infra/lib/lambda/page-maintenance/`）は S3 / KVS の SDK 呼び出しをモックせず、`validate.ts`（検証・期限切れ・KVS 値の直列化）と `plan.ts`（あるべき状態と実際の KVS の差分計算）、`dispatch.ts`（S3イベントかスケジュールかの判定）を純粋関数として単体テストする。
 
 CDK は `Template.fromStack()` の snapshot テストを正とする。個別リソースのアサーションは、意図を明示したい箇所（bucket が private であること、CORS があること、pages Distribution に OAC と Function が付いていること、authenticated role のポリシーと信頼ポリシー、unauthenticated access が無効であること）にだけ足す。
 
@@ -621,9 +619,11 @@ web と CLI には、それぞれの利用者に向けたアダプタだけが�
 
 ## やらないこと
 
-API Gateway / REST API / JWT Authorizer / DynamoDB / Lambda@Edge / WAF / S3 Lifecycle + オブジェクトタグ / presigned URL / `packages/api` / `packages/shared` / 既存 ALB との統合 / 外部共有専用の第 3 origin。
+API Gateway / REST API / JWT Authorizer / DynamoDB / Lambda@Edge / WAF / S3 Lifecycle + オブジェクトタグ / presigned URL / `packages/api` / 既存 ALB との統合 / 外部共有専用の第 3 origin。
 
 CloudFront KeyValueStore は外部共有の投影先として採用した。「使わない」の対象からは外れる。
+
+`packages/shared` という名前のパッケージも作らない。これは「API サーバーと呼び出し側で型を共有する」用途を想定していたもので、API 自体を持たないため出番がない。web と CLI がどちらも直接 S3 を操作することで生まれた「ページの規則と S3 操作の共有」は、別の目的として `packages/core` が担っている（「パッケージ構成」節）。
 
 外部共有専用の第 3 origin は作らない。`/s/*` は既存の pages Distribution にビヘイビアとして追加しており、origin は増えていない（理由は「外部共有」節）。
 

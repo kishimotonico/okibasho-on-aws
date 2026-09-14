@@ -7,14 +7,12 @@ import {
   deletePagePrefix,
   getMetadataJson,
   listAllMetadataKeys,
-  listPagePrefixesWithLastModified,
 } from './s3-client.js';
 import type { DiffPlan } from './types.js';
 import {
   buildDesiredEntry,
   decodeS3EventKey,
   isExpired,
-  isPastOrphanGracePeriod,
   prefixFromMetadataKey,
   serializeKvsValue,
 } from './validate.js';
@@ -33,8 +31,8 @@ function requireEnv(name: string): string {
 /**
  * S3イベント(meta/配下のJSONの作成・削除)と1時間ごとのスケジュールの両方から起動される。
  * S3イベントはそのページだけを投影し(ページ単位でUpdateKeysを呼ぶ。all-or-nothingで
- * 他ページを巻き込まないため)、スケジュールは「期限切れページの削除」「孤児の回収」
- * 「meta/全件とKVS全件の突き合わせ」の3つを順に行う(定期処理をcleanupと統合したもの)
+ * 他ページを巻き込まないため)、スケジュールは「期限切れページの削除」
+ * 「meta/全件とKVS全件の突き合わせ」の2つを順に行う(定期処理をcleanupと統合したもの)
  */
 export async function handler(event: unknown): Promise<void> {
   const records = extractS3Records(event);
@@ -97,8 +95,7 @@ interface MetaEntry {
 /**
  * 1時間ごとのスケジュール処理。
  * 1. 期限切れページの削除(成果物 → metadataの順)
- * 2. 孤児(成果物はあるがmetadataが無い prefix。猶予24時間)の回収
- * 3. meta/全件とKVS全件の突き合わせ
+ * 2. meta/全件とKVS全件の突き合わせ
  *
  * 期限切れページの削除を先に行うが、KVSの突き合わせに使う desired は
  * (削除前に読んだ)metadataから buildDesiredEntry で計算するため、期限切れ分は
@@ -120,7 +117,6 @@ async function handleSchedule(): Promise<void> {
   });
 
   await deleteExpiredPages(metaEntries, now);
-  await reclaimOrphanPages(metaEntries, now);
   await reconcileKvs(metaEntries, now);
 }
 
@@ -139,27 +135,6 @@ async function deleteExpiredPages(metaEntries: MetaEntry[], now: Date): Promise<
     await deletePagePrefix(PAGES_BUCKET, entry.prefix);
     await deleteObjectsChunked(PAGES_BUCKET, [entry.key]);
     console.log(`cleanup: expired prefix=${entry.prefix}`);
-  }
-}
-
-/**
- * 孤児(pages/配下にオブジェクトはあるがmeta/配下にmetadataが無いprefix)を回収する。
- * アップロードは成果物 → metadataの順に書くため、アップロード中のページを誤って消さないよう
- * そのprefix配下の最新更新から24時間経っているものだけを対象にする
- */
-async function reclaimOrphanPages(metaEntries: MetaEntry[], now: Date): Promise<void> {
-  const metadataPrefixes = new Set(metaEntries.map((entry) => entry.prefix));
-  const pagePrefixes = await listPagePrefixesWithLastModified(PAGES_BUCKET);
-
-  for (const [prefix, lastModified] of pagePrefixes) {
-    if (metadataPrefixes.has(prefix)) {
-      continue;
-    }
-    if (!isPastOrphanGracePeriod(lastModified, now)) {
-      continue;
-    }
-    await deletePagePrefix(PAGES_BUCKET, prefix);
-    console.log(`cleanup: orphan prefix=${prefix}`);
   }
 }
 

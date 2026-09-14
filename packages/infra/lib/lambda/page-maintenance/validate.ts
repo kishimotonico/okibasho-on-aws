@@ -129,23 +129,6 @@ export function prefixFromMetadataKey(s3Key: string): string | null {
   return `pages/${match[1]}/${match[2]}/`;
 }
 
-/** ページ成果物のキー "pages/<email>/<slug>/..." からそのページのprefixを導出する(孤児回収の走査で使う) */
-export function pagePrefixFromObjectKey(s3Key: string): string | null {
-  const match = s3Key.match(/^pages\/([^/]+)\/([^/]+)\//);
-  if (!match) {
-    return null;
-  }
-  return `pages/${match[1]}/${match[2]}/`;
-}
-
-/** 孤児回収の猶予(24時間)。アップロード中(成果物のみ書けてmetadataがまだ無い)のページを誤って消さないための猶予 */
-const ORPHAN_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
-
-/** そのprefix配下で最後にオブジェクトが更新されてから猶予時間を過ぎているか。過ぎていれば孤児として消してよい */
-export function isPastOrphanGracePeriod(lastModified: Date, now: Date): boolean {
-  return now.getTime() - lastModified.getTime() >= ORPHAN_GRACE_PERIOD_MS;
-}
-
 export function buildShareKvsValue(prefix: string, share: ValidatedShare): ShareKvsValue {
   const value: ShareKvsValue = { p: prefix, id: share.id };
   if (share.basic) {

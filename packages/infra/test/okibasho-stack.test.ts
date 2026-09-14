@@ -351,7 +351,7 @@ describe('OkibashoStack', () => {
           st.Action === 's3:DeleteObject' ||
           (Array.isArray(st.Action) && st.Action.includes('s3:DeleteObject')),
       );
-      // 期限切れ削除・孤児回収のため、削除だけはpages/*・meta/*の両方に許可する
+      // 期限切れ削除のため、削除だけはpages/*・meta/*の両方に許可する
       expect(JSON.stringify(s3DeleteStatement?.Resource)).toContain('/pages/*');
       expect(JSON.stringify(s3DeleteStatement?.Resource)).toContain('/meta/*');
 

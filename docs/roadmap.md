@@ -91,7 +91,7 @@
 
 ## Phase 5: 仕上げ
 
-- [x] EventBridge Rule + cleanup（期限切れ削除・孤児回収）。別Lambdaは作らず、PageMaintenance Lambda（旧share projector）の1時間ごとのスケジュール処理に統合した（[plan-performance-tuning.md](plan-performance-tuning.md) フェーズ4）
+- [x] EventBridge Rule + cleanup（期限切れ削除）。別Lambdaは作らず、PageMaintenance Lambda（旧share projector）の1時間ごとのスケジュール処理に統合した（[plan-performance-tuning.md](plan-performance-tuning.md) フェーズ4）。当初あわせて実装した孤児回収は、アップロードの書き込み順を metadata 先行に変えたことで不要になり削除した
 - [ ] Google IdP 追加 + メールドメイン制限（PreSignUp トリガー）
 - [ ] CLI の npm 配布
 - [ ] CI（typecheck / test / synth）、GitHub Actions OIDC

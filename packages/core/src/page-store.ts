@@ -215,16 +215,17 @@ export function createPageStore({ s3, bucket, email }: PageStoreTarget): PageSto
     getMetadata,
 
     async upload(slug, files, options) {
-      // ページ成果物 → 差分削除 → metadata の順に書く。途中で失敗しても一覧は前の状態のまま。
-      // 新規で metadata まで届かなかった prefix は PageMaintenance が孤児として回収する
+      // metadata → ページ成果物の並列 Put → 差分削除の順に書く。途中で失敗しても
+      // metadata は残るので一覧に載り続け、利用者が消すか上げ直せる
+      const metadata = buildUploadMetadata(options.existing, options, new Date());
+      await putMetadata(slug, metadata);
+
       await putFiles(slug, files, options.onProgress);
 
       const uploadedKeys = new Set(files.map((file) => pageObjectKey(email, slug, file.path)));
       const existingKeys = await listKeys(pagePrefix(email, slug));
       await deleteKeys(existingKeys.filter((key) => !uploadedKeys.has(key)));
 
-      const metadata = buildUploadMetadata(options.existing, options, new Date());
-      await putMetadata(slug, metadata);
       return metadata;
     },
 

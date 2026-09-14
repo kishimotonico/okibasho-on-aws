@@ -4,12 +4,11 @@ import {
   ListObjectsV2Command,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { pagePrefixFromObjectKey, parseMetadataJson } from './validate.js';
+import { parseMetadataJson } from './validate.js';
 
 const client = new S3Client({});
 
 const META_PREFIX = 'meta/';
-const PAGES_PREFIX = 'pages/';
 /** DeleteObjects は1回のリクエストで1000件まで */
 const DELETE_CHUNK_SIZE = 1000;
 
@@ -74,41 +73,6 @@ export async function listAllKeysUnderPrefix(bucket: string, prefix: string): Pr
 /** meta/ 配下の全 metadata キーを列挙する(全件reconcile用) */
 export async function listAllMetadataKeys(bucket: string): Promise<string[]> {
   return listAllKeysUnderPrefix(bucket, META_PREFIX);
-}
-
-/**
- * pages/ 配下の全オブジェクトを走査し、ページ(email/slug)単位でグループ化して
- * 最新の LastModified を返す(孤児回収の走査用)。キー自体は保持せず集約だけ持つ
- */
-export async function listPagePrefixesWithLastModified(bucket: string): Promise<Map<string, Date>> {
-  const latest = new Map<string, Date>();
-  let continuationToken: string | undefined;
-
-  do {
-    const result = await client.send(
-      new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: PAGES_PREFIX,
-        ContinuationToken: continuationToken,
-      }),
-    );
-    for (const object of result.Contents ?? []) {
-      if (!object.Key || !object.LastModified) {
-        continue;
-      }
-      const pagePrefix = pagePrefixFromObjectKey(object.Key);
-      if (!pagePrefix) {
-        continue;
-      }
-      const current = latest.get(pagePrefix);
-      if (!current || object.LastModified > current) {
-        latest.set(pagePrefix, object.LastModified);
-      }
-    }
-    continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
-  } while (continuationToken);
-
-  return latest;
 }
 
 /** keys を1000件ずつのチャンクに分けて DeleteObjects する */

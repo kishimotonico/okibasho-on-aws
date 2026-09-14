@@ -4,10 +4,8 @@ import {
   buildShareKvsValue,
   decodeS3EventKey,
   isExpired,
-  isPastOrphanGracePeriod,
   isValidCidr,
   isValidShareId,
-  pagePrefixFromObjectKey,
   prefixFromMetadataKey,
   serializeKvsValue,
   validateShare,
@@ -250,42 +248,6 @@ describe('buildDesiredEntry', () => {
       share: { id: VALID_ID },
     };
     expect(buildDesiredEntry(metadata, prefix, now)).toBeNull();
-  });
-});
-
-describe('pagePrefixFromObjectKey', () => {
-  it('pages/<email>/<slug>/... からページのprefixを導出する', () => {
-    expect(pagePrefixFromObjectKey('pages/tanaka@example.jp/q3-report/index.html')).toBe(
-      'pages/tanaka@example.jp/q3-report/',
-    );
-  });
-
-  it('ネストしたパスでも先頭3セグメントだけを見る', () => {
-    expect(pagePrefixFromObjectKey('pages/tanaka@example.jp/q3-report/assets/img.png')).toBe(
-      'pages/tanaka@example.jp/q3-report/',
-    );
-  });
-
-  it('pages/配下以外は null', () => {
-    expect(pagePrefixFromObjectKey('meta/tanaka@example.jp/q3-report.json')).toBeNull();
-  });
-
-  it('セグメント数が足りないkeyは null', () => {
-    expect(pagePrefixFromObjectKey('pages/tanaka@example.jp')).toBeNull();
-  });
-});
-
-describe('isPastOrphanGracePeriod', () => {
-  const now = new Date('2026-01-02T00:00:00Z');
-
-  it('最終更新から24時間経っていれば孤児として回収してよい', () => {
-    const lastModified = new Date('2026-01-01T00:00:00Z'); // ちょうど24時間前
-    expect(isPastOrphanGracePeriod(lastModified, now)).toBe(true);
-  });
-
-  it('24時間経っていなければアップロード中の可能性があるので回収しない', () => {
-    const lastModified = new Date('2026-01-01T01:00:00Z'); // 23時間前
-    expect(isPastOrphanGracePeriod(lastModified, now)).toBe(false);
   });
 });
 

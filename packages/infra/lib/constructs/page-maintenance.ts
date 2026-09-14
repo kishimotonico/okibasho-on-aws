@@ -12,23 +12,23 @@ import { EventType, type Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export interface PageMaintenanceProps {
-  /** pages bucket。Lambdaがmeta/配下のmetadataを読み、期限切れ・孤児のpages/配下を削除する */
+  /** pages bucket。Lambdaがmeta/配下のmetadataを読み、期限切れのpages/配下を削除する */
   readonly pagesBucket: Bucket;
 }
 
 /**
  * share-id → S3 prefix の投影(CloudFront KVS)と、それを正本(meta/配下のmetadataの
- * share フィールド)から作り直すLambda。roadmap.md の cleanup Lambda(期限切れ削除・
- * 孤児回収)はこの Lambda の定期処理に統合しており、別 Lambda としては作らない。
+ * share フィールド)から作り直すLambda。roadmap.md の cleanup Lambda(期限切れ削除)は
+ * この Lambda の定期処理に統合しており、別 Lambda としては作らない。
  *
  * 外部共有のエッジ側(share-router.js と /s/* ビヘイビア)は PagesDelivery が持つ。
  * このConstructはKVSへの書き込み経路とページのお掃除(定期処理とそのトリガー)だけを担う。
  *
  * Lambdaはmetadataの作成・削除のS3イベントと1時間ごとのスケジュールの両方から起動する。
  * S3イベントは該当ページだけを投影し(ページ単位でUpdateKeysを呼ぶ)、スケジュールは
- * 「期限切れページの削除」「孤児(metadataの無い成果物prefix)の回収」
- * 「meta/全件とKVS全件の突き合わせ」を順に行う冪等な処理。KVSのキーはprefixから決まるtagのため、
- * イベントの順序・重複には依存しない(取りこぼしはスケジュールが最大1時間遅れで拾う)。
+ * 「期限切れページの削除」「meta/全件とKVS全件の突き合わせ」を順に行う冪等な処理。
+ * KVSのキーはprefixから決まるtagのため、イベントの順序・重複には依存しない
+ * (取りこぼしはスケジュールが最大1時間遅れで拾う)。
  */
 export class PageMaintenance extends Construct {
   readonly keyValueStore: KeyValueStore;
@@ -70,7 +70,7 @@ export class PageMaintenance extends Construct {
       },
       description:
         'page maintenance: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影し、' +
-        '期限切れページの削除・孤児回収も行う',
+        '期限切れページの削除も行う',
     });
 
     // 同時実行1で詰まった古い非同期呼び出しを溜め込まない。5分より古い呼び出しは
@@ -98,7 +98,7 @@ export class PageMaintenance extends Construct {
       new PolicyStatement({
         effect: Effect.ALLOW,
         actions: ['s3:DeleteObject'],
-        // 期限切れページ・孤児の削除用。ページ成果物(pages/*)とmetadata(meta/*)の両方が対象
+        // 期限切れページの削除用。ページ成果物(pages/*)とmetadata(meta/*)の両方が対象
         resources: [pagesBucket.arnForObjects('pages/*'), pagesBucket.arnForObjects('meta/*')],
       }),
     );
@@ -109,7 +109,7 @@ export class PageMaintenance extends Construct {
         actions: ['s3:ListBucket'],
         resources: [pagesBucket.bucketArn],
         conditions: {
-          // meta/* は投影・reconcile用、pages/* は孤児回収の走査用
+          // meta/* は投影・reconcile用、pages/* は期限切れページの削除で対象prefixを列挙する用
           StringLike: { 's3:prefix': ['meta/*', 'pages/*'] },
         },
       }),
@@ -133,7 +133,7 @@ export class PageMaintenance extends Construct {
 
   /**
    * metadataの作成・削除で即時に起動し、1時間ごとのスケジュールを重ねる。
-   * スケジュールは「S3イベントの取りこぼしを拾う安全網」と「cleanup(期限切れ削除・孤児回収)」を
+   * スケジュールは「S3イベントの取りこぼしを拾う安全網」と「cleanup(期限切れ削除)」を
    * 兼ねる。取りこぼしの回復は最大1時間になるが、社内 `/p/` の cleanup 反映と同じ許容範囲とする
    */
   private wireTriggers(pagesBucket: Bucket): void {
@@ -147,7 +147,7 @@ export class PageMaintenance extends Construct {
     new Rule(this, 'ScheduleRule', {
       schedule: Schedule.rate(Duration.hours(1)),
       targets: [new LambdaFunction(this.maintenanceFunction)],
-      description: '安全網 + cleanup(期限切れ削除・孤児回収・KVS全件突き合わせ)を1時間毎に実行',
+      description: '安全網 + cleanup(期限切れ削除・KVS全件突き合わせ)を1時間毎に実行',
     });
   }
 }
