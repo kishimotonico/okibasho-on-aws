@@ -1,4 +1,4 @@
-import { UserManager, WebStorageStateStore } from 'oidc-client-ts';
+import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
 
 import { getWebConfig } from '~/config/env';
 
@@ -32,7 +32,20 @@ function buildMetadata(hostedUiBaseUrl: string, issuer: string) {
   };
 }
 
-export function createUserManager(): UserManager {
+let userManager: UserManager | null = null;
+
+/**
+ * UserManager はアプリでひとつだけ持つ。
+ * React の外（route の loader）からもログイン状態を読むため、
+ * AuthProvider の内側に閉じ込めず、モジュールで共有する。
+ * 複数インスタンスを作るとトークンの自動更新タイマーが二重に走る。
+ */
+export function getUserManager(): UserManager {
+  userManager ??= createUserManager();
+  return userManager;
+}
+
+function createUserManager(): UserManager {
   const config = getWebConfig();
   const storage = createSessionStorage();
 
@@ -70,6 +83,29 @@ export function buildLogoutUrl(
 export function getLogoutUrl(): string {
   const config = getWebConfig();
   return buildLogoutUrl(config.hostedUiBaseUrl, config.webAppClientId, window.location.origin);
+}
+
+/** S3 を呼ぶのに必要なログイン情報。email は S3 のキーに使うため小文字で揃える */
+export interface AuthSession {
+  email: string;
+  idToken: string;
+}
+
+export function sessionFromUser(user: User | null): AuthSession | null {
+  if (!user || user.expired) {
+    return null;
+  }
+  const email =
+    typeof user.profile.email === 'string' ? user.profile.email.trim().toLowerCase() : null;
+  if (!email || !user.id_token) {
+    return null;
+  }
+  return { email, idToken: user.id_token };
+}
+
+/** route の loader など、React の外からログイン情報を読む */
+export async function loadAuthSession(): Promise<AuthSession | null> {
+  return sessionFromUser(await getUserManager().getUser());
 }
 
 export function saveReturnPath(path: string): void {

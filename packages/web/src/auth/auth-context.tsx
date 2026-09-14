@@ -11,17 +11,19 @@ import type { User, UserManager } from 'oidc-client-ts';
 
 import {
   consumeReturnPath,
-  createUserManager,
   getLogoutUrl,
+  getUserManager,
   saveReturnPath,
+  sessionFromUser,
+  type AuthSession,
 } from '~/auth/user-manager';
 
 export interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   user: User | null;
-  email: string | null;
-  idToken: string | null;
+  /** S3 を呼ぶのに必要な email と idToken。未ログイン・期限切れでは null */
+  session: AuthSession | null;
   login: (returnPath?: string) => Promise<void>;
   logout: () => Promise<void>;
   completeSignInCallback: () => Promise<string>;
@@ -31,8 +33,7 @@ const ssrAuthState: AuthState = {
   isLoading: false,
   isAuthenticated: false,
   user: null,
-  email: null,
-  idToken: null,
+  session: null,
   login: async () => {},
   logout: async () => {},
   completeSignInCallback: async () => '/',
@@ -46,7 +47,7 @@ function ClientAuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setUserManager(createUserManager());
+    setUserManager(getUserManager());
   }, []);
 
   useEffect(() => {
@@ -122,9 +123,7 @@ function ClientAuthProvider({ children }: { children: ReactNode }) {
       isLoading: userManager === null || isLoading,
       isAuthenticated: user !== null && !user.expired,
       user,
-      email:
-        typeof user?.profile.email === 'string' ? user.profile.email.trim().toLowerCase() : null,
-      idToken: user?.id_token ?? null,
+      session: sessionFromUser(user),
       login,
       logout,
       completeSignInCallback,

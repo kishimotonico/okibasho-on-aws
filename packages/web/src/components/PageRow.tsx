@@ -1,0 +1,123 @@
+import { Check, Copy, EllipsisVertical, SquareArrowOutUpRight } from 'lucide-react';
+import { useRef } from 'react';
+
+import type { ListedPage, Retention } from '~/api/pages';
+import { Menu, MenuItem } from '~/components/Menu';
+import { Tooltip } from '~/components/Tooltip';
+import { getExpirationStatus } from '~/lib/expiration-status';
+import { messages } from '~/lib/messages';
+
+interface PageRowProps {
+  page: ListedPage;
+  highlighted: boolean;
+  copied: boolean;
+  onCopy: (page: ListedPage) => void;
+  onReupload: (page: ListedPage) => void;
+  onRetentionChange: (page: ListedPage, retention: Retention) => void;
+  onDelete: (page: ListedPage) => void;
+}
+
+/** 一覧の1行。表示だけを受け持ち、操作はすべてコールバックで上へ渡す */
+export function PageRow({
+  page,
+  highlighted,
+  copied,
+  onCopy,
+  onReupload,
+  onRetentionChange,
+  onDelete,
+}: PageRowProps) {
+  // 「再アップロード」を選んだかどうか。メニューが閉じたあとに知る必要があるので ref で持つ
+  const reuploadSelectedRef = useRef(false);
+
+  const expiration = getExpirationStatus(page.expiresAt);
+  const copyLabel = copied ? messages.copied : messages.copyUrl;
+  const rowClass = [
+    'page-row',
+    expiration.kind === 'expired' ? 'page-row--expired' : '',
+    highlighted ? 'page-row--highlight' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <li className={rowClass} data-highlighted={highlighted ? 'true' : undefined}>
+      <div className="page-row__info">
+        <h3>{page.slug}</h3>
+        <p className="page-row__url">{page.viewUrl}</p>
+        <p
+          className={
+            expiration.kind === 'expired'
+              ? 'page-row__meta page-row__meta--expired'
+              : 'page-row__meta'
+          }
+        >
+          {expiration.label}
+        </p>
+      </div>
+      <div className="page-row__actions">
+        <Tooltip label={messages.openPage}>
+          <a
+            className="icon-button"
+            href={page.viewUrl}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={messages.openPage}
+          >
+            <SquareArrowOutUpRight size={16} strokeWidth={1.75} aria-hidden />
+          </a>
+        </Tooltip>
+        <Tooltip label={copyLabel}>
+          <button
+            type="button"
+            className={copied ? 'icon-button icon-button--copied' : 'icon-button'}
+            aria-label={copyLabel}
+            onClick={() => onCopy(page)}
+          >
+            {copied ? (
+              <Check size={16} strokeWidth={1.75} aria-hidden />
+            ) : (
+              <Copy size={16} strokeWidth={1.75} aria-hidden />
+            )}
+          </button>
+        </Tooltip>
+        <Menu
+          label={messages.rowActions(page.slug)}
+          tooltip={messages.moreActions}
+          trigger={<EllipsisVertical size={16} strokeWidth={1.75} aria-hidden />}
+          onCloseAutoFocus={(event) => {
+            if (!reuploadSelectedRef.current) {
+              return;
+            }
+            reuploadSelectedRef.current = false;
+            // 再アップロードはフォームの slug 入力へフォーカスを移す。
+            // メニューが開いている間はフォーカストラップに引き戻されるので、
+            // 閉じきったこの瞬間に伝える。トリガーへの復帰は止める
+            event.preventDefault();
+            onReupload(page);
+          }}
+        >
+          <MenuItem
+            onSelect={() => {
+              reuploadSelectedRef.current = true;
+            }}
+          >
+            {messages.reupload}
+          </MenuItem>
+          {page.retention === 'temporary' ? (
+            <MenuItem onSelect={() => onRetentionChange(page, 'permanent')}>
+              {messages.toPermanent}
+            </MenuItem>
+          ) : (
+            <MenuItem onSelect={() => onRetentionChange(page, 'temporary')}>
+              {messages.toTemporary}
+            </MenuItem>
+          )}
+          <MenuItem danger onSelect={() => onDelete(page)}>
+            {messages.remove}
+          </MenuItem>
+        </Menu>
+      </div>
+    </li>
+  );
+}

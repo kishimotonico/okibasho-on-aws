@@ -1,11 +1,8 @@
-import { emailLocalPart, generateRandomSlug, isValidSlug, type PageMetadata } from '@cli/page';
+import { generateRandomSlug, isValidSlug } from '@cli/page';
 import { Check, Copy, Trash2 } from 'lucide-react';
 import {
-  forwardRef,
   useCallback,
   useEffect,
-  useImperativeHandle,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -14,47 +11,37 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 
-import { useAuth } from '~/auth/auth-context';
-import { ConfirmAlertDialog } from '~/components/AlertDialog';
+import { pageMetadataFromListed, type ListedPage, type Retention } from '~/api/pages';
 import { BoxBubble } from '~/components/BoxBubble';
+import { ConfirmAlertDialog } from '~/components/AlertDialog';
 import { Tooltip } from '~/components/Tooltip';
 import { UploadBoxIcon } from '~/components/UploadBoxIcon';
-import { getWebConfig } from '~/config/env';
+import { usePagesApi, userMessage } from '~/hooks/usePagesApi';
 import {
   collectUploadFilesFromFileList,
   collectUploadFilesFromPathEntries,
   type UploadFileEntry,
 } from '~/lib/collect-upload-files';
-import { formatUploadError } from '~/lib/format-upload-error';
-import {
-  buildViewUrl,
-  deletePage,
-  getPageMetadata,
-  type Retention,
-  uploadPage,
-} from '~/lib/pages-s3';
-import { collectFilesFromDataTransfer } from '~/lib/read-data-transfer';
-import { createPagesS3Client } from '~/lib/s3-client';
 import { formatUrlForWrap } from '~/lib/format-url-for-wrap';
+import { messages } from '~/lib/messages';
+import { collectFilesFromDataTransfer } from '~/lib/read-data-transfer';
 import { validateUploadFiles } from '~/lib/validate-upload';
 
-export interface UploadPanelHandle {
-  /** 一覧の「再アップロード」から呼ばれ、フォームの slug を差し替える */
-  setSlug: (slug: string) => void;
-  /** 一覧からページを消したあと、その slug がフォームに残っていれば乱数に戻す */
-  notifyPageDeleted: (slug: string) => void;
-}
+/** 一覧の操作をフォームへ伝えるための合図。同じ slug が続けて来ても分かるよう nonce を持つ */
+export type ComposerSignal = { slug: string; nonce: number } | null;
 
-export type UploadedPageInfo = {
-  slug: string;
-  viewUrl: string;
-  isReupload: boolean;
-};
-
-interface UploadPanelProps {
+interface ComposerProps {
   initialSlug?: string;
-  onUploaded: (info: UploadedPageInfo) => void;
-  onDeleted?: (slug: string) => void;
+  /** 既存 slug の確認と、差し替え時に引き継ぐメタデータの取得元 */
+  pages: readonly ListedPage[];
+  /** 一覧の「再アップロード」。slug を入れてフォーカスする */
+  seed: ComposerSignal;
+  /** 消えたページ。フォームに残っていれば外す */
+  retired: ComposerSignal;
+  /** ページの削除中（ルート側のトランジション） */
+  deleting: boolean;
+  onUploaded: (slug: string) => void;
+  onDelete: (slug: string) => void;
 }
 
 type UploadPhase = 'idle' | 'uploading' | 'success' | 'error';
@@ -65,25 +52,27 @@ type BubbleState =
   | { kind: 'success'; message: string };
 
 const DEFAULT_RETENTION: Retention = 'temporary';
-const INVALID_SLUG_MESSAGE = '使えるのは小文字の英数字と - _ だけ';
 const DRAG_STALE_MS = 2000;
 const COPY_FEEDBACK_MS = 2000;
-const UPLOADED_MESSAGE = '公開しました';
 
 function validationBubbleMessage(errors: readonly { code: string; message: string }[]): string {
   const missingIndex = errors.find((error) => error.code === 'missing_index_html');
   if (missingIndex) {
     return missingIndex.message;
   }
-  return errors[0]?.message ?? '送れませんでした。もう一度どうぞ。';
+  return errors[0]?.message ?? messages.uploadFailed;
 }
 
-export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(function UploadPanel(
-  { initialSlug, onUploaded, onDeleted },
-  ref,
-) {
-  const auth = useAuth();
-  const config = useMemo(() => getWebConfig(), []);
+export function Composer({
+  initialSlug,
+  pages,
+  seed,
+  retired,
+  deleting,
+  onUploaded,
+  onDelete,
+}: ComposerProps) {
+  const api = usePagesApi();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const directoryInputRef = useRef<HTMLInputElement>(null);
   const slugInputRef = useRef<HTMLInputElement>(null);
@@ -101,29 +90,66 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   const [pendingOverwrite, setPendingOverwrite] = useState<{
     files: UploadFileEntry[];
     targetSlug: string;
-    existingMetadata: PageMetadata;
+    existing: ListedPage;
   } | null>(null);
-  const [highlightSlug, setHighlightSlug] = useState<string | null>(null);
+  const [overwriteSlug, setOverwriteSlug] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<{ slug: string; viewUrl: string } | null>(
     null,
   );
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [slugTooltipOpen, setSlugTooltipOpen] = useState(false);
   const slugJustFocusedRef = useRef(false);
+  // window のイベントリスナーは登録し直さずに最新の phase を読む必要があるため ref に映す
   const phaseRef = useRef<UploadPhase>('idle');
-  const urlOrigin = config.pagesBaseUrl.replace(/\/$/, '');
-  const userPath = auth.email ? `/${emailLocalPart(auth.email)}/` : '';
-  const urlPrefix = auth.email ? `${urlOrigin}${userPath}` : '';
-  const slugAriaLabel = urlPrefix ? `公開URL ${urlPrefix}${slug}` : '公開URL';
-  const slugRef = useRef(slug);
-  slugRef.current = slug;
-  const successResultRef = useRef(successResult);
-  successResultRef.current = successResult;
-  const pendingOverwriteRef = useRef(pendingOverwrite);
-  pendingOverwriteRef.current = pendingOverwrite;
   phaseRef.current = phase;
+
+  const slugAriaLabel = api.userPath ? `公開URL ${api.urlOrigin}${api.userPath}${slug}` : '公開URL';
+  const busy = phase === 'uploading';
+
+  const dismissBubble = useCallback(() => {
+    setBubble(null);
+    setPendingOverwrite(null);
+    setOverwriteSlug(null);
+  }, []);
+
+  const resetToIdle = useCallback(() => {
+    setPhase('idle');
+    setSuccessResult(null);
+    setCopyMessage(null);
+    setDeleteConfirmOpen(false);
+    dismissBubble();
+  }, [dismissBubble]);
+
+  // 一覧からの合図に合わせて状態を直す。描画中の setState は React の
+  // 「prop の変化に合わせて state を直す」書き方で、effect より一手早く整う
+  const [appliedSeed, setAppliedSeed] = useState(0);
+  if (seed && seed.nonce !== appliedSeed) {
+    setAppliedSeed(seed.nonce);
+    setSlug(seed.slug);
+    lockedRef.current = false;
+    resetToIdle();
+  }
+
+  const [appliedRetired, setAppliedRetired] = useState(0);
+  if (retired && retired.nonce !== appliedRetired) {
+    setAppliedRetired(retired.nonce);
+    if (slug === retired.slug) {
+      setSlug(generateRandomSlug());
+    }
+    if (successResult?.slug === retired.slug || pendingOverwrite?.targetSlug === retired.slug) {
+      lockedRef.current = false;
+      resetToIdle();
+    }
+  }
+
+  // seed が変わった描画では slug 入力が必ず出ているので、そのままフォーカスを移せる
+  useEffect(() => {
+    if (!seed) {
+      return;
+    }
+    slugInputRef.current?.focus();
+  }, [seed]);
 
   useEffect(() => {
     if (phase !== 'idle' || bubble) {
@@ -139,58 +165,6 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
     return () => window.clearTimeout(id);
   }, [copyMessage]);
 
-  const dismissBubble = useCallback(() => {
-    setBubble(null);
-    setPendingOverwrite(null);
-    setHighlightSlug(null);
-  }, []);
-
-  const resetAfterDeletedPage = useCallback(
-    (deletedSlug: string) => {
-      if (slugRef.current === deletedSlug) {
-        const nextSlug = generateRandomSlug();
-        setSlug(nextSlug);
-        slugFocusValueRef.current = nextSlug;
-      }
-
-      if (successResultRef.current?.slug === deletedSlug) {
-        setSuccessResult(null);
-        setCopyMessage(null);
-        setPhase('idle');
-        setDeleteConfirmOpen(false);
-        dismissBubble();
-      }
-
-      if (pendingOverwriteRef.current?.targetSlug === deletedSlug) {
-        lockedRef.current = false;
-        dismissBubble();
-        setPhase('idle');
-      }
-    },
-    [dismissBubble],
-  );
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      setSlug: (value: string) => {
-        setSlug(value);
-        setPhase('idle');
-        setSuccessResult(null);
-        setCopyMessage(null);
-        setDeleteConfirmOpen(false);
-        dismissBubble();
-        window.setTimeout(() => {
-          slugInputRef.current?.focus();
-        }, 0);
-      },
-      notifyPageDeleted: (deletedSlug: string) => {
-        resetAfterDeletedPage(deletedSlug);
-      },
-    }),
-    [dismissBubble, resetAfterDeletedPage],
-  );
-
   const showError = useCallback((message: string, options?: { persist?: boolean }) => {
     lockedRef.current = false;
     setBubble({ kind: 'error', message, persist: options?.persist });
@@ -200,56 +174,34 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   }, []);
 
   const executeUpload = useCallback(
-    async (
-      files: UploadFileEntry[],
-      targetSlug: string,
-      existingMetadata?: PageMetadata | null,
-    ) => {
-      if (!auth.idToken || !auth.email) {
-        showError('ログインが必要です');
-        return;
-      }
-
-      setHighlightSlug(targetSlug);
+    async (files: UploadFileEntry[], targetSlug: string, existing?: ListedPage | null) => {
+      setOverwriteSlug(targetSlug);
       setPhase('uploading');
       setProgress({ completed: 0, total: files.length });
 
       try {
-        const client = createPagesS3Client(config, auth.idToken);
-        const metadata = existingMetadata ?? null;
-
-        await uploadPage(
-          client,
-          config.pagesBucket,
-          auth.email,
-          targetSlug,
-          files,
-          {
-            retention,
-            existingMetadata: metadata,
-          },
-          (completed, total) => setProgress({ completed, total }),
-        );
-
-        const nextViewUrl = buildViewUrl(config.pagesBaseUrl, auth.email, targetSlug);
-        setSlug(generateRandomSlug());
-        setSuccessResult({ slug: targetSlug, viewUrl: nextViewUrl });
-        setPhase('success');
-        setBubble({ kind: 'success', message: UPLOADED_MESSAGE });
-        onUploaded({
+        const result = await api.upload({
           slug: targetSlug,
-          viewUrl: nextViewUrl,
-          isReupload: Boolean(metadata),
+          files,
+          retention,
+          existing: existing ? pageMetadataFromListed(existing) : null,
+          onProgress: (completed, total) => setProgress({ completed, total }),
         });
+
+        setSlug(generateRandomSlug());
+        setSuccessResult(result);
+        setPhase('success');
+        setBubble({ kind: 'success', message: messages.uploaded });
+        onUploaded(result.slug);
       } catch (error) {
-        showError(formatUploadError(error).message);
+        showError(userMessage(error));
       } finally {
         lockedRef.current = false;
-        setHighlightSlug(null);
+        setOverwriteSlug(null);
         setPendingOverwrite(null);
       }
     },
-    [auth.email, auth.idToken, config, onUploaded, retention, showError],
+    [api, onUploaded, retention, showError],
   );
 
   const beginUpload = useCallback(
@@ -276,48 +228,33 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
       }
 
       if (!isValidSlug(targetSlug)) {
-        showError(INVALID_SLUG_MESSAGE, { persist: true });
+        showError(messages.invalidSlug, { persist: true });
         return;
       }
 
-      if (!auth.idToken || !auth.email) {
-        showError('ログインが必要です');
-        return;
-      }
-
-      try {
-        const client = createPagesS3Client(config, auth.idToken);
-        const existingMetadata = await getPageMetadata(
-          client,
-          config.pagesBucket,
-          auth.email,
+      // 既存 slug かどうかは一覧から分かる。S3 へメタデータを読みに行く必要はない
+      const existing = pages.find((page) => page.slug === targetSlug);
+      if (existing) {
+        setPhase('idle');
+        setPendingOverwrite({ files, targetSlug, existing });
+        setOverwriteSlug(targetSlug);
+        setBubble({
+          kind: 'confirm',
+          message: messages.confirmOverwrite(targetSlug),
           targetSlug,
-        );
-
-        if (existingMetadata) {
-          setPhase('idle');
-          setPendingOverwrite({ files, targetSlug, existingMetadata });
-          setHighlightSlug(targetSlug);
-          setBubble({
-            kind: 'confirm',
-            message: `${targetSlug} はもうあるよ。差し替える？ 保存期間はそのまま`,
-            targetSlug,
-          });
-          return;
-        }
-
-        await executeUpload(files, targetSlug);
-      } catch (error) {
-        showError(formatUploadError(error).message);
+        });
+        return;
       }
+
+      await executeUpload(files, targetSlug);
     },
-    [auth.email, auth.idToken, config, dismissBubble, executeUpload, phase, showError, slug],
+    [dismissBubble, executeUpload, pages, phase, showError, slug],
   );
 
   const handleCollectedFiles = useCallback(
     (result: ReturnType<typeof collectUploadFilesFromFileList>) => {
       if (result.singleFileNotHtml) {
-        showError('HTML 以外は置けません');
+        showError(messages.notHtml);
         return;
       }
 
@@ -342,7 +279,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
     handleCollectedFiles(collectUploadFilesFromFileList(selected));
   };
 
-  const handleFilePick = () => {
+  const openPicker = (input: HTMLInputElement | null) => {
     if (phase === 'success') {
       return;
     }
@@ -350,18 +287,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
       lockedRef.current = false;
     }
     dismissBubble();
-    fileInputRef.current?.click();
-  };
-
-  const handleDirectoryPick = () => {
-    if (phase === 'success') {
-      return;
-    }
-    if (bubble?.kind === 'confirm' || pendingOverwrite) {
-      lockedRef.current = false;
-    }
-    dismissBubble();
-    directoryInputRef.current?.click();
+    input?.click();
   };
 
   const handleDrop = useCallback(
@@ -515,23 +441,18 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
   };
 
   const handleUploadAnother = () => {
-    const nextSlug = generateRandomSlug();
-    setSlug(nextSlug);
-    slugFocusValueRef.current = nextSlug;
+    setSlug(generateRandomSlug());
     setRetention(DEFAULT_RETENTION);
-    setSuccessResult(null);
-    setCopyMessage(null);
-    setPhase('idle');
-    dismissBubble();
+    resetToIdle();
   };
 
   const handleReplace = () => {
     if (!pendingOverwrite || bubble?.kind !== 'confirm') {
       return;
     }
-    const { files, targetSlug, existingMetadata } = pendingOverwrite;
+    const { files, targetSlug, existing } = pendingOverwrite;
     dismissBubble();
-    void executeUpload(files, targetSlug, existingMetadata);
+    void executeUpload(files, targetSlug, existing);
   };
 
   const handleConfirmCancel = () => {
@@ -555,32 +476,11 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
 
     try {
       await navigator.clipboard.writeText(successResult.viewUrl);
-      setCopyMessage('コピーしました');
+      setCopyMessage(messages.copied);
     } catch {
-      setCopyMessage('コピーに失敗しました');
+      setCopyMessage(messages.copyFailed);
     }
   };
-
-  const handleDeleteConfirm = async () => {
-    if (!successResult || !auth.idToken || !auth.email || isDeleting) {
-      return;
-    }
-
-    setIsDeleting(true);
-    try {
-      const client = createPagesS3Client(config, auth.idToken);
-      await deletePage(client, config.pagesBucket, auth.email, successResult.slug);
-      const deletedSlug = successResult.slug;
-      resetAfterDeletedPage(deletedSlug);
-      onDeleted?.(deletedSlug);
-    } catch (error) {
-      showError(formatUploadError(error).message);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const busy = phase === 'uploading';
 
   const handleSlugChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextValue = event.target.value;
@@ -588,7 +488,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
     if (bubble?.kind === 'confirm' || pendingOverwrite) {
       lockedRef.current = false;
       dismissBubble();
-    } else if (bubble?.kind === 'error' && bubble.message !== INVALID_SLUG_MESSAGE) {
+    } else if (bubble?.kind === 'error' && bubble.message !== messages.invalidSlug) {
       dismissBubble();
     }
 
@@ -596,18 +496,18 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
 
     const trimmed = nextValue.trim();
     if (!trimmed) {
-      if (bubble?.kind === 'error' && bubble.message === INVALID_SLUG_MESSAGE) {
+      if (bubble?.kind === 'error' && bubble.message === messages.invalidSlug) {
         dismissBubble();
       }
       return;
     }
 
     if (!isValidSlug(trimmed)) {
-      setBubble({ kind: 'error', message: INVALID_SLUG_MESSAGE, persist: true });
+      setBubble({ kind: 'error', message: messages.invalidSlug, persist: true });
       return;
     }
 
-    if (bubble?.kind === 'error' && bubble.message === INVALID_SLUG_MESSAGE) {
+    if (bubble?.kind === 'error' && bubble.message === messages.invalidSlug) {
       dismissBubble();
     }
   };
@@ -636,18 +536,14 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
 
     const trimmed = restored.trim();
     if (!trimmed || isValidSlug(trimmed)) {
-      if (bubble?.kind === 'error' && bubble.message === INVALID_SLUG_MESSAGE) {
+      if (bubble?.kind === 'error' && bubble.message === messages.invalidSlug) {
         dismissBubble();
       }
     }
   };
 
-  const copyButtonLabel =
-    copyMessage === 'コピーしました'
-      ? 'コピーしました'
-      : copyMessage === 'コピーに失敗しました'
-        ? 'コピーに失敗しました'
-        : 'URLをコピー';
+  const copied = copyMessage === messages.copied;
+  const copyButtonLabel = copyMessage ?? messages.copyUrl;
   const progressLabel = progress.total <= 1 ? '1件' : `${progress.completed}/${progress.total}`;
 
   return (
@@ -655,7 +551,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
       {isDragging ? (
         <div className="drag-overlay" aria-hidden="true">
           {!composerVisible ? (
-            <p className="drag-overlay__fallback">上のフォームにドロップ</p>
+            <p className="drag-overlay__fallback">{messages.dragOverlayFallback}</p>
           ) : null}
         </div>
       ) : null}
@@ -663,13 +559,15 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
       <ConfirmAlertDialog
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}
-        title="このページを削除する"
-        description={
-          successResult ? `「${successResult.slug}」を削除しますか？この操作は取り消せません。` : ''
-        }
-        confirmLabel="削除"
+        title={messages.deleteDialogTitle}
+        description={successResult ? messages.deleteDialogDescription(successResult.slug) : ''}
+        confirmLabel={messages.remove}
         danger
-        onConfirm={() => void handleDeleteConfirm()}
+        onConfirm={() => {
+          if (successResult) {
+            onDelete(successResult.slug);
+          }
+        }}
       />
 
       <div
@@ -712,24 +610,22 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
               <div className="upload-result__actions">
                 <button
                   type="button"
-                  className={`button button--copy${
-                    copyMessage === 'コピーしました' ? ' button--copy-success' : ''
-                  }`}
+                  className={`button button--copy${copied ? ' button--copy-success' : ''}`}
                   onClick={() => void handleCopyUrl()}
                 >
-                  {copyMessage === 'コピーしました' ? (
+                  {copied ? (
                     <Check size={16} strokeWidth={1.75} aria-hidden />
                   ) : (
                     <Copy size={16} strokeWidth={1.75} aria-hidden />
                   )}
                   <span>{copyButtonLabel}</span>
                 </button>
-                <Tooltip label="削除">
+                <Tooltip label={messages.remove}>
                   <button
                     type="button"
                     className="icon-button upload-result__delete"
-                    aria-label="削除"
-                    disabled={isDeleting}
+                    aria-label={messages.remove}
+                    disabled={deleting}
                     onClick={() => setDeleteConfirmOpen(true)}
                   >
                     <Trash2 size={16} strokeWidth={1.75} aria-hidden />
@@ -741,7 +637,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
                 className="button button--ghost upload-result__another"
                 onClick={handleUploadAnother}
               >
-                次のファイルを置く
+                {messages.uploadAnother}
               </button>
             </div>
           ) : (
@@ -750,7 +646,7 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
                 {busy ? (
                   <span className="composer-progress">{progressLabel}</span>
                 ) : (
-                  'ここにドロップして公開'
+                  messages.dropLead
                 )}
               </p>
               <div className="composer-pick-links">
@@ -758,9 +654,9 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
                   type="button"
                   className="text-link"
                   disabled={busy}
-                  onClick={handleFilePick}
+                  onClick={() => openPicker(fileInputRef.current)}
                 >
-                  ファイルを選ぶ
+                  {messages.pickFiles}
                 </button>
                 <span className="composer-pick-links__sep" aria-hidden="true">
                   {' '}
@@ -770,9 +666,9 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
                   type="button"
                   className="text-link"
                   disabled={busy}
-                  onClick={handleDirectoryPick}
+                  onClick={() => openPicker(directoryInputRef.current)}
                 >
-                  フォルダを選ぶ
+                  {messages.pickDirectory}
                 </button>
               </div>
             </>
@@ -786,16 +682,16 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
                 公開URL
               </label>
               <div
-                className={`url-input${highlightSlug ? ' url-input--overwrite' : ''}`}
+                className={`url-input${overwriteSlug ? ' url-input--overwrite' : ''}`}
                 tabIndex={-1}
               >
-                {auth.email ? (
+                {api.userPath ? (
                   <span className="url-input__prefix" aria-hidden="true">
-                    <span className="url-input__host">{urlOrigin}</span>
-                    <span className="url-input__user">{userPath}</span>
+                    <span className="url-input__host">{api.urlOrigin}</span>
+                    <span className="url-input__user">{api.userPath}</span>
                   </span>
                 ) : null}
-                <Tooltip label="クリックして名前を付け直せる" side="top" open={slugTooltipOpen}>
+                <Tooltip label={messages.slugTooltip} side="top" open={slugTooltipOpen}>
                   <input
                     ref={slugInputRef}
                     id="public-url-slug"
@@ -867,4 +763,4 @@ export const UploadPanel = forwardRef<UploadPanelHandle, UploadPanelProps>(funct
       </div>
     </div>
   );
-});
+}

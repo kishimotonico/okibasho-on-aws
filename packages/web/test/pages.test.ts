@@ -9,14 +9,13 @@ import { metadataObjectKey, pageObjectKey } from '@cli/page';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  computeExpiresAtForNewUpload,
-  computeExpiresAtForRetentionChange,
+  computeExpiresAt,
   deletePage,
   getPageMetadata,
   listPages,
   updatePageRetention,
   uploadPage,
-} from '../src/lib/pages-s3';
+} from '../src/api/pages';
 
 const email = 'tanaka@example.jp';
 const bucket = 'pages-bucket';
@@ -106,7 +105,7 @@ function createFakeS3Client(initial: Record<string, StoredObject> = {}): S3Clien
   } as unknown as S3Client;
 }
 
-describe('pages-s3', () => {
+describe('pages API', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-26T00:00:00.000Z'));
@@ -150,7 +149,7 @@ describe('pages-s3', () => {
 
     expect(metadata.slug).toBe('q3-report');
     expect(metadata.owner).toBe(email);
-    expect(metadata.expiresAt).toBe(computeExpiresAtForNewUpload('temporary', createdAt));
+    expect(metadata.expiresAt).toBe(computeExpiresAt('temporary', createdAt));
 
     const storedHtml = await getPageMetadata(client, bucket, email, 'q3-report');
     expect(storedHtml?.slug).toBe('q3-report');
@@ -268,7 +267,7 @@ describe('pages-s3', () => {
       { retention: 'temporary', existingMetadata },
     );
 
-    expect(metadata.expiresAt).toBe(computeExpiresAtForNewUpload('temporary', now));
+    expect(metadata.expiresAt).toBe(computeExpiresAt('temporary', now));
     expect(metadata.expiresAt).not.toBe(existingMetadata.expiresAt);
   });
 
@@ -291,7 +290,7 @@ describe('pages-s3', () => {
 
     const metadata = await updatePageRetention(client, bucket, email, slug, 'temporary');
 
-    expect(metadata.expiresAt).toBe(computeExpiresAtForRetentionChange('temporary', createdAt));
+    expect(metadata.expiresAt).toBe(computeExpiresAt('temporary', createdAt));
   });
 
   it('削除は prefix 配下をまとめて消す', async () => {

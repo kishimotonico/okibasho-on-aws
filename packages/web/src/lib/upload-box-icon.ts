@@ -53,7 +53,7 @@ export type BoxIconAnim = {
 
 export type BoxIconMotion = 'idle' | 'hover' | 'drag' | 'uploading' | 'success' | 'error';
 
-/** UploadPanel の phase。hover / drag はコンポーネント内部と dragging から導出する。 */
+/** Composer の phase。hover / drag はコンポーネント内部と dragging から導出する。 */
 export type BoxIconPhase = 'idle' | 'uploading' | 'success' | 'error';
 
 /** チューナー render() の指数補間。`k = 1 - 0.001^(16/260)`、約 0.26s で収束。 */

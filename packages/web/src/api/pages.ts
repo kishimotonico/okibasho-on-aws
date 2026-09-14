@@ -39,26 +39,30 @@ function retentionFromExpiresAt(expiresAt: string | null): Retention {
   return expiresAt === null ? 'permanent' : 'temporary';
 }
 
-export function computeExpiresAtForNewUpload(retention: Retention, createdAt: Date): string | null {
+/**
+ * 保存期限。temporary は基準時刻（新規アップロードは公開時刻、保存期間の変更は作成時刻）から
+ * 30日後で、permanent は期限なし。新規と変更で計算が違わないようひとつにまとめている。
+ */
+export function computeExpiresAt(retention: Retention, base: Date | string): string | null {
   if (retention === 'permanent') {
     return null;
   }
-  const expires = new Date(createdAt);
+  const expires = new Date(base);
   expires.setUTCDate(expires.getUTCDate() + DEFAULT_RETENTION_DAYS);
   return expires.toISOString();
 }
 
-export function computeExpiresAtForRetentionChange(
-  retention: Retention,
-  createdAt: string,
-): string | null {
-  if (retention === 'permanent') {
-    return null;
-  }
-  const created = new Date(createdAt);
-  const expires = new Date(created);
-  expires.setUTCDate(expires.getUTCDate() + DEFAULT_RETENTION_DAYS);
-  return expires.toISOString();
+/**
+ * 一覧の行から、差し替えアップロードで引き継ぐメタデータを作る。
+ * 一覧が同じ内容を持っているので、差し替えのたびに S3 を読み直す必要はない。
+ */
+export function pageMetadataFromListed(page: ListedPage): PageMetadata {
+  return {
+    slug: page.slug,
+    owner: page.owner,
+    createdAt: page.createdAt,
+    expiresAt: page.expiresAt,
+  };
 }
 
 async function bodyToString(body: unknown): Promise<string> {
@@ -279,13 +283,13 @@ export async function uploadPage(
         expiresAt:
           options.existingMetadata.expiresAt === null
             ? null
-            : computeExpiresAtForNewUpload(options.retention, now),
+            : computeExpiresAt(options.retention, now),
       }
     : {
         slug,
         owner: email,
         createdAt: now.toISOString(),
-        expiresAt: computeExpiresAtForNewUpload(options.retention, now),
+        expiresAt: computeExpiresAt(options.retention, now),
       };
 
   await client.send(
@@ -314,7 +318,7 @@ export async function updatePageRetention(
 
   const metadata: PageMetadata = {
     ...existing,
-    expiresAt: computeExpiresAtForRetentionChange(retention, existing.createdAt),
+    expiresAt: computeExpiresAt(retention, existing.createdAt),
   };
 
   await client.send(

@@ -1,28 +1,14 @@
-export type FormattedUploadError = {
-  message: string;
-  detail: string | null;
-};
+import { messages } from '~/lib/messages';
 
 const NETWORK_MESSAGE = 'つながりません。接続を確かめて、もう一度どうぞ。';
 
 /**
- * アップロード失敗を画面用の日本語にする。
- * fetch のネットワークエラーは定型文、それ以外は概要 + 元のメッセージ。
+ * S3 呼び出しの失敗を画面に出す日本語にする。
+ * fetch のネットワークエラーは操作によらず同じ案内、それ以外は操作ごとの fallback。
+ * 生のエラーメッセージ（AccessDenied など）は画面に出さない。
  */
-export function formatUploadError(error: unknown): FormattedUploadError {
-  const detail = rawErrorText(error);
-
-  if (isNetworkFailure(detail)) {
-    return {
-      message: NETWORK_MESSAGE,
-      detail: detail === 'Failed to fetch' ? null : detail,
-    };
-  }
-
-  return {
-    message: '送れませんでした。もう一度どうぞ。',
-    detail,
-  };
+export function toUserMessage(error: unknown, fallback: string = messages.uploadFailed): string {
+  return isNetworkFailure(rawErrorText(error)) ? NETWORK_MESSAGE : fallback;
 }
 
 function rawErrorText(error: unknown): string {
