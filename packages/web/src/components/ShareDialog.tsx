@@ -198,42 +198,44 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
                 </p>
               ) : null}
 
-              <label className="share-password-toggle">
-                <input
-                  type="checkbox"
-                  checked={hasPassword}
-                  disabled={saving}
-                  onChange={(event) => void handlePasswordToggle(event.target.checked)}
-                />
-                {messages.sharePasswordToggle}
-              </label>
-              {!hasPassword ? (
-                <p className="field-hint">{messages.sharePasswordToggleHint}</p>
-              ) : null}
+              <div className="share-password-group">
+                <label className="share-password-toggle">
+                  <input
+                    type="checkbox"
+                    checked={hasPassword}
+                    disabled={saving}
+                    onChange={(event) => void handlePasswordToggle(event.target.checked)}
+                  />
+                  {messages.sharePasswordToggle}
+                </label>
+                {!hasPassword ? (
+                  <p className="field-hint">{messages.sharePasswordToggleHint}</p>
+                ) : null}
 
-              {hasPassword ? (
-                <div className="share-credentials">
-                  <div className="share-credentials__field">
-                    <span className="share-form__field-label">{messages.shareUsernameLabel}</span>
-                    <p className="share-credentials__value share-credentials__value--mono">
-                      {SHARE_USERNAME}
-                    </p>
-                  </div>
-                  <div className="share-credentials__field">
-                    <span className="share-form__field-label">{messages.sharePasswordLabel}</span>
-                    <div className="share-credentials__password">
-                      <span className="share-credentials__value share-credentials__value--mono">
-                        {existingShare.password}
-                      </span>
-                      <CopyButton
-                        value={existingShare.password!}
-                        variant="icon"
-                        label={messages.sharePasswordCopy}
-                      />
+                {hasPassword ? (
+                  <div className="share-credentials">
+                    <div className="share-credentials__field">
+                      <span className="share-form__field-label">{messages.shareUsernameLabel}</span>
+                      <p className="share-credentials__value share-credentials__value--mono">
+                        {SHARE_USERNAME}
+                      </p>
+                    </div>
+                    <div className="share-credentials__field">
+                      <span className="share-form__field-label">{messages.sharePasswordLabel}</span>
+                      <div className="share-credentials__password">
+                        <span className="share-credentials__value share-credentials__value--mono">
+                          {existingShare.password}
+                        </span>
+                        <CopyButton
+                          value={existingShare.password!}
+                          variant="icon"
+                          label={messages.sharePasswordCopy}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
 
               {error ? <p className="message message--error">{error}</p> : null}
               {notice ? <p className="field-hint">{noticeMessage(notice)}</p> : null}

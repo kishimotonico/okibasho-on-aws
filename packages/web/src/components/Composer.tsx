@@ -259,7 +259,7 @@ export function Composer({
             >
               <div className="share-visibility-panel__inner">
                 <p className="field-hint">{messages.shareVisibilityAutoNotice}</p>
-                <label className="share-password-toggle">
+                <label className="share-password-toggle share-password-toggle--tight">
                   <input
                     type="checkbox"
                     checked={withPassword}
@@ -268,6 +268,9 @@ export function Composer({
                   />
                   {messages.shareVisibilityPasswordToggle}
                 </label>
+                {!withPassword ? (
+                  <p className="field-hint">{messages.sharePasswordToggleHint}</p>
+                ) : null}
               </div>
             </div>
           </>

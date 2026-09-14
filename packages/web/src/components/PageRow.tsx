@@ -70,7 +70,16 @@ export function PageRow({
             </Tooltip>
           ) : null}
         </div>
-        <p className="page-row__url">{page.viewUrl}</p>
+        <p className="page-row__url" title={page.viewUrl}>
+          {/*
+           * 長い URL は先頭側を省略し、slug 側（末尾）を見せる。UrlField と同じ扱い:
+           * 外側を direction: rtl にし、中身は dir="ltr" + unicode-bidi: isolate で
+           * 独立した LTR ランにして文字順と末尾の `/` がずれないようにする
+           */}
+          <span className="page-row__url-text" dir="ltr">
+            {page.viewUrl}
+          </span>
+        </p>
         <p
           className={
             expiration.kind === 'expired'

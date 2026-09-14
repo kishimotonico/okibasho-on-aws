@@ -56,8 +56,7 @@ export const messages = {
   shareUrlLabel: '共有URL',
   shareExpiresHint: (dateLabel: string) => `保存期限（${dateLabel}）を過ぎると共有も終わります`,
   sharePasswordToggle: 'パスワードを付ける',
-  sharePasswordToggleHint:
-    'URLを知っている人だけが開けます。他社への安心感を上乗せしたいときに付けてください。',
+  sharePasswordToggleHint: 'オンにすると、開くときにユーザー名とパスワードの入力が必要になります。',
   shareUsernameLabel: 'ユーザー名',
   sharePasswordLabel: 'パスワード',
   sharePasswordCopy: 'パスワードをコピー',
