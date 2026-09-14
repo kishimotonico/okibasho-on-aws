@@ -35,7 +35,7 @@ AI エージェントや開発者が生成した HTML（分析レポート、説
 - 規模: 全ユーザー合計で 10〜100 request/hour 程度。高負荷・高可用性・低レイテンシは求めない
 - 2 つのホスト: `app.<service-domain>`（trusted。ログイン・アップロード・アップロード済みページ・Signed Cookie 発行）と `pages.<service-domain>`（untrusted。アップロードされた HTML を配信）。実際のドメイン名は未確定
 - 内部向け共有 URL は `https://pages.<service-domain>/p/<user>/<slug>/`。`<user>` はメールアドレスのローカル部（`@` より前）
-- 外部向け共有 URL は `https://pages.<service-domain>/s/<share-id>/`。ページ単位で発行し、ログイン不要。任意でパスワード（Basic 認証）・IP アドレス制限を付けられる
+- 外部向け共有 URL は `https://pages.<service-domain>/s/<tag><share-id>/`（`tag` はページごとに決まる 11 文字、`share-id` はランダムな 22 文字）。ページ単位で発行し、ログイン不要。任意でパスワード（Basic 認証）・IP アドレス制限を付けられる
 - 典型フロー（Web）: 管理アプリを開く（未ログインなら即 Managed Login にリダイレクト） → Google ログイン → `/` の白いウェルに HTML またはフォルダをドロップ（または箱をクリックしてファイル選択） → その時点の公開URL（slug）と保存期間（30 日 / 無期限。デフォルト 30 日）で即アップロードが始まる → 箱の下に表示された URL をコピーして共有。slug は初期表示から自動入力されているので、変えたいときだけ編集する。アップロード成功中はフォーム（slug・保存期間・ファイル選択）を隠して結果ブロックだけを表示し、連続アップロードは受け付けない。次のファイルを共有したいときは「次のファイルを置く」を押してフォームの初期状態に戻す
 - 典型フロー（CLI）: `okiba login` → `okiba ./report/ --name q3-report [--permanent]` → URL が表示される。`list` / `rm` もある
 - 認証は Cognito Managed Login（ログイン画面は自作しない）。web は Authorization Code + PKCE（`oidc-client-ts`）
@@ -66,8 +66,8 @@ MVP でやらないこと（UI に匂わせない）: 管理者ロール・RBAC�
 - サイズ上限（クライアント側の目安。IAM では強制できない）: 1 ファイル 50 MB、1 ページ合計 200 MB、ファイル数 200
 - ページ直下に `index.html` が必須。dotfile などの無効なパスはスキップされる。単一ファイル選択では HTML のみ
 - 保存期間: temporary（作成から 30 日固定。変更時刻ではなく `createdAt` 起点）と permanent（無期限）。無期限から 30 日へ戻すと、作成から 30 日以上経過している場合は即座に期限切れになる
-- ページごとの `.metadata.json`: `{ slug, owner, createdAt, expiresAt }`。`expiresAt` が null なら無期限
-- 一覧は S3 ListObjectsV2 の CommonPrefixes から取得し、各ページの `.metadata.json` を並列取得する。ページ数が増えると一覧はその分遅くなる。管理 UI の表示順は作成日時（`createdAt`）の新しい順で、S3 の取得順そのものは変えない。再アップロードでは `createdAt` が変わらないので並びも変わらない
+- ページごとの metadata（`meta/<email>/<slug>.json`）: `{ createdAt, expiresAt, share? }`。slug と owner はキー由来なので metadata には持たない。`expiresAt` が null なら無期限
+- 一覧は `meta/<email>/` 配下を S3 ListObjectsV2 で列挙し、キー名から得た slug ごとに metadata を並列取得する。ページ数が増えると一覧はその分遅くなる。管理 UI の表示順は作成日時（`createdAt`）の新しい順で、S3 の取得順そのものは変えない。再アップロードでは `createdAt` が変わらないので並びも変わらない
 - UI 言語は日本語のみ。i18n は前提にしない（ユーザー確認済み）
 - 技術: TanStack Start（React 19）の SPA モード + prerender。SSR もサーバー関数も使わない。成果物は静的ファイルのみで S3 + CloudFront から配信。AWS SDK for JavaScript v3 でブラウザから直接 S3 を操作。slug 規則・上限・S3 キー組み立ては `packages/cli/src/page` を `@cli/page` として web から参照する
 - ブラウザ操作には pages バケットの CORS が必要（Phase 4）

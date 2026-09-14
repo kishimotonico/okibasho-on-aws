@@ -26,7 +26,7 @@ export function redactId(id: string): string {
 }
 
 /**
- * KVS全件を tag -> 生JSON文字列 で返す(15分毎の全件reconcile用)。
+ * KVS全件を tag -> 生JSON文字列 で返す(1時間毎の全件reconcile用)。
  * tagはprefixから決まるので、値の中身を解釈する必要はなく、文字列としてそのまま突き合わせられる
  */
 export async function listAllActualEntries(kvsArn: string): Promise<Map<string, string>> {

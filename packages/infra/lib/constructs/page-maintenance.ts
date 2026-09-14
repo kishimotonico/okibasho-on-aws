@@ -38,7 +38,8 @@ export class PageMaintenance extends Construct {
     super(scope, id);
 
     this.keyValueStore = new KeyValueStore(this, 'ShareKeyValueStore', {
-      comment: '/s/<share-id>/ -> pages S3キーの投影(正本はmeta/配下のmetadataのshareフィールド)',
+      comment:
+        '/s/<tag><share-id>/ -> pages S3キーの投影(正本はmeta/配下のmetadataのshareフィールド)',
     });
 
     this.maintenanceFunction = new NodejsFunction(this, 'MaintenanceFunction', {

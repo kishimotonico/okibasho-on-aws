@@ -1,7 +1,7 @@
 import type { DiffPlan } from './types.js';
 
 /**
- * 「あるべき状態」と「実際のKVS」を突き合わせて差分を決める純粋関数。15分毎の全件reconcileで使う
+ * 「あるべき状態」と「実際のKVS」を突き合わせて差分を決める純粋関数。1時間毎の全件reconcileで使う
  * (S3イベント駆動のページ単位の投影は、この関数を使わずページごとに直接put/deleteする)。
  *
  * KVSのキーはprefixから決まるtagなので、旧仕様(share-idがキー)のような

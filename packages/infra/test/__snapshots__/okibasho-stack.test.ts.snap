@@ -1516,7 +1516,7 @@ def sort_filter_rules(json_obj):
     },
     "PageMaintenanceShareKeyValueStoreAB6806D3": {
       "Properties": {
-        "Comment": "/s/<share-id>/ -> pages S3キーの投影(正本はmeta/配下のmetadataのshareフィールド)",
+        "Comment": "/s/<tag><share-id>/ -> pages S3キーの投影(正本はmeta/配下のmetadataのshareフィールド)",
         "Name": "OkibashoPageMaintenanceShareKeyValueStore1FDA5F9B",
       },
       "Type": "AWS::CloudFront::KeyValueStore",
@@ -2075,7 +2075,7 @@ function buildQueryString(querystring) {
 }
 ",
         "FunctionConfig": {
-          "Comment": "share: /s/<share-id>/... をKVSで検証しS3キーへrewrite",
+          "Comment": "share: /s/<tag><share-id>/... をKVSで検証しS3キーへrewrite",
           "KeyValueStoreAssociations": [
             {
               "KeyValueStoreARN": {

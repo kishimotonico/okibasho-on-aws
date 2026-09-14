@@ -48,7 +48,7 @@
 - [ ] Cognito Identity Pool + authenticated role + IAM ポリシー + プリンシパルタグ（`sts:TagSession` を含む）
 - [ ] unauthenticated access を無効にする
 - [ ] CLI: `login`（PKCE + localhost コールバック + token 保存）
-- [ ] CLI: アップロード（単一ファイル / ディレクトリ、`.metadata.json` 書き込み、URL 表示）
+- [ ] CLI: アップロード（単一ファイル / ディレクトリ、metadata 書き込み、URL 表示）
 - [ ] CLI: `list` / `rm`
 
 受け入れ: `okiba login` → `okiba ./dist/` でアップロードし、発行された URL で閲覧できる（このフェーズでは閲覧認証なし）。**別ユーザーの prefix に書こうとすると AccessDenied になることをテストで確認する。**
@@ -91,7 +91,7 @@
 
 ## Phase 5: 仕上げ
 
-- [x] EventBridge Scheduler + cleanup（期限切れ削除・孤児回収）。別Lambdaは作らず、share projectorの1時間ごとのスケジュール処理に統合した（[plan-performance-tuning.md](plan-performance-tuning.md) フェーズ4）
+- [x] EventBridge Rule + cleanup（期限切れ削除・孤児回収）。別Lambdaは作らず、PageMaintenance Lambda（旧share projector）の1時間ごとのスケジュール処理に統合した（[plan-performance-tuning.md](plan-performance-tuning.md) フェーズ4）
 - [ ] Google IdP 追加 + メールドメイン制限（PreSignUp トリガー）
 - [ ] CLI の npm 配布
 - [ ] CI（typecheck / test / synth）、GitHub Actions OIDC
@@ -101,7 +101,7 @@
 
 ## Phase 6: 外部共有
 
-- [ ] CloudFront KeyValueStore + share projector Lambda（S3 イベント + 15 分ごとの安全網で全件 reconcile）
+- [ ] CloudFront KeyValueStore + PageMaintenance Lambda（S3 イベントでページ単位の即時投影 + 1 時間ごとの定期処理で全件 reconcile）
 - [ ] pages Distribution に `/s/*` ビヘイビア（share-router.js）と `/errors/*` ビヘイビア（カスタムエラーレスポンス、BucketDeployment）を追加
 - [ ] `packages/cli/src/page/share.ts`（share の組み立て・ハッシュ・id 生成・CIDR 検証）
 - [ ] 管理 UI の ShareDialog（共有 URL の発行・パスワード・IP 制限・再発行・停止）
@@ -111,15 +111,18 @@
 デプロイ後に確認したい点:
 
 - 存在しないパスで `errors/404.html` が返り、S3 のキーが見えないこと
-- `/s/<id>/%2Emetadata.json` と `/p/<user>/<slug>/%2Emetadata.json` が読めないこと
+- 不正な形式（33 文字でない、`/^[A-Za-z0-9_-]{33}$/` に合わない）の id が 404 になること
 - viewer-request の CloudFront Function が `Authorization` ヘッダを読めること（cache policy に含めていなくても）
 - `Authorization` ヘッダを削除して転送しても OAC の署名が壊れないこと
 - 401 でブラウザの認証ダイアログが出ること
 - `Buffer` / `crypto.createHash` / `Number.isInteger` が CloudFront Functions runtime 2.0 で動き、コードサイズとコンピュート使用率が上限内に収まること
-- `.metadata.json` の作成・削除・書き換えが数秒〜十数秒で KVS へ反映されること。S3 通知を止めても 15 分以内の安全網で追いつくこと
-- 墓標化した旧 id が 404 のままであること
+- `meta/` 配下の JSON の作成・削除・書き換えが数秒〜十数秒で KVS へ反映されること。S3 通知を止めても 1 時間以内の定期処理で追いつくこと
+- 共有を停止・削除した旧 id が 404 のままであること
 - SigV4A 署名（`@aws-sdk/signature-v4a` の副作用 import）が Lambda 実行環境で通るか
 - `NodejsFunction` の bundling（pnpm workspace 特有の PATH 調整を含む）が CI で動くか
+- パフォーマンスチューニング計画（[plan-performance-tuning.md](plan-performance-tuning.md)）フェーズ0の計測をやり直す。CloudWatch Logs Insights で PageMaintenance Lambda（改名前は share projector）の `Init Duration` / `Duration` を集計する。共有を ON にしてから `/s/` が 404 以外を返すまでの時間を curl のループで測り、連続して 2〜3 ページを操作したときの値（スロットルの影響）も見る
+- 存在しない KVS キーへの `UpdateKeys` の delete が実際にどう振る舞うか。`kvs-client.ts` は `ResourceNotFoundException` が起きたときだけ `GetKey` で存在を確かめる実装にしているため、これが実際に必要な分岐かどうかを確認する
+- 上記の計測でスロットル待ちが残るようなら、`reservedConcurrentExecutions: 1` を外す検討をする（外す場合は plan-performance-tuning.md フェーズ2に書いた「Describe（ETag）→ metadata の Get → UpdateKeys(IfMatch)」の順に処理を組み直す）
 
 ## ビルド成果物のデプロイ
 

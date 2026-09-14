@@ -54,7 +54,7 @@ export class PagesDelivery extends Construct {
         filePath: join(dirname(fileURLToPath(import.meta.url)), '../functions/share-router.js'),
       }),
       runtime: FunctionRuntime.JS_2_0,
-      comment: 'share: /s/<share-id>/... をKVSで検証しS3キーへrewrite',
+      comment: 'share: /s/<tag><share-id>/... をKVSで検証しS3キーへrewrite',
       keyValueStore: props.shareKeyValueStore,
     });
 
