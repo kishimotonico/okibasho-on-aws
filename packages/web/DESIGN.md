@@ -217,9 +217,9 @@ components:
 
 - **Role:** バリデーションエラー、アップロード失敗、新規アップロード時の既存 slug 上書き確認、アップロード成功の案内を箱の下に表示する。ページ上部のインラインや `window.confirm` は使わない
 - **Placement:** 箱アイコンの直下に `position: absolute` で重ねて表示する（通常フローには置かない）。ブランド名や案内文にかぶってよい。三角形のしっぽは中央
-- **Kinds:** `error`（danger 地・シェイクと同時）、`confirm`（上書き確認。紙地）、`info`（案内。紙地）、`success`（アップロード成功。emerald-soft 地。DESIGN のエメラルドは箱アイコンと成功フィードバックにだけ使う原則に合致させた種別）
+- **Kinds:** `error`（danger 地・シェイクと同時）、`confirm`（上書き確認。紙地）、`success`（アップロード成功。emerald-soft 地。DESIGN のエメラルドは箱アイコンと成功フィードバックにだけ使う原則に合致させた種別）
 - **Overwrite:** 新規アップロードで既存 slug にぶつかったときだけ。「差し替える」「やめる」。保存期間は変わらない旨を短く示す
-- **Dismiss:** × ボタンは持たない。`error` / `info` / `success` は吹き出し自体のクリック（`cursor: pointer`）で閉じる。`confirm` は「差し替える」「やめる」でのみ閉じる。`error` / `info` / `success` は 6 秒で自動消去（`persist` と confirm とホバー中は消さない）。確認待ち中は2回目のドロップを無視する
+- **Dismiss:** × ボタンは持たない。`error` / `success` は吹き出し自体のクリック（`cursor: pointer`）で閉じる。`confirm` は「差し替える」「やめる」でのみ閉じる。`error` / `success` は 6 秒で自動消去（`persist` と confirm とホバー中は消さない）。確認待ち中は2回目のドロップを無視する
 - **Motion:** 開閉は `opacity` のフェードのみ（高さのアニメーションはしない）。absolute 重ねのため開閉で下の要素は動かない。reduced-motion では即時
 - **本文の余白:** 本文（ボタン行がある `confirm` も含む）に対して上下左右が均等になるようパディングを揃える
 
@@ -260,6 +260,18 @@ components:
 - **Style:** 全幅、罫 1px、6px 角、紙背景
 - **Focus:** 墨 2px outline（グローバル `:focus-visible`）
 - **Read-only:** 地背景（入力の read-only 属性がある場合）
+
+## 依存と構成
+
+UI 部品は radix-ui（DropdownMenu / Tooltip / AlertDialog）を DESIGN のトークンで包んで使う。アイコンは lucide-react。slug 生成と検証、メタデータ型は `@cli/page` を web から参照する。箱アイコン（`UploadBoxIcon.tsx` / `upload-box-icon.ts`）はチューナーの幾何をそのまま移植したものなので、ライブラリで置き換えない。
+
+## 確認と検証
+
+- 開発サーバー: `pnpm --filter @okibasho/web dev`（http://localhost:3000。Cognito の callback に登録済み）
+- 静的チェック: `pnpm --filter @okibasho/web typecheck` / `pnpm --filter @okibasho/web test` / `pnpm format:check` / `pnpm --filter @okibasho/web build`
+- 実機確認はブラウザ自動操作（agent-browser など）で行い、幅 1280 と 375（`innerWidth` を実際に 375 にする）の両方を撮る
+- 箱アイコン単体は `/dev/upload-box-icon` のハーネスで確認できる（dev サーバーのみ、build には含まれない）
+- 本番未公開のため防衛的なテストは書かない。テストは仕様変更で意味を失ったものを消しつつ、見た目と操作の確認は実機で行う
 
 ## Do's and Don'ts
 

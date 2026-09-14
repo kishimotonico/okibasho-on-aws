@@ -1,12 +1,12 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { useEffect, useId, useRef } from 'react';
 
-export type BoxBubbleKind = 'info' | 'error' | 'confirm' | 'success';
+export type BoxBubbleKind = 'error' | 'confirm' | 'success';
 
 const AUTO_CLOSE_MS = 6000;
 
 function autoClosableKind(kind: BoxBubbleKind) {
-  return kind === 'error' || kind === 'info' || kind === 'success';
+  return kind === 'error' || kind === 'success';
 }
 
 export function BoxBubble({
@@ -101,7 +101,7 @@ export function BoxBubble({
   };
 
   const role = kind === 'error' ? 'alert' : kind === 'confirm' ? 'dialog' : 'status';
-  const clickToClose = kind === 'error' || kind === 'info' || kind === 'success';
+  const clickToClose = kind === 'error' || kind === 'success';
 
   return (
     <div className="box-bubble">

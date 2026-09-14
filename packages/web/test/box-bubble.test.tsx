@@ -9,7 +9,7 @@ import { BoxBubble } from '~/components/BoxBubble';
 describe('BoxBubble', () => {
   it('閉じているとき吹き出しを出さない', () => {
     render(
-      <BoxBubble kind="info" open={false} message="案内文" onClose={() => {}}>
+      <BoxBubble kind="success" open={false} message="案内文" onClose={() => {}}>
         <button type="button">箱</button>
       </BoxBubble>,
     );
@@ -18,14 +18,14 @@ describe('BoxBubble', () => {
     expect(screen.getByRole('button', { name: '箱' })).toBeInTheDocument();
   });
 
-  it('info と error の文言を表示する', () => {
+  it('success と error の文言を表示する', () => {
     const { rerender } = render(
-      <BoxBubble kind="info" open message="PNG または JPEG" onClose={() => {}}>
+      <BoxBubble kind="success" open message="公開しました" onClose={() => {}}>
         <span>箱</span>
       </BoxBubble>,
     );
 
-    expect(screen.getByRole('status')).toHaveTextContent('PNG または JPEG');
+    expect(screen.getByRole('status')).toHaveTextContent('公開しました');
 
     rerender(
       <BoxBubble kind="error" open message="サイズが大きすぎます" onClose={() => {}}>
@@ -36,12 +36,12 @@ describe('BoxBubble', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('サイズが大きすぎます');
   });
 
-  it('info / error は吹き出しのクリックで onClose を呼ぶ', async () => {
+  it('success / error は吹き出しのクリックで onClose を呼ぶ', async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
 
     render(
-      <BoxBubble kind="info" open message="案内文" onClose={onClose}>
+      <BoxBubble kind="success" open message="案内文" onClose={onClose}>
         <span>箱</span>
       </BoxBubble>,
     );
@@ -99,7 +99,7 @@ describe('BoxBubble', () => {
 
     render(
       <div onClick={onBoxClick}>
-        <BoxBubble kind="info" open message="案内文" onClose={() => {}}>
+        <BoxBubble kind="success" open message="案内文" onClose={() => {}}>
           <button type="button">箱</button>
         </BoxBubble>
       </div>,

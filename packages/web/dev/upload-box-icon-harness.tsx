@@ -6,12 +6,11 @@ import type { BoxIconMotion, BoxIconPhase } from '~/lib/upload-box-icon';
 
 const MOTIONS: BoxIconMotion[] = ['idle', 'hover', 'drag', 'uploading', 'success', 'error'];
 
-const BUBBLE_KINDS = ['closed', 'info', 'error', 'confirm', 'success'] as const;
+const BUBBLE_KINDS = ['closed', 'error', 'confirm', 'success'] as const;
 
 const SIZES = [96, 48, 24] as const;
 
 const BUBBLE_MESSAGES: Record<BoxBubbleKind, string> = {
-  info: 'PNG または JPEG を選べます。',
   error: 'ファイルサイズが大きすぎます（上限 10MB）。',
   confirm: '別のファイルに差し替えますか？',
   success: '公開しました',
@@ -29,7 +28,7 @@ export function UploadBoxIconHarness() {
   const [motion, setMotion] = useState<BoxIconMotion>('idle');
   const [size, setSize] = useState<(typeof SIZES)[number]>(96);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const [bubbleKind, setBubbleKind] = useState<(typeof BUBBLE_KINDS)[number]>('info');
+  const [bubbleKind, setBubbleKind] = useState<(typeof BUBBLE_KINDS)[number]>('success');
 
   return (
     <main className="harness">
@@ -39,9 +38,9 @@ export function UploadBoxIconHarness() {
       </p>
       <div className="harness__stage">
         <BoxBubble
-          kind={bubbleKind === 'closed' ? 'info' : bubbleKind}
+          kind={bubbleKind === 'closed' ? 'success' : bubbleKind}
           open={bubbleKind !== 'closed'}
-          message={BUBBLE_MESSAGES[bubbleKind === 'closed' ? 'info' : bubbleKind]}
+          message={BUBBLE_MESSAGES[bubbleKind === 'closed' ? 'success' : bubbleKind]}
           onClose={() => setBubbleKind('closed')}
           onReplace={() => setBubbleKind('closed')}
           onCancel={() => setBubbleKind('closed')}
