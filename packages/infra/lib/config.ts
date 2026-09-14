@@ -21,7 +21,7 @@ export interface DomainsConfig {
   root: string;
   /** 管理アプリ (例: app.example.com) */
   app: string;
-  /** 社内限定閲覧 (例: pages.example.com) */
+  /** 内部限定の閲覧 (例: pages.example.com) */
   pages: string;
 }
 

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>okibasho アップロードアイコン案</title>
+    <style>
+      :root {
+        --ground: #eef0f2;
+        --paper: #ffffff;
+        --line: #d3d6db;
+        --ink: #1a1d21;
+        --muted: #5b6169;
+        --emerald: #1f7a4d;
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+        --font: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Noto Sans JP", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; }
+      body {
+        font-family: var(--font);
+        background: var(--ground);
+        color: var(--ink);
+        line-height: 1.5;
+        font-size: 1rem;
+      }
+      ::selection { background: var(--line); }
+      :focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 2px;
+      }
+      button { font-family: inherit; color: inherit; }
+
+      .site-bar {
+        height: 3rem;
+        background: var(--paper);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        padding: 0 1.25rem;
+        gap: 0.5rem;
+        position: sticky;
+        top: 0;
+        z-index: 4;
+      }
+      #header-mark {
+        width: 1.25rem;
+        height: 1.25rem;
+        display: flex;
+        flex-shrink: 0;
+        color: var(--ink);
+      }
+      .site-bar .mark,
+      #header-mark .mark {
+        width: 1.25rem;
+        height: 1.25rem;
+      }
+      .site-bar strong {
+        font-size: 0.95rem;
+        font-weight: 700;
+      }
+      .site-bar > span {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .page {
+        max-width: 45rem;
+        margin: 0 auto;
+        padding: 1.75rem 1.25rem 4rem;
+      }
+
+      h1 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin: 0 0 0.75rem;
+      }
+      h2 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin: 2.25rem 0 0.75rem;
+      }
+      p { margin: 0 0 0.75rem; }
+      .lede { font-weight: 500; }
+      .muted { color: var(--muted); }
+
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin: 1.25rem 0;
+      }
+      .filters button,
+      .states button,
+      .views button {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .filters button[aria-pressed="true"],
+      .states button[aria-pressed="true"],
+      .views button[aria-pressed="true"] {
+        background: var(--ink);
+        color: var(--ground);
+        border-color: var(--ink);
+      }
+
+      .composer {
+        background: var(--paper);
+        border: 1px solid var(--ink);
+        border-radius: 10px;
+        box-shadow: 0 8px 20px rgba(26, 29, 33, 0.08);
+        min-height: 16.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 2rem 1rem 1.5rem;
+        text-align: center;
+        color: var(--ink);
+        transition: background 180ms var(--ease);
+      }
+      .composer[data-state="drag"] { background: var(--ground); }
+      .composer .hero-mark {
+        width: 7.5rem;
+        height: 7.5rem;
+        color: var(--ink);
+      }
+      .composer .prompt { font-weight: 500; margin: 0; }
+      .composer-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .ghost {
+        background: var(--ground);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        font-size: 0.88rem;
+        font-weight: 600;
+        pointer-events: none;
+      }
+      .composer[data-view="header"] {
+        min-height: 3rem;
+        flex-direction: row;
+        justify-content: flex-start;
+        padding: 0 1rem;
+        border-radius: 0;
+        border: none;
+        border-bottom: 1px solid var(--line);
+        box-shadow: none;
+        gap: 0.5rem;
+      }
+      .composer[data-view="header"] .hero-mark {
+        width: 1.25rem;
+        height: 1.25rem;
+      }
+      .composer[data-view="header"] .prompt {
+        font-weight: 700;
+        font-size: 0.95rem;
+      }
+      .composer[data-view="header"] .composer-actions { display: none; }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin: 0.75rem 0 0;
+      }
+      .states, .views {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+
+      .note { margin-top: 1.25rem; }
+      .note h2 { margin-top: 0; }
+      .meta {
+        display: grid;
+        grid-template-columns: 6.5rem 1fr;
+        gap: 0.35rem 0.75rem;
+        font-size: 0.88rem;
+      }
+      .meta dt { color: var(--muted); font-weight: 600; }
+      .meta dd { margin: 0; }
+
+      .sizes {
+        display: flex;
+        align-items: flex-end;
+        gap: 1.25rem;
+        margin-top: 1rem;
+        padding: 0.75rem 0;
+        border-top: 1px solid var(--line);
+      }
+      .sizes figure {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .sizes figcaption {
+        font-size: 0.75rem;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .index {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-top: 0.75rem;
+      }
+      .index button {
+        width: 5rem;
+        min-height: 4.7rem;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.55rem 0.2rem 0.45rem;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3rem;
+      }
+      .index button .mark {
+        width: 2.35rem;
+        height: 2.35rem;
+      }
+      .index button span {
+        font-size: 0.68rem;
+        font-weight: 600;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+      .index button[aria-current="true"] {
+        border-color: var(--ink);
+        box-shadow: inset 0 0 0 1px var(--ink);
+      }
+      .index button[hidden] { display: none; }
+
+      .shortlist {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+      }
+      @media (min-width: 40rem) {
+        .shortlist { grid-template-columns: 1fr 1fr; }
+      }
+      .short {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 1rem;
+        cursor: pointer;
+        text-align: left;
+        width: 100%;
+      }
+      .short .mark {
+        width: 4.5rem;
+        height: 4.5rem;
+        display: block;
+        margin: 0 auto 0.5rem;
+      }
+      .short strong {
+        display: block;
+        font-size: 0.88rem;
+        margin-bottom: 0.25rem;
+      }
+      .short p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .short[data-rank="1"] { border-color: var(--ink); }
+
+      .verdict p { max-width: 65ch; }
+
+      .mark { overflow: visible; display: block; }
+      .s16 [stroke],
+      .s24 [stroke],
+      .site-bar .mark [stroke],
+      #header-mark .mark [stroke],
+      .composer[data-view="header"] .hero-mark [stroke] {
+        stroke-width: 1.65px;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .mark .obj,
+      .mark .lid,
+      .mark .place,
+      .mark .slot,
+      .mark .arm,
+      .mark .well {
+        transform-box: fill-box;
+        transform-origin: center;
+        transition: transform 240ms var(--ease), opacity 240ms var(--ease);
+      }
+
+      [data-state="hover"] .mark .obj { transform: translateY(-3px); }
+      [data-state="drag"] .mark .obj { transform: translateY(-7px); }
+      [data-state="uploading"] .mark .obj { animation: bob 720ms ease-in-out infinite; }
+      [data-state="success"] .mark .obj { transform: translateY(var(--seat, 4px)); }
+
+      [data-state="hover"] .mark-nested .obj { transform: translateY(-6px); }
+      [data-state="drag"] .mark-nested .place { transform: scale(1.04); }
+      [data-state="drag"] .mark-nested .obj { transform: translateY(-10px); }
+      [data-state="success"] .mark-nested .obj { transform: none; }
+
+      [data-state="hover"] .mark-lidded .lid { transform: rotate(-8deg) translate(-1px, -2px); }
+      [data-state="drag"] .mark-lidded .lid { transform: rotate(-18deg) translate(-2px, -4px); }
+      [data-state="uploading"] .mark-lidded .lid { animation: lid-wiggle 640ms ease-in-out infinite; }
+      [data-state="success"] .mark-lidded .lid { transform: rotate(0deg) translate(0, 6px); }
+      [data-state="success"] .mark-lidded .obj { opacity: 0; }
+
+      [data-state="hover"] .mark-brackets .arm-l { transform: translateX(-2px); }
+      [data-state="hover"] .mark-brackets .arm-r { transform: translateX(2px); }
+      [data-state="drag"] .mark-brackets .arm-l { transform: translateX(-5px); }
+      [data-state="drag"] .mark-brackets .arm-r { transform: translateX(5px); }
+      [data-state="success"] .mark-brackets .arm-l { transform: translateX(1px); }
+      [data-state="success"] .mark-brackets .arm-r { transform: translateX(-1px); }
+
+      [data-state="hover"] .mark-corners .arm { transform: scale(1.08); }
+      [data-state="drag"] .mark-corners .arm { transform: scale(1.16); }
+      [data-state="success"] .mark-corners .arm { transform: scale(0.92); }
+
+      [data-state="hover"] .mark-aperture .slot { transform: scaleX(1.06); }
+      [data-state="drag"] .mark-aperture .slot { transform: scaleX(1.14); }
+      [data-state="success"] .mark-aperture .obj { transform: translateY(18px); opacity: 0; }
+      [data-state="success"] .mark-pageslot .obj { transform: translateY(16px); opacity: 0.2; }
+      [data-state="success"] .mark-pocket .obj { transform: translateY(10px); opacity: 0.35; }
+      [data-state="drag"] .mark-pocket .place { transform: scaleY(1.04); }
+
+      [data-state="hover"] .mark-offset .obj { transform: translate(-1px, -5px); }
+      [data-state="drag"] .mark-offset .obj { transform: translate(-2px, -8px); }
+      [data-state="success"] .mark-offset .obj { transform: translate(3px, 3px); }
+      [data-state="success"] .mark-urlbase .place { transform: scaleX(1.04); }
+
+      @keyframes bob {
+        0%, 100% { transform: translateY(-2px); }
+        50% { transform: translateY(-8px); }
+      }
+      @keyframes lid-wiggle {
+        0%, 100% { transform: rotate(-12deg) translate(-1px, -3px); }
+        50% { transform: rotate(-20deg) translate(-2px, -5px); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .mark .obj, .mark .lid, .mark .place, .mark .slot, .mark .arm, .mark .well {
+          transition: none;
+          animation: none !important;
+        }
+        [data-state="uploading"] .mark .obj { opacity: 0.7; transform: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-bar">
+      <span id="header-mark" aria-hidden="true"></span>
+      <strong>okibasho</strong>
+      <span>アイコン案</span>
+    </header>
+
+    <main class="page">
+      <h1>ドロップ領域の中央に置く印</h1>
+      <p class="lede">
+        ヘッダーの隅のロゴではなく、アップロードフォームの主役として成立する形を探しています。
+        案を選ぶと、下のフォームで実際の置き方と状態変化を確認できます。
+      </p>
+      <p class="muted">
+        印は単色の SVG です。枠が置き場所、塗りの塊が置かれるものです。配送箱やアップロード矢印からは離しています。
+      </p>
+
+      <div class="filters" role="group" aria-label="方向性">
+        <button type="button" data-cat="all" aria-pressed="true">すべて</button>
+        <button type="button" data-cat="box">箱</button>
+        <button type="button" data-cat="tray">トレイ / 台</button>
+        <button type="button" data-cat="act">入れる動作</button>
+        <button type="button" data-cat="abs">抽象</button>
+        <button type="button" data-cat="page">ページ</button>
+        <button type="button" data-cat="space">空間</button>
+        <button type="button" data-cat="other">その他</button>
+      </div>
+
+      <div id="composer" class="composer" data-state="idle" data-view="drop">
+        <div class="hero-mark" id="hero-mark" aria-hidden="true"></div>
+        <p class="prompt" id="prompt">ファイルまたはディレクトリをドロップ</p>
+        <div class="composer-actions">
+          <span class="ghost">ファイルを選択</span>
+          <span class="ghost">ディレクトリを選択</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="states" role="group" aria-label="状態">
+          <button type="button" data-state="idle" aria-pressed="true">通常</button>
+          <button type="button" data-state="hover">ホバー</button>
+          <button type="button" data-state="drag">ドラッグ中</button>
+          <button type="button" data-state="uploading">アップロード中</button>
+          <button type="button" data-state="success">成功</button>
+        </div>
+        <div class="views" role="group" aria-label="大きさ">
+          <button type="button" data-view="drop" aria-pressed="true">フォーム中央</button>
+          <button type="button" data-view="header">ヘッダー</button>
+        </div>
+      </div>
+
+      <section class="note" aria-live="polite">
+        <h2 id="icon-name">入れ子</h2>
+        <dl class="meta" id="icon-meta"></dl>
+        <div class="sizes" id="size-row"></div>
+      </section>
+
+      <h2>案</h2>
+      <p class="muted">クリックで上のフォームに表示します。状態ボタンで動きを確認できます。</p>
+      <div class="index" id="index"></div>
+
+      <h2>絞り込み</h2>
+      <p>
+        ブランドとして残るか、ドロップ領域の中央で黙って成立するか、状態を形の移動で示せるか、16px でも潰されないか、favicon に転用できるか、で見ています。
+      </p>
+      <div class="shortlist" id="shortlist"></div>
+
+      <section class="verdict">
+        <h2>いまの見立て</h2>
+        <p>
+          第一候補は<strong>入れ子</strong>です。置く／入るが同じ図の中で完結し、ホバーで内側が浮き、成功で収まる。小さくしても二つの角丸が残ります。ヘッダーにもそのまま置けます。
+        </p>
+        <p>
+          第二候補は<strong>升</strong>です。配送箱ではなく「入れる単位」に読めるので、名前の置き場所と一番近い。壁を厚くした真上視点なら 16px でも器だと分かります。等角の枡にすると小サイズで潰れます。
+        </p>
+        <p>
+          改良すれば使えるのは<strong>くぼみ</strong>と<strong>括弧の場</strong>と<strong>蓋開き</strong>です。くぼみは composer ウェルそのものなので画面との響きは強い反面、升と区別しにくい。括弧はロゴ向きですが、開発者ツールに寄って非開発職にはコード記号に見えやすい。蓋開きは動きが分かりやすい一方、角度を間違えると段ボールになります。
+        </p>
+        <p>
+          外してよい傾向は、フラップの付いた宅配箱、地図ピン、クラウド、矢印だけのアップロード、封筒・メールスロットです。ページを直読みする案はプロダクトには合うのですが、保存やアーカイブの既視感が出やすいです。
+        </p>
+      </section>
+    </main>
+
+    <div hidden>
+      <svg id="i-nested" class="mark mark-nested" viewBox="0 0 64 64" fill="none">
+        <rect class="place" x="12" y="16" width="40" height="40" rx="9" stroke="currentColor" stroke-width="2.4"/>
+        <rect class="obj" x="22" y="26" width="20" height="20" rx="5" fill="currentColor"/>
+      </svg>
+      <svg id="i-masu" class="mark mark-masu" viewBox="0 0 64 64" fill="none">
+        <rect class="place" x="10" y="12" width="44" height="44" rx="2" stroke="currentColor" stroke-width="2.4"/>
+        <rect class="well" x="20" y="22" width="24" height="24" rx="1" stroke="currentColor" stroke-width="2.4"/>
+        <rect class="obj" x="26" y="28" width="12" height="12" rx="1.5" fill="currentColor"/>
+      </svg>
+      <svg id="i-crate" class="mark mark-crate" viewBox="0 0 64 64" fill="none">
+        <path class="place" d="M14 26h36v22a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4V26Z" stroke="currentColor" stroke-width="2.4"/>
+        <path d="M14 26l18 8 18-8" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M32 34v18" stroke="currentColor" stroke-width="2.4"/>
+        <rect class="obj" x="25" y="8" width="14" height="12" rx="2" fill="currentColor"/>
+      </svg>
+      <svg id="i-lidded" class="mark mark-lidded" viewBox="0 0 64 64" fill="none">
+        <path class="place" d="M16 30v18a4 4 0 0 0 4 4h24a4 4 0 0 0 4-4V30" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <path class="lid" d="M16 30l6-14 30 2-2 12" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+        <rect class="obj" x="26" y="34" width="12" height="10" rx="1.5" fill="currentColor"/>
+      </svg>
+      <svg id="i-tray" class="mark mark-tray" viewBox="0 0 64 64" fill="none">
+        <rect class="obj" x="24" y="8" width="16" height="18" rx="2.5" fill="currentColor"/>
+        <path class="place" d="M8 36h48L48 52H16L8 36Z" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M14 36h36" stroke="currentColor" stroke-width="2.2"/>
+      </svg>
+      <svg id="i-pedestal" class="mark mark-pedestal" viewBox="0 0 64 64" fill="none">
+        <rect class="obj" x="21" y="8" width="22" height="24" rx="4" fill="currentColor"/>
+        <rect class="place" x="8" y="46" width="48" height="8" rx="2" stroke="currentColor" stroke-width="2.4"/>
+      </svg>
+      <svg id="i-shelf" class="mark mark-shelf" viewBox="0 0 64 64" fill="none">
+        <path class="place" d="M14 12v40h36V12" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M14 44h36" stroke="currentColor" stroke-width="2.4"/>
+        <rect class="obj" x="23" y="24" width="18" height="16" rx="2" fill="currentColor"/>
+      </svg>
+      <svg id="i-enclosure" class="mark mark-enclosure" viewBox="0 0 64 64" fill="none">
+        <path class="place" d="M14 16v26c0 8 6 14 18 14s18-6 18-14V16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <rect class="obj" x="24" y="8" width="16" height="16" rx="3" fill="currentColor"/>
+      </svg>
+      <svg id="i-aperture" class="mark mark-aperture" viewBox="0 0 64 64" fill="none">
+        <rect class="obj" x="26" y="6" width="12" height="16" rx="2" fill="currentColor"/>
+        <rect class="place" x="8" y="28" width="48" height="26" rx="7" stroke="currentColor" stroke-width="2.4"/>
+        <rect class="slot" x="18" y="37" width="28" height="8" rx="4" stroke="currentColor" stroke-width="2.4"/>
+      </svg>
+      <svg id="i-pageslot" class="mark mark-pageslot" viewBox="0 0 64 64" fill="none">
+        <path class="obj" d="M23 8h14l6 6v20H23V8Z" fill="currentColor"/>
+        <path class="place" d="M12 46h40" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 46l4 8h24l4-8" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+      </svg>
+      <svg id="i-brackets" class="mark mark-brackets" viewBox="0 0 64 64" fill="none">
+        <path class="arm arm-l" d="M24 12h-8v40h8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path class="arm arm-r" d="M40 12h8v40h-8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect class="obj" x="24" y="22" width="16" height="20" rx="2.5" fill="currentColor"/>
+      </svg>
+      <svg id="i-well" class="mark mark-well" viewBox="0 0 64 64" fill="none">
+        <rect class="place" x="8" y="8" width="48" height="48" rx="11" stroke="currentColor" stroke-width="2.4"/>
+        <rect class="well" x="18" y="22" width="28" height="26" rx="7" stroke="currentColor" stroke-width="2.4"/>
+      </svg>
+      <svg id="i-dotstand" class="mark mark-dotstand" viewBox="0 0 64 64" fill="none">
+        <rect class="obj" x="20" y="10" width="24" height="24" rx="7" fill="currentColor"/>
+        <path class="place" d="M10 50h44" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+      </svg>
+      <svg id="i-corners" class="mark mark-corners" viewBox="0 0 64 64" fill="none">
+        <path class="arm" d="M14 26V14h12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        <path class="arm" d="M38 14h12v12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        <path class="arm" d="M50 38v12H38" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        <path class="arm" d="M26 50H14V38" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        <rect class="obj" x="24" y="24" width="16" height="16" rx="3" fill="currentColor"/>
+      </svg>
+      <svg id="i-offset" class="mark mark-offset" viewBox="0 0 64 64" fill="none">
+        <rect class="place" x="16" y="18" width="32" height="32" rx="7" stroke="currentColor" stroke-width="2.4"/>
+        <rect class="obj" x="10" y="12" width="32" height="32" rx="7" stroke="currentColor" stroke-width="2.4" fill="none"/>
+      </svg>
+      <svg id="i-pageframe" class="mark mark-pageframe" viewBox="0 0 64 64" fill="none">
+        <rect class="place" x="12" y="8" width="40" height="48" rx="5" stroke="currentColor" stroke-width="2.4"/>
+        <path class="obj" d="M20 16h18l8 8v24H20V16Z" fill="currentColor"/>
+      </svg>
+      <svg id="i-urlbase" class="mark mark-urlbase" viewBox="0 0 64 64" fill="none">
+        <rect class="obj" x="16" y="8" width="32" height="32" rx="7" fill="currentColor"/>
+        <path class="place" d="M12 52h40" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+        <circle cx="18" cy="52" r="1.6" fill="currentColor"/>
+        <circle cx="24" cy="52" r="1.6" fill="currentColor"/>
+      </svg>
+      <svg id="i-tokonoma" class="mark mark-tokonoma" viewBox="0 0 64 64" fill="none">
+        <path class="place" d="M18 10v34h28V10" stroke="currentColor" stroke-width="2.4"/>
+        <path d="M10 50h44l-4-6H14l-4 6Z" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+        <rect class="obj" x="26" y="22" width="12" height="18" rx="1.5" fill="currentColor"/>
+      </svg>
+      <svg id="i-pocket" class="mark mark-pocket" viewBox="0 0 64 64" fill="none">
+        <path class="place" d="M16 22v20c0 9 7 16 16 16s16-7 16-16V22" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <rect class="obj" x="24" y="8" width="16" height="22" rx="2" fill="currentColor"/>
+      </svg>
+      <svg id="i-pageplane" class="mark mark-pageplane" viewBox="0 0 64 64" fill="none">
+        <path class="obj" d="M21 8h18l7 7v23H21V8Z" fill="currentColor"/>
+        <rect class="place" x="10" y="46" width="44" height="8" rx="2" stroke="currentColor" stroke-width="2.4"/>
+      </svg>
+    </div>
+
+    <script>
+      const ICONS = [
+        { id: "nested", name: "入れ子", cat: "act", motif: "枠の中に、もう一つの塊が収まる", why: "置く／入るが同じ図で完結します。ドロップ領域の「ここに入れる」と直結し、ロゴとしても読めます", motion: "内側が浮く → ドラッグで枠が少し開く → 成功で収まる", size: "16pxでも二つの角丸が残る。大きくしても間が死ににくい", impl: "低" },
+        { id: "masu", name: "升", cat: "box", motif: "枡。量を入れる器を真上から見た形", why: "置き場所そのもの。配送箱ではなく、入れる単位として名前と近い", motion: "中の塊が落ちて収まる。壁は動かさない", size: "厚い壁が小サイズを助ける。等角にすると潰れる", impl: "低" },
+        { id: "crate", name: "受け箱", cat: "box", motif: "上だけ開いた器。内部の折りが見える", why: "入れる動作は明確。ただし開いた箱は宅配に寄りやすい", motion: "上から塊が落ち、内部の谷に収まる", size: "内部のY字が小サイズでノイズになる", impl: "中" },
+        { id: "lidded", name: "蓋開き", cat: "box", motif: "器と、手前に開いた蓋", why: "受け取る瞬間が形になる。蓋の角度次第で段ボールに見える", motion: "ホバーで蓋が開く。成功で閉じて中に隠す", size: "蓋の斜線が16pxで潰れる。ヘッダーには向かない", impl: "中" },
+        { id: "tray", name: "受け皿", cat: "tray", motif: "浅い器の上に、これから載る塊", why: "載せるに近い。ドロップの動きと合う", motion: "塊が落ちて皿に着地。ドラッグ中は皿の上で浮く", size: "大きく置くと器に読める。16pxでは線だけの台形になる", impl: "中" },
+        { id: "pedestal", name: "置き台", cat: "tray", motif: "台と、その上の塊", why: "置くが一番短い。フォーム中央でも説明不要", motion: "塊が降りて着地。アップロード中は上下に待つ", size: "台の横線と四角は16pxでも残る。やや一般的", impl: "低" },
+        { id: "shelf", name: "棚口", cat: "space", motif: "空き棚の一マス", why: "置き場所の指定席。チームの共有棚、という読みもできる", motion: "塊が棚板に着く。ドラッグでマスが受けになる", size: "n 型は小サイズで門やアーカイブに見える", impl: "低" },
+        { id: "enclosure", name: "囲い", cat: "act", motif: "上だけ開いたU。受けの形", why: "入れる方向が矢印なしで分かる。マグネットやカップに寄ると弱い", motion: "上から収まる。ドラッグでUがわずかに開く", size: "Uは16pxでも強い。ブランドとしてはやや汎用", impl: "低" },
+        { id: "aperture", name: "入れ口", cat: "act", motif: "板に空いた横長の口", why: "預ける動作。郵便受けに見えるとメールになるので、口は短く厚くする", motion: "塊が口へ吸い込まれて消える", size: "カセットや電源スロットにも見える", impl: "中" },
+        { id: "pageslot", name: "頁スロット", cat: "page", motif: "ページが、台の切れ込みへ入る", why: "HTMLを置く、に直結する。保存・アーカイブの既視感が出やすい", motion: "ページがスロットへ滑り込む", size: "折り角は大向き。小さいとただのカードになる", impl: "中" },
+        { id: "brackets", name: "括弧の場", cat: "abs", motif: "受けの括弧と、中の塊", why: "ロゴ向き。場所を記号にしたもの。非開発職にはコードに見えやすい", motion: "括弧が開いて受け、成功で閉じる", size: "16pxでも識別しやすい。フォーム中央ではやや薄い", impl: "低" },
+        { id: "well", name: "くぼみ", cat: "abs", motif: "composer ウェルを縮めた二重の角丸", why: "画面の主役と同じ形。印がUIの説明になる", motion: "内側が沈む。ドラッグで窪みが深くなる", size: "升と区別しにくい。内側を下にずらして差を出す", impl: "低" },
+        { id: "dotstand", name: "点と台", cat: "abs", motif: "置かれた塊と、地面の一本", why: "最小。ブランドの核にできるが、何の印か説明が要る", motion: "塊が線に着地するだけ", size: "最強。大きくすると空しくなるので、フォームでは余白設計が要る", impl: "低" },
+        { id: "corners", name: "指定枠", cat: "abs", motif: "四隅の見当と、その中の塊", why: "ここへ置け、がUI語。カメラのファインダーにも見える", motion: "隅が開いて受け、成功で締まる", size: "隅は小サイズで残る。中の塊がないとcropにしか見えない", impl: "低" },
+        { id: "offset", name: "ずれ枠", cat: "abs", motif: "同じ枠が二つ、ずらして重なる", why: "置き場所と置かれたものが同位。ロゴとして強い。レイヤーアイコンに寄る", motion: "ずれが広がる／成功で重なる", size: "16pxでも二重が残る。塗りがないので中央では線が弱い", impl: "低" },
+        { id: "pageframe", name: "収まる頁", cat: "page", motif: "枠の中にページが収まっている", why: "共有ページそのもの。アップロードより成果物に寄る", motion: "ページが枠へはまる", size: "文書アイコンに溶けやすい", impl: "低" },
+        { id: "urlbase", name: "URLの台", cat: "other", motif: "塊の下に、URLを思わせる下線", why: "置くとURLが付く、という成果まで含む。線が弱いとただの台", motion: "着地と同時に下線が少し伸びる", size: "下線は16pxで点に潰れる", impl: "低" },
+        { id: "tokonoma", name: "床の間", cat: "space", motif: "奥の壁と、手前の台。ものを飾る場所", why: "見せるための置き場所。共有の「見せる」に近い。複雑", motion: "塊が台に据わる", size: "大でだけ成立。16pxは門になる", impl: "高" },
+        { id: "pocket", name: "ポケット", cat: "other", motif: "上から差し込む袋", why: "入れるが分かりやすい。封筒・メールに寄ると外す", motion: "塊が袋へ沈む", size: "U字に縮む。囲いと差がつきにくい", impl: "低" },
+        { id: "pageplane", name: "頁を置く", cat: "page", motif: "ページを台に載せる", why: "操作そのもの。置き台の具体化。ファイルアイコンに近い", motion: "ページが台に着地", size: "折りなしでも読める。独自性は低い", impl: "低" }
+      ];
+
+      const SHORTLIST_BLURB = {
+        nested: "第一候補。置く／入るが一つの印になる。状態も内側の移動だけで足りる。",
+        masu: "第二候補。名前の「置き場所」に一番近い器。真上視点を崩さない。",
+        pedestal: "動作が最短。一般的さだけが欠点。入れ子の予備。",
+        well: "画面のウェルと同じ形。升と差をつけきれれば残る。",
+        brackets: "ロゴ転用は強い。フォームの主役には細い。開発者寄り。"
+      };
+
+      const PROMPTS = {
+        idle: "ファイルまたはディレクトリをドロップ",
+        hover: "ファイルまたはディレクトリをドロップ",
+        drag: "ここに置いてください",
+        uploading: "アップロードしています",
+        success: "置きました"
+      };
+
+      const indexEl = document.getElementById("index");
+      const heroEl = document.getElementById("hero-mark");
+      const headerEl = document.getElementById("header-mark");
+      const sizeRow = document.getElementById("size-row");
+      const composer = document.getElementById("composer");
+      const promptEl = document.getElementById("prompt");
+      const nameEl = document.getElementById("icon-name");
+      const metaEl = document.getElementById("icon-meta");
+      const shortlistEl = document.getElementById("shortlist");
+
+      let current = "nested";
+      let cat = "all";
+
+      function svgOf(id) {
+        return document.getElementById("i-" + id).cloneNode(true);
+      }
+
+      function syncPrompt() {
+        promptEl.textContent =
+          composer.dataset.view === "header" ? "okibasho" : PROMPTS[composer.dataset.state];
+      }
+
+      function renderPicker() {
+        indexEl.replaceChildren();
+        ICONS.forEach((icon) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.dataset.id = icon.id;
+          btn.hidden = cat !== "all" && icon.cat !== cat;
+          btn.setAttribute("aria-current", icon.id === current ? "true" : "false");
+          btn.appendChild(svgOf(icon.id));
+          const cap = document.createElement("span");
+          cap.textContent = icon.name;
+          btn.appendChild(cap);
+          btn.addEventListener("click", () => select(icon.id));
+          indexEl.appendChild(btn);
+        });
+      }
+
+      function fillMeta(icon) {
+        nameEl.textContent = icon.name;
+        metaEl.replaceChildren();
+        [
+          ["モチーフ", icon.motif],
+          ["合う理由", icon.why],
+          ["動き", icon.motion],
+          ["大きさ", icon.size],
+          ["実装", icon.impl]
+        ].forEach(([k, v]) => {
+          const dt = document.createElement("dt");
+          dt.textContent = k;
+          const dd = document.createElement("dd");
+          dd.textContent = v;
+          metaEl.appendChild(dt);
+          metaEl.appendChild(dd);
+        });
+      }
+
+      function renderSizes(id) {
+        sizeRow.replaceChildren();
+        [16, 24, 32, 48].forEach((n) => {
+          const fig = document.createElement("figure");
+          const mark = svgOf(id);
+          mark.classList.add("s" + n);
+          mark.style.width = n + "px";
+          mark.style.height = n + "px";
+          const cap = document.createElement("figcaption");
+          cap.textContent = n + "px";
+          fig.append(mark, cap);
+          sizeRow.appendChild(fig);
+        });
+      }
+
+      function select(id) {
+        current = id;
+        const icon = ICONS.find((x) => x.id === id);
+        heroEl.replaceChildren(svgOf(id));
+        headerEl.replaceChildren(svgOf(id));
+        fillMeta(icon);
+        renderSizes(id);
+        indexEl.querySelectorAll("button").forEach((b) => {
+          b.setAttribute("aria-current", b.dataset.id === id ? "true" : "false");
+        });
+      }
+
+      function renderShortlist() {
+        ["nested", "masu", "pedestal", "well", "brackets"].forEach((id, i) => {
+          const icon = ICONS.find((x) => x.id === id);
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "short";
+          btn.dataset.rank = String(i + 1);
+          btn.appendChild(svgOf(id));
+          const t = document.createElement("strong");
+          t.textContent = (i === 0 ? "第一候補 · " : i === 1 ? "第二候補 · " : "") + icon.name;
+          const p = document.createElement("p");
+          p.textContent = SHORTLIST_BLURB[id];
+          btn.append(t, p);
+          btn.addEventListener("click", () => {
+            select(id);
+            composer.scrollIntoView({ behavior: "smooth", block: "center" });
+          });
+          shortlistEl.appendChild(btn);
+        });
+      }
+
+      document.querySelectorAll(".filters button").forEach((b) => {
+        b.addEventListener("click", () => {
+          cat = b.dataset.cat;
+          document.querySelectorAll(".filters button").forEach((x) => {
+            x.setAttribute("aria-pressed", x === b ? "true" : "false");
+          });
+          renderPicker();
+        });
+      });
+
+      document.querySelectorAll(".states button").forEach((b) => {
+        b.addEventListener("click", () => {
+          composer.dataset.state = b.dataset.state;
+          syncPrompt();
+          document.querySelectorAll(".states button").forEach((x) => {
+            x.setAttribute("aria-pressed", x === b ? "true" : "false");
+          });
+        });
+      });
+
+      document.querySelectorAll(".views button").forEach((b) => {
+        b.addEventListener("click", () => {
+          composer.dataset.view = b.dataset.view;
+          document.querySelectorAll(".views button").forEach((x) => {
+            x.setAttribute("aria-pressed", x === b ? "true" : "false");
+          });
+          syncPrompt();
+        });
+      });
+
+      composer.addEventListener("mouseenter", () => {
+        if (composer.dataset.state === "idle" && composer.dataset.view === "drop") {
+          composer.dataset.state = "hover";
+        }
+      });
+      composer.addEventListener("mouseleave", () => {
+        const pressed = document.querySelector('.states button[aria-pressed="true"]').dataset.state;
+        composer.dataset.state = pressed;
+        syncPrompt();
+      });
+
+      renderPicker();
+      renderShortlist();
+      select("nested");
+    </script>
+  </body>
+</html>

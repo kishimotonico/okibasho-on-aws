@@ -1,4 +1,4 @@
-import { generateRandomSlug, isValidSlug } from '@cli/page';
+import { generateRandomSlug, isValidSlug, type PageShare } from '@cli/page';
 import { useReducer } from 'react';
 
 import { pageMetadataFromListed, type ListedPage, type Retention } from '~/api/pages';
@@ -22,7 +22,13 @@ export type UploadState =
   /** ドロップされたファイルを読んでいる。読み終わるまで次のドロップは受け付けない */
   | { kind: 'checking' }
   /** 既存 slug への差し替え確認。返事があるまで待つ */
-  | { kind: 'confirming'; files: UploadFileEntry[]; slug: string; existing: ListedPage }
+  | {
+      kind: 'confirming';
+      files: UploadFileEntry[];
+      slug: string;
+      existing: ListedPage;
+      share?: PageShare;
+    }
   | { kind: 'uploading'; slug: string; completed: number; total: number }
   /** noticeOpen は箱の吹き出しだけの開閉。結果ブロックは閉じても残る */
   | { kind: 'success'; slug: string; viewUrl: string; noticeOpen: boolean }
@@ -31,7 +37,13 @@ export type UploadState =
 type UploadAction =
   | { type: 'reset' }
   | { type: 'checking' }
-  | { type: 'confirm'; files: UploadFileEntry[]; slug: string; existing: ListedPage }
+  | {
+      type: 'confirm';
+      files: UploadFileEntry[];
+      slug: string;
+      existing: ListedPage;
+      share?: PageShare;
+    }
   | { type: 'start'; slug: string; total: number }
   | { type: 'progress'; completed: number; total: number }
   | { type: 'succeeded'; slug: string; viewUrl: string }
@@ -61,6 +73,7 @@ function reduce(state: UploadState, action: UploadAction): UploadState {
         files: action.files,
         slug: action.slug,
         existing: action.existing,
+        share: action.share,
       };
     case 'start':
       return { kind: 'uploading', slug: action.slug, completed: 0, total: action.total };
@@ -153,8 +166,8 @@ export interface UploadFlow {
   targetSlug: string | null;
   /** 新しいドロップやファイル選択を受け付けるか */
   accepts: boolean;
-  submitFiles: (selected: readonly File[]) => void;
-  submitDataTransfer: (dataTransfer: DataTransfer) => void;
+  submitFiles: (selected: readonly File[], share?: PageShare) => void;
+  submitDataTransfer: (dataTransfer: DataTransfer, share?: PageShare) => void;
   replace: () => void;
   cancel: () => void;
   reset: () => void;
@@ -184,6 +197,7 @@ export function useUploadFlow({
     files: UploadFileEntry[],
     targetSlug: string,
     existing: ListedPage | null,
+    share: PageShare | undefined,
   ): Promise<void> {
     dispatch({ type: 'start', slug: targetSlug, total: files.length });
 
@@ -193,6 +207,7 @@ export function useUploadFlow({
         files,
         retention,
         existing: existing ? pageMetadataFromListed(existing) : null,
+        share,
         onProgress: (completed, total) => dispatch({ type: 'progress', completed, total }),
       });
 
@@ -216,7 +231,10 @@ export function useUploadFlow({
     }
   }
 
-  async function begin(collected: CollectUploadFilesResult): Promise<void> {
+  async function begin(
+    collected: CollectUploadFilesResult,
+    share: PageShare | undefined,
+  ): Promise<void> {
     if (collected.singleFileNotHtml) {
       dispatch({ type: 'failed', message: messages.notHtml });
       return;
@@ -247,11 +265,11 @@ export function useUploadFlow({
     // 既存かどうかは一覧から分かる。S3 へメタデータを読みに行く必要はない
     const existing = pages.find((page) => page.slug === targetSlug);
     if (existing) {
-      dispatch({ type: 'confirm', files: collected.files, slug: targetSlug, existing });
+      dispatch({ type: 'confirm', files: collected.files, slug: targetSlug, existing, share });
       return;
     }
 
-    await upload(collected.files, targetSlug, null);
+    await upload(collected.files, targetSlug, null, share);
   }
 
   return {
@@ -261,22 +279,22 @@ export function useUploadFlow({
     iconPhase: iconPhaseOf(state),
     targetSlug: targetSlugOf(state),
 
-    submitFiles: (selected) => {
+    submitFiles: (selected, share) => {
       if (!accepts) {
         return;
       }
       dispatch({ type: 'checking' });
-      void guard(() => begin(collectUploadFilesFromFileList(Array.from(selected))));
+      void guard(() => begin(collectUploadFilesFromFileList(Array.from(selected)), share));
     },
 
-    submitDataTransfer: (dataTransfer) => {
+    submitDataTransfer: (dataTransfer, share) => {
       if (!accepts) {
         return;
       }
       dispatch({ type: 'checking' });
       void guard(async () => {
         const entries = await collectFilesFromDataTransfer(dataTransfer);
-        await begin(collectUploadFilesFromPathEntries(entries));
+        await begin(collectUploadFilesFromPathEntries(entries), share);
       });
     },
 
@@ -284,7 +302,7 @@ export function useUploadFlow({
       if (state.kind !== 'confirming') {
         return;
       }
-      void upload(state.files, state.slug, state.existing);
+      void upload(state.files, state.slug, state.existing, state.share);
     },
 
     cancel: () => dispatch({ type: 'reset' }),

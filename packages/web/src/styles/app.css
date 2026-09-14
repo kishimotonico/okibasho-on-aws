@@ -6,8 +6,8 @@
  *   20  .utility-menu         ユーティリティメニューのトリガー（固定位置）
  *   30  .ui-menu              メニュー（Menu、Radix DropdownMenu）
  *   40  .ui-tooltip           ツールチップ（Tooltip）
- *   45  .ui-dialog__overlay   社外共有ダイアログの背景（ShareDialog、Radix Dialog）
- *   46  .ui-dialog            社外共有ダイアログ本体（ShareDialog）
+ *   45  .ui-dialog__overlay   外部共有ダイアログの背景（ShareDialog、Radix Dialog）
+ *   46  .ui-dialog            外部共有ダイアログ本体（ShareDialog）
  *   50  .ui-alert__overlay    確認ダイアログの背景（AlertDialog）。ShareDialog の上に重ねられる
  *   51  .ui-alert             確認ダイアログ本体（AlertDialog）
  */
@@ -505,7 +505,8 @@ button.text-link,
 /* ---------- SlugField（公開URL。固定部分 + slug 入力） ---------- */
 
 .url-field,
-.retention-field {
+.retention-field,
+.visibility-field {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -514,7 +515,8 @@ button.text-link,
 }
 
 .url-field .field-label,
-.retention-field .field-label {
+.retention-field .field-label,
+.visibility-field .field-label {
   margin-bottom: 0;
 }
 
@@ -643,6 +645,33 @@ button.text-link,
 
 .retention-field .seg {
   align-self: flex-start;
+}
+
+/* ---------- VisibilityToggle（内部のみ / 外部にも公開のセグメント） ---------- */
+
+.visibility-field .seg {
+  align-self: flex-start;
+}
+
+/* ---------- 公開範囲の展開パネル（「外部にも公開」を選んだときだけ、にゅっと開く） ---------- */
+
+.share-visibility-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  width: 100%;
+  transition: grid-template-rows 220ms ease;
+}
+
+.share-visibility-panel--open {
+  grid-template-rows: 1fr;
+}
+
+.share-visibility-panel__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .seg {
@@ -1041,7 +1070,7 @@ button.text-link,
   margin-top: 0.9rem;
 }
 
-/* ---------- ShareDialog（社外共有。Radix Dialog をトークンで装飾。確認は ConfirmAlertDialog） ---------- */
+/* ---------- ShareDialog（外部共有。Radix Dialog をトークンで装飾。確認は ConfirmAlertDialog） ---------- */
 
 .ui-dialog__overlay {
   position: fixed;
@@ -1380,6 +1409,10 @@ button.text-link,
   .box-bubble__panel {
     transition: none;
   }
+
+  .share-visibility-panel {
+    transition: none;
+  }
 }
 
 /* ---------- レスポンシブ ---------- */
@@ -1416,11 +1449,13 @@ button.text-link,
     padding-left: 0.65rem;
   }
 
-  .retention-field .seg {
+  .retention-field .seg,
+  .visibility-field .seg {
     width: 100%;
   }
 
-  .retention-field .seg button {
+  .retention-field .seg button,
+  .visibility-field .seg button {
     flex: 1;
   }
 }

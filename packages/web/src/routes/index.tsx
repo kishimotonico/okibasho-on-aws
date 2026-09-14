@@ -114,6 +114,10 @@ function HomePage() {
   const [highlight, setHighlight] = useState<ComposerSignal>(null);
   // ShareDialog の開閉は一覧・成功結果ブロックのどちらから開いても同じ経路になるよう、ここで一元管理する
   const [shareSlug, setShareSlug] = useState<string | null>(null);
+  // Composer で今回新しく外部公開したときだけ入る。値があれば ShareDialog を完了画面から開く
+  const [shareIssuedCredentials, setShareIssuedCredentials] = useState<
+    { username: string; password: string } | null | undefined
+  >(undefined);
   // pages から都度探すことで、保存後に一覧が更新されるとダイアログの表示（共有URLなど）も追随する
   const sharePage = shareSlug ? (pages.find((page) => page.slug === shareSlug) ?? null) : null;
 
@@ -163,7 +167,7 @@ function HomePage() {
   };
 
   /**
-   * 社外共有の保存/再発行/停止。ShareDialog がエラーを自前で表示するので、
+   * 外部共有の保存/再発行/停止。ShareDialog がエラーを自前で表示するので、
    * 一覧の楽観更新（useOptimistic）は使わず、保存が終わった本物の一覧に入れ替えてからダイアログへ返す。
    * これで発行直後もダイアログの共有URL表示がすぐに一覧の内容と一致する。
    */
@@ -172,10 +176,19 @@ function HomePage() {
     await router.invalidate();
   };
 
-  const handleUploaded = (slug: string) => {
+  const handleUploaded = (
+    slug: string,
+    sharedCredentials?: { username: string; password: string } | null,
+  ) => {
     setHighlight((current) => nextSignal(current, slug));
     startTransition(async () => {
+      // 今回新しく外部公開した場合は、一覧が新しい share を含むまで待ってから
+      // ShareDialog を完了画面のまま開く（一覧の表示とダイアログを食い違わせない）
       await router.invalidate();
+      if (sharedCredentials !== undefined) {
+        setShareIssuedCredentials(sharedCredentials);
+        setShareSlug(slug);
+      }
     });
   };
 
@@ -184,7 +197,10 @@ function HomePage() {
     uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const handleShare = (slug: string) => setShareSlug(slug);
+  const handleShare = (slug: string) => {
+    setShareIssuedCredentials(undefined);
+    setShareSlug(slug);
+  };
 
   return (
     <div className="page">
@@ -220,11 +236,13 @@ function HomePage() {
           onOpenChange={(open) => {
             if (!open) {
               setShareSlug(null);
+              setShareIssuedCredentials(undefined);
             }
           }}
           page={sharePage}
           pagesBaseUrl={api.urlOrigin}
           onSave={(share) => handleShareChange(sharePage, share)}
+          openIssuedCredentials={shareIssuedCredentials}
         />
       ) : null}
     </div>

@@ -8,7 +8,7 @@ export interface PageMetadata {
   createdAt: string;
   /** ISO 8601。null なら無期限 */
   expiresAt: string | null;
-  /** 社外共有設定。無ければ社外共有していない */
+  /** 外部共有設定。無ければ外部共有していない */
   share?: PageShare;
 }
 

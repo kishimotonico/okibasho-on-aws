@@ -271,6 +271,11 @@ export async function uploadPage(
   options: {
     retention: Retention;
     existingMetadata?: PageMetadata | null;
+    /**
+     * 外部共有を新しく設定する場合だけ渡す。渡さなければ既存の share（あれば）をそのまま引き継ぐ。
+     * Composer で「外部にも公開」を選んだときに使う
+     */
+    share?: PageShare;
   },
   onProgress?: (completed: number, total: number) => void,
 ): Promise<PageMetadata> {
@@ -290,12 +295,14 @@ export async function uploadPage(
           options.existingMetadata.expiresAt === null
             ? null
             : computeExpiresAt(options.retention, now),
+        ...(options.share ? { share: options.share } : {}),
       }
     : {
         slug,
         owner: email,
         createdAt: now.toISOString(),
         expiresAt: computeExpiresAt(options.retention, now),
+        ...(options.share ? { share: options.share } : {}),
       };
 
   await client.send(
@@ -339,7 +346,7 @@ export async function updatePageRetention(
   return metadata;
 }
 
-/** 社外共有設定を更新する。既存 metadata を読み、share だけ差し替えて書き戻す。null で共有解除 */
+/** 外部共有設定を更新する。既存 metadata を読み、share だけ差し替えて書き戻す。null で共有解除 */
 export async function updatePageShare(
   client: S3Client,
   bucket: string,

@@ -12,7 +12,7 @@ import { PortsInUseError } from './port.js';
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
 
-const HELP_TEXT = `okiba — 社内向けHTML共有サービスのCLI
+const HELP_TEXT = `okiba — ちょっとしたHTML・アーティファクトを共有するためのCLI
 
 使い方:
   okiba login              ブラウザでログイン (OAuth PKCE)

@@ -1,6 +1,6 @@
 # 引き継ぎ: okibasho を「案3（IAM 活用案）」で実装する
 
-URL 形式（`/<user>/<slug>/`）と CloudFront KeyValueStore 不採用の方針は、その後 [architecture.md](architecture.md) で更新されている（社外共有の追加により `/p/<user>/<slug>/` へ変更、KVS は採用）。本書は当時の判断記録として書き換えない。
+URL 形式（`/<user>/<slug>/`）と CloudFront KeyValueStore 不採用の方針は、その後 [architecture.md](architecture.md) で更新されている（外部共有の追加により `/p/<user>/<slug>/` へ変更、KVS は採用）。本書は当時の判断記録として書き換えない。
 
 ## 0. この文書の位置づけ
 
@@ -18,7 +18,7 @@ presigned PUT で S3 に上げる」だった。これを「**認可を IAM ポ�
 S3 を直接操作する**」構成に変える。API Gateway・API Lambda・REST API・
 `shared` パッケージがすべて不要になる。
 
-判断の根拠: 30 人規模・10〜100 req/hour の社内ツールで、`docs/concept.md` の
+判断の根拠: 30 人規模・10〜100 req/hour のチーム向けツールで、`docs/concept.md` の
 優先順位（シンプル > セキュリティ境界の明確さ > 低コスト）に最も忠実な構成だから。
 owner 認可がアプリコードから消え、IAM の Resource ARN に置き換わるため、
 アプリのバグで他人のページを壊せなくなる。
@@ -262,7 +262,7 @@ CloudFront → S3 の直配信で Lambda を通らないため、`expiresAt` を
      （アップロード中断で発生しうる）
 - 削除処理は CLI / Web の削除と**同じ関数**を使う。ロジックを 2 本持たない
 
-期限切れから実際に消えるまで最大 1 時間のズレが出るが、社内ツールとして十分。
+期限切れから実際に消えるまで最大 1 時間のズレが出るが、チーム向けツールとして十分。
 
 **cleanup Lambda のロールだけは prefix 制限のない権限を持つ**ので、
 IAM の境界の外にある唯一の処理になる。ここはレビュー対象。

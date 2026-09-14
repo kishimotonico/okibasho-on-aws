@@ -4,7 +4,7 @@ import { useRouterState } from '@tanstack/react-router';
 import { useAuth } from '~/auth/auth-context';
 import { PendingFallback } from '~/components/PendingFallback';
 
-// 管理UIは社内専用でIAMがセキュリティ境界のため、未ログインで見せる画面は用意しない。
+// 管理UIはチーム内専用でIAMがセキュリティ境界のため、未ログインで見せる画面は用意しない。
 // ここで全ページを一括してログインゲートする（/callback はコールバック処理のため素通し）。
 export function AuthGate({ children }: { children: ReactNode }) {
   const auth = useAuth();

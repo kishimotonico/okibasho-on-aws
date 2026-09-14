@@ -1,6 +1,6 @@
 ---
 name: okibasho
-description: 社内チャットに URL を貼る直前の下書き。箱アイコンを中心にしたドロップ即公開と、その下のページ一覧。
+description: チャットに URL を貼る直前の下書き。箱アイコンを中心にしたドロップ即公開と、その下のページ一覧。
 colors:
   ground: '#e4e7eb'
   paper: '#ffffff'
@@ -76,7 +76,7 @@ components:
 
 **Creative North Star: "The Composer Well"（明るいコンポーザー）**
 
-管理画面は、社内チャットに URL を貼る直前の下書きである。蛍光灯のオフィスで開く明るいコンポーザー。地は薄いグレー、本文は白いウェル。ダッシュボードでもマーケでも5列表でもない。
+管理画面は、チャットに URL を貼る直前の下書きである。蛍光灯のオフィスで開く明るいコンポーザー。地は薄いグレー、本文は白いウェル。ダッシュボードでもマーケでも5列表でもない。
 
 操作の主役は composer（白いウェル全体）。中央の開いた箱がブランドマークであり、「ここにドロップして公開」のアフォーダンスであり、状態のフィードバックでもある。ファイルまたはフォルダをドロップ、箱をクリック、または案内直下のテキストリンクで選ぶと、その時点の slug と保存期間で即アップロードが始まる。送信 CTA はない。ウィンドウにファイルを持ち込んだときは画面全体を墨系の薄いオーバーレイで沈め、composer をその上に残す。composer が画面外のときだけオーバーレイ中央に「上のフォームにドロップ」を出す。成功すると箱の直下に公開 URL（リンク）とコピー・削除が残り、下の「アップロード済みページ」の該当行が数秒ハイライトされる。
 
@@ -203,14 +203,24 @@ components:
 - **Label:** 保存期間（visually-hidden 可）
 - **Control:** ウェル内の 30日 / 無期限セグメント。デフォルトは 30日。選択は薄い墨
 
+### 公開範囲（Composer）
+
+- **Label:** 公開範囲（visually-hidden 可）
+- **Control:** 保存期間の直下、同じ seg の見た目で「内部のみ / 外部にも公開」。デフォルトは内部のみ
+- **展開:** 「外部にも公開」を選ぶと、直下にパスワード保護の設定が `grid-template-rows: 0fr → 1fr` でにゅっと開く（Box bubble と同じく reduced-motion では `transition: none` で即時）。「パスワードをかける」チェックボックス（既定オン）と、オンなら ShareDialog と共通の `ShareBasicFields`（ユーザー名 + 生成済みパスワード欄・再生成アイコン。ユーザー名の初期値は `guest`）。オフなら控えめに「URLを知っている人なら誰でも見られます」。IP アドレス制限はここでは出さない（ShareDialog でのみ変更できる）
+- **検証:** ドロップ・ファイル選択のたびに検証し、ユーザー名・パスワードが不正ならアップロードを止めてフィールド直下にエラーを出す（箱の吹き出しは使わない）
+- **外部共有中のページへの差し替え:** 対象 slug が既に外部共有中なら、この seg は選択肢を出さず「外部共有中（設定はそのまま）」に固定された1つのボタン（disabled）になる。展開パネルも開かない。差し替えても既存の共有URL・パスワードを維持する
+- **リセット:** 「次のファイルを置く」で内部のみ・チェックボックスON・生成済みパスワード破棄に戻す。一覧の「再アップロード」（seed）では保存期間と同様にリセットしない
+
 ### Success result
 
 - **When:** アップロード成功。「次のファイルを置く」を押すまで残す。モーダル・トーストは使わない。連続アップロードはしない（成功中はドロップ・ファイル選択・ドラッグ演出を受け付けない）
 - **Placement:** 箱の直下（案内文・slug 入力・保存期間・ファイル選択リンクはすべて隠す）
-- **Content:** `UrlField`（URL とコピーが一体の表示部品。詳細は後述）、その下の操作列に「社外共有…」（`text-link`。削除アイコンと並べる、控えめな副次操作）と Trash（一覧と同じ `ConfirmAlertDialog`）
+- **Content:** `UrlField`（URL とコピーが一体の表示部品。詳細は後述）、その下の操作列に「外部共有…」（`text-link`。削除アイコンと並べる、控えめな副次操作）と Trash（一覧と同じ `ConfirmAlertDialog`）
 - **箱の吹き出し:** アップロード成功時、箱から `success` 種別の吹き出し（emerald 系。「公開しました」）を出す。挙動は Box bubble の `info` と同じ（6 秒自動消去・クリックで閉じる）
 - **次のファイルを置く:** 結果の下に第二階層の見た目のボタン（`button--ghost`。エメラルドではない）。押すとフォームを初期状態（乱数 slug・30日・案内文・選択リンク）に戻し、箱も idle に戻す
-- **社外共有…:** クリックすると、今アップロードしたページの `ShareDialog` を開く。開閉は route（`routes/index.tsx`）が一元管理し、一覧の kebab から開いた場合と同じ経路・同じ一覧更新（`router.invalidate`）を使う。すでに社外共有中のページを再アップロードしたときも同じボタンで今の設定を開ける
+- **外部共有…:** クリックすると、今アップロードしたページの `ShareDialog` を開く。開閉は route（`routes/index.tsx`）が一元管理し、一覧の kebab から開いた場合と同じ経路・同じ一覧更新（`router.invalidate`）を使う。すでに外部共有中のページを再アップロードしたときも同じボタンで今の設定を開ける
+- **外部公開を今回新しく選んだとき:** 結果ブロックの表示に加えて、`ShareDialog` を完了画面から自動で開く（一覧の再取得を待ってから開くので、開いた瞬間から一覧と一致する）。中身は ShareDialog の完了画面と同じ（共有URL、パスワードを設定していればユーザー名・パスワード・まとめてコピー）。閉じるのは通常どおり右上の×だけ
 - **Delete:** AlertDialog で確認してから削除。消したページの slug がフォームに残っていれば乱数に戻す。そのページの成功結果が出ていれば初期状態（フォーム表示）に戻す。一覧から消したときも同じ
 - **Reupload:** 一覧の kebab「再アップロード」は成功状態からでもフォームへ戻す
 
@@ -224,15 +234,15 @@ components:
 - **Motion:** 開閉は `opacity` のフェードのみ（高さのアニメーションはしない）。absolute 重ねのため開閉で下の要素は動かない。reduced-motion では即時
 - **本文の余白:** 本文（ボタン行がある `confirm` も含む）に対して上下左右が均等になるようパディングを揃える
 
-### ShareDialog（社外共有）
+### ShareDialog（外部共有）
 
-- **Role:** 社外の人に渡す別URL（`/s/<share-id>/`）の発行・設定変更・再発行・停止。一覧の kebab、または成功結果ブロックの「社外共有…」から開く（開閉は route が一元管理）。社内URL（`/p/`）はそのまま使えることを最初の説明文で伝える
+- **Role:** 外部の人に渡す別URL（`/s/<share-id>/`）の発行・設定変更・再発行・停止。一覧の kebab、または成功結果ブロックの「外部共有…」から開く（開閉は route が一元管理）。内部URL（`/p/`）はそのまま使えることを最初の説明文で伝える
 - **Shape:** Radix Dialog を AlertDialog と同じトークンで装飾（`ui-dialog`）。確認が要る操作（再発行・停止）は入れ子で AlertDialog（`ui-alert`）を重ねる。z-index は `ui-dialog` を `ui-alert` より低くし、確認ダイアログが必ず最前面に来るようにする
 - **Close:** ヘッダー右上に lucide `X` の icon button（aria-label・Tooltip とも「閉じる」）。フッターにテキストの「閉じる」は置かない。Esc・外側クリックでも閉じる（Radix の既定）
 - **未発行:** 保護方法のチェックボックス「パスワード（Basic認証）」「IPアドレス制限」。どちらも外すと「URLを知っている人なら誰でも見られます」を field-hint で明示。主ボタンは「共有URLを発行」
 - **発行済み:** タイトル直下に `UrlField`（URL とコピーを一体にした表示部品。詳細は後述）。保存期間があればその下に「保存期限（日付）を過ぎると共有も終わります」を field-hint で出す。「現在の保護方法」の要約はチェックボックスと重複するため出さない。同じ設定フォームを下に表示する
 - **発行済み Basic の読み取り表示:** Basic が設定済みのまま「変更」を押していない間は、ユーザー名と伏せ字パスワード（`••••••••`。実際の文字数を反映しない固定表示）を横に並べて読み取り表示し、その横に控えめな text-link「変更」を置く。自然文の説明は付けない。「変更」を押すと編集用の入力欄（後述のパスワード自動生成と同じ見た目）に切り替わり、ユーザー名は現在値、パスワードは新しく生成した値から編集を始める。入力欄の下に text-link「取り消す」を出し、押すと編集を破棄して読み取り表示に戻る（保存されるのは「変更」を押して編集した場合だけ）
-- **パスワードの自動生成:** 新しく Basic をオンにしたとき（未共有で発行する、または共有中で Basic が無かったところにオンにする）、または発行済みの Basic を「変更」したときは、`generateSharePassword`（`@cli/page`）で生成した約80bitのパスワードを欄に最初から入れ、伏せ字にせず平文（等幅フォント）で表示する。欄の右に「再生成」（`RefreshCw` の icon button + Tooltip）を置く（コピーは完了画面で行えるため、編集中の欄にはコピーボタンを置かない）。ユーザーは自由に書き換えられる（書き換えても既存の検証をかける）
+- **パスワードの自動生成:** 新しく Basic をオンにしたとき（未共有で発行する、または共有中で Basic が無かったところにオンにする）、または発行済みの Basic を「変更」したときは、`generateSharePassword`（`@cli/page`）で生成した約80bitのパスワードを欄に最初から入れ、伏せ字にせず平文（等幅フォント）で表示する。欄の右に「再生成」（`RefreshCw` の icon button + Tooltip）を置く（コピーは完了画面で行えるため、編集中の欄にはコピーボタンを置かない）。ユーザーは自由に書き換えられる（書き換えても既存の検証をかける）。このユーザー名・パスワード入力欄は `components/ShareBasicFields.tsx` に切り出し、Composer の公開範囲パネルとも共有する（`idPrefix` で input の id 衝突を避ける）
 - **完了画面:** 未発行から発行した場合、または発行済みの設定を保存して今回パスワードを新しく設定した場合は、発行・保存の成功後にダイアログの中身を完了画面へ丸ごと差し替える。× での閉じ方はそのまま。タイトルは未発行からの発行なら「共有URLを発行しました」、発行済みの保存なら「設定を保存しました」。パスワードを変えなかった保存（保護なしの変更、CIDR だけの変更）は完了画面へ切り替えず、これまでどおりフォームにとどまり field-hint で反映遅延を案内する
   - **中身:** `UrlField`、保存期限があれば field-hint、パスワードを新しく設定した場合だけユーザー名・パスワード（パスワードは等幅・読み取り専用表示、個別コピーの icon button 付き）と「パスワードはこの画面を閉じると再表示できません」、常に「反映まで5分ほどかかることがあります」
   - **Footer:** パスワードを新しく設定した場合だけ、右に「まとめてコピー」（`CopyButton` labeled variant。`URL: .. / ユーザー名: .. / パスワード: ..` の3行テキスト）を出す。IP制限だけ・保護なしで発行した場合はフッター自体を出さない（URL は `UrlField` でコピーできる）。どちらの場合も「完了」のような閉じるボタンは置かず、閉じるのは常にヘッダー右上の × だけにする
@@ -260,8 +270,8 @@ components:
 - **Row:** 下線だけ。主表示は slug、副表示は URL と有効期限
 - **Expiration:** 日本時間の絶対日時を主表示。例: `2026/8/20 21:00 まで（あと2日）`。無期限は「無期限」。期限切れは `期限切れ（yyyy/M/d）`
 - **Direct:** 「ページを開く」「URLをコピー」（icon button + tooltip + aria-label）
-- **Share:** 社外共有中のページは slug の直後に小さな icon button（muted、既存の icon button より一回り小さく、slug の横で主張しない大きさ）を置く。押すとその行の ShareDialog を開く。保護なし（パスワードも IP 制限も無い）は lucide `Globe`、パスワードか IP 制限があれば `GlobeLock` にして一覧だけで保護の有無を見分けられるようにする（色は変えず形だけで区別する）。Tooltip・aria-label は保護の有無で出し分ける（「社外共有中・誰でも閲覧可」「社外共有中・パスワード / IP 制限あり」）。行の高さは共有の有無で変えない
-- **Overflow:** 再アップロード / 無期限に変更（または 30日に戻す）/ 社外共有… / 削除は kebab。削除は danger
+- **Share:** 外部共有中のページは slug の直後に小さな icon button（muted、既存の icon button より一回り小さく、slug の横で主張しない大きさ）を置く。押すとその行の ShareDialog を開く。保護なし（パスワードも IP 制限も無い）は lucide `Globe`、パスワードか IP 制限があれば `GlobeLock` にして一覧だけで保護の有無を見分けられるようにする（色は変えず形だけで区別する）。Tooltip・aria-label は保護の有無で出し分ける（「外部共有中・誰でも閲覧可」「外部共有中・パスワード / IP 制限あり」）。行の高さは共有の有無で変えない
+- **Overflow:** 再アップロード / 無期限に変更（または 30日に戻す）/ 外部共有… / 削除は kebab。削除は danger
 - **Order:** 作成日時（`createdAt`）の新しい順。同時刻は slug 昇順
 - **Highlight:** 新規は先頭に出て数秒。再アップロードは並びを変えずその行だけ。reduced-motion では色だけの静止ハイライト
 
@@ -295,19 +305,25 @@ UI 部品は radix-ui（DropdownMenu / Tooltip / AlertDialog）を DESIGN のト
 
 ```
 routes/index.tsx        一覧を loader で取得。route の state（composerSeed / retiredSlug /
-                         highlight / actionError / shareSlug）と useOptimistic を持つ。
-                         ShareDialog もここで開閉する（一覧・成功結果のどちらから開いても同じ経路）
+                         highlight / actionError / shareSlug / shareIssuedCredentials）と
+                         useOptimistic を持つ。ShareDialog もここで開閉する
+                         （一覧・成功結果・アップロード直後の自動オープンのどれでも同じ経路）
 routes/callback.tsx      Cognito のログインコールバック
-components/Composer.tsx フォームの骨組み。useUploadFlow と useWindowFileDrag をつなぐ
+components/Composer.tsx フォームの骨組み。useUploadFlow と useWindowFileDrag をつなぐ。
+                         公開範囲（内部のみ / 外部にも公開）の state と、外部なら share の
+                         組み立て・検証も持つ
   SlugField.tsx          公開URL。全選択・Esc・ツールチップの開閉を内包
   RetentionToggle.tsx    30日 / 無期限
+  VisibilityToggle.tsx   内部のみ / 外部にも公開。対象 slug が共有中なら固定表示になる
+  ShareBasicFields.tsx   パスワード保護のユーザー名・生成済みパスワード欄（ShareDialog と共通）
   PickLinks.tsx          ファイルを選ぶ · フォルダを選ぶ（隠し input を内包）
-  UploadResult.tsx       UrlField・「社外共有…」・削除（確認ダイアログ）・次のファイルを置く
+  UploadResult.tsx       UrlField・「外部共有…」・削除（確認ダイアログ）・次のファイルを置く
   DragOverlay.tsx        ウィンドウ全体のドラッグ強調
 components/PagesList.tsx 一覧。表示専用（確認ダイアログ・コピー失敗の表示だけ持つ。ShareDialog の開閉は route へ委譲）
   PageRow.tsx             一覧の1行。表示とコールバック。共有中は控えめな icon button（Globe / GlobeLock）を出し、押すと ShareDialog を開く
-components/ShareDialog.tsx 社外共有の発行・設定変更・再発行・停止（Radix Dialog）。確認は AlertDialog に委譲。
-                            発行・保存が成功すると完了画面に切り替わる
+components/ShareDialog.tsx 外部共有の発行・設定変更・再発行・停止（Radix Dialog）。確認は AlertDialog に委譲。
+                            発行・保存が成功すると完了画面に切り替わる。`openIssuedCredentials` を
+                            渡すと、開いた瞬間から完了画面で始まる（Composer からの自動オープン用）
 components/UrlField.tsx     URL とコピーを一体にした表示部品（ShareDialog / UploadResult で使う）
 components/CopyButton.tsx   URLコピーの共通部品（UploadResult / PageRow / ShareDialog / UrlField で使う）
 components/BoxBubble.tsx    箱の直下の吹き出し（error / confirm / success）
@@ -326,7 +342,7 @@ lib/to-user-message.ts     エラーを画面向けの日本語にする
 
 - **一覧データ**: `routes/index.tsx` の loader で取得し、`useOptimistic` で削除・保存期間変更を先に画面へ反映する。通信後に `router.invalidate()` で本物と入れ替える
 - **route から下ろす合図**: `composerSeed`（再アップロード）・`retiredSlug`（消えたページ）・`highlight`（成功行）は `{ slug, nonce }` の値を props で Composer / PagesList へ渡す。`forwardRef` や `useImperativeHandle` は使わない
-- **ShareDialog の開閉**: `shareSlug`（開いている対象の slug、または `null`）を `routes/index.tsx` が持つ。一覧の kebab「社外共有…」も成功結果の「社外共有…」も同じ `onShare(slug)` を呼ぶだけで、ShareDialog 自体の描画・`pages` からの対象ページの引き直し・保存後の `router.invalidate()` は route 側の一箇所にまとめる
+- **ShareDialog の開閉**: `shareSlug`（開いている対象の slug、または `null`）を `routes/index.tsx` が持つ。一覧の kebab「外部共有…」も成功結果の「外部共有…」も同じ `onShare(slug)` を呼ぶだけで、ShareDialog 自体の描画・`pages` からの対象ページの引き直し・保存後の `router.invalidate()` は route 側の一箇所にまとめる。Composer で今回新しく外部公開したときは、`onUploaded` の第2引数（credentials か null）を `shareIssuedCredentials` に控えてから同じ経路で開き、ShareDialog を完了画面から始める（通常どおり開いたときは `undefined` に戻す）
 - **アップロードの状態**: `useUploadFlow` が `idle / checking / confirming / uploading / success / error` の判別共用体を `useReducer` で持つ。箱の吹き出し（`bubbleOf`）と箱アイコンの phase（`iconPhaseOf`）はこの状態から導出する
 - **コピーの表示**: `useCopyToClipboard` が `idle / copied / failed` を持ち、2秒で idle に戻す。`CopyButton` がこれを使い、一覧側の共通エラー表示へは `onError` / `onCopied` で伝える
 

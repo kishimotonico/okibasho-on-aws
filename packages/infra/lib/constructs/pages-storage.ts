@@ -24,7 +24,7 @@ export class PagesStorage extends Construct {
 
     this.bucket = new Bucket(this, 'Bucket', {
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
-      // 30人規模の社内ツールでは KMS の運用コストに見合わない
+      // 30人規模のチーム向けツールでは KMS の運用コストに見合わない
       encryption: BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       // ユーザー成果物はスタック削除後も残す。中身の自動削除はしない

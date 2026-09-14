@@ -13,11 +13,11 @@ interface UploadResultProps {
   deleting: boolean;
   onDelete: () => void;
   onAnother: () => void;
-  /** 「社外共有…」。今アップロードしたページの ShareDialog を開く（route 側で一元管理） */
+  /** 「外部共有…」。今アップロードしたページの ShareDialog を開く（route 側で一元管理） */
   onShare: () => void;
 }
 
-/** 公開できたあとに箱の下へ残るブロック。URL とコピー、社外共有、削除、次のファイルを置く */
+/** 公開できたあとに箱の下へ残るブロック。URL とコピー、外部共有、削除、次のファイルを置く */
 export function UploadResult({
   slug,
   viewUrl,

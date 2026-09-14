@@ -37,10 +37,10 @@ export const messages = {
   remove: '削除',
   removeFailed: '削除に失敗しました',
   retentionChangeFailed: '保存期間の変更に失敗しました',
-  share: '社外共有…',
-  shareActiveOpen: '社外共有中・誰でも閲覧可',
-  shareActiveProtected: '社外共有中・パスワード / IP 制限あり',
-  shareUpdateFailed: '社外共有の設定に失敗しました',
+  share: '外部共有…',
+  shareActiveOpen: '外部共有中・誰でも閲覧可',
+  shareActiveProtected: '外部共有中・パスワード / IP 制限あり',
+  shareUpdateFailed: '外部共有の設定に失敗しました',
 
   /** 確認ダイアログ */
   deleteDialogTitle: 'このページを削除する',
@@ -51,10 +51,10 @@ export const messages = {
   retentionDialogImmediateExpiry:
     '30日保存に戻すと、作成から30日以上経過しているため即座に期限切れになります。続行しますか？',
 
-  /** 社外共有ダイアログ */
-  shareDialogTitleNew: '社外共有',
-  shareDialogTitleEdit: '社外共有の設定',
-  shareDialogDescriptionNew: '社外の人に渡す別のURLを発行します。社内URLはそのまま使えます。',
+  /** 外部共有ダイアログ */
+  shareDialogTitleNew: '外部共有',
+  shareDialogTitleEdit: '外部共有の設定',
+  shareDialogDescriptionNew: '外部の人に渡す別のURLを発行します。内部URLはそのまま使えます。',
   shareUrlLabel: '共有URL',
   shareExpiresHint: (dateLabel: string) => `保存期限（${dateLabel}）を過ぎると共有も終わります`,
   shareNoProtectionNotice: 'URLを知っている人なら誰でも見られます',
@@ -77,7 +77,7 @@ export const messages = {
   shareCopyFailed: 'URL のコピーに失敗しました',
   shareReissueDialogTitle: 'URLを再発行する',
   shareReissueDialogDescription: '古いURLが使えなくなるまで5分ほどかかります。続行しますか？',
-  shareStopDialogTitle: '社外共有を停止する',
+  shareStopDialogTitle: '外部共有を停止する',
   shareStopDialogDescription: '共有URLが無効になるまで5分ほどかかります。続行しますか？',
   shareSaveFailed: '保存に失敗しました',
   shareReissueFailed: '再発行に失敗しました',
@@ -120,6 +120,13 @@ export const messages = {
   retentionLabel: '保存期間',
   retentionTemporaryOption: '30日',
   retentionPermanentOption: '無期限',
+
+  /** 公開範囲（Composer） */
+  shareVisibilityLabel: '公開範囲',
+  shareVisibilityInternalOption: '内部のみ',
+  shareVisibilityExternalOption: '外部にも公開',
+  shareVisibilityLocked: '外部共有中（設定はそのまま）',
+  shareVisibilityWithPassword: 'パスワードをかける',
 
   /** 一覧の期限表示 */
   expiredLabel: (dateLabel: string) => `期限切れ（${dateLabel}）`,

@@ -25,7 +25,7 @@ export interface PagesDeliveryProps {
   readonly bucket: IBucket;
   /** メールドメイン。CloudFront Function が user ローカル部を補完する */
   readonly emailDomain: string;
-  /** 社外共有(/s/*)のエッジ投影先KVS。share-router.jsがここを参照する */
+  /** 外部共有(/s/*)のエッジ投影先KVS。share-router.jsがここを参照する */
   readonly shareKeyValueStore: IKeyValueStore;
 }
 
@@ -119,7 +119,7 @@ export class PagesDelivery extends Construct {
       additionalBehaviors: {
         '/s/*': {
           origin,
-          // Signed Cookieによる社内限定閲覧はデフォルトビヘイビアだけの機能にする。
+          // Signed Cookieによる内部限定の閲覧はデフォルトビヘイビアだけの機能にする。
           // ここにTrusted Key Groupは今後も付けない
           viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy,

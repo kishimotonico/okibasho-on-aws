@@ -2,7 +2,7 @@
 
 実装の進め方。設計の正本は [architecture.md](architecture.md)、要件は [concept.md](concept.md)。変更の経緯は [decision-adpot-iam-direct.md](decision-adpot-iam-direct.md)。
 
-方針は「縦に薄く」。統合リスクの高いところを最小構成で早く一周させる。API Gateway・presigned PUT は使わない。最初の一周は「IAM で自分の prefix だけに書ける → CloudFront で見える」である。CloudFront KeyValueStore は当初は使わない方針だったが、社外共有（Phase 6）で採用した。
+方針は「縦に薄く」。統合リスクの高いところを最小構成で早く一周させる。API Gateway・presigned PUT は使わない。最初の一周は「IAM で自分の prefix だけに書ける → CloudFront で見える」である。CloudFront KeyValueStore は当初は使わない方針だったが、外部共有（Phase 6）で採用した。
 
 チェックボックスは「実装が終わった」印である。受け入れ条件はデプロイして初めて確認できるものが多いため、AWS アカウントが決まるまでは各フェーズに検証状況を注記し、未検証のまま先へ進む。
 
@@ -30,7 +30,7 @@
 - [ ] pages Distribution + OAC + Response Headers Policy + Geo restriction
 - [ ] CloudFront Function（`/p/<user>/` の展開 + index.html 補完、runtime `cloudfront-js-2.0`）
 - [ ] CDK snapshot テスト（env / domains 未設定でも synth が通ること）
-- [ ] 存在しないページの 404 で S3 のエラー XML を返さない（本文の `<Key>` に `pages/<email>/...` がそのまま出て、メールアドレスとキー構成が見える。デプロイ後の確認で発覚）。社外共有（Phase 6）で追加したカスタムエラーレスポンス（404 → `errors/404.html`）で対応した。デプロイ後の確認は未了
+- [ ] 存在しないページの 404 で S3 のエラー XML を返さない（本文の `<Key>` に `pages/<email>/...` がそのまま出て、メールアドレスとキー構成が見える。デプロイ後の確認で発覚）。外部共有（Phase 6）で追加したカスタムエラーレスポンス（404 → `errors/404.html`）で対応した。デプロイ後の確認は未了
 
 受け入れ: 手で置いた `pages/test@example.jp/demo/index.html` が `/p/test/demo/` で表示される。
 
@@ -78,7 +78,7 @@
 - 親ドメイン Cookie が pages ホストへ届くか
 - `cloudfront.net` のままでは親ドメイン Cookie が設定できないこと（独自ドメイン必須）
 
-この期間は URL を知っていれば誰でも閲覧できるため、実際の社内資料はアップロードしない（検証用データのみ）。
+この期間は URL を知っていれば誰でも閲覧できるため、実際の業務資料はアップロードしない（検証用データのみ）。
 
 ## Phase 4: 管理 UI
 
@@ -99,14 +99,14 @@
 
 受け入れ: 期限切れページが最大 1 時間以内に消え、Workspace ドメイン外のアカウントはサインアップできない。
 
-## Phase 6: 社外共有
+## Phase 6: 外部共有
 
 - [ ] CloudFront KeyValueStore + share projector Lambda（5 分ごとの全件 reconcile）
 - [ ] pages Distribution に `/s/*` ビヘイビア（share-router.js）と `/errors/*` ビヘイビア（カスタムエラーレスポンス、BucketDeployment）を追加
 - [ ] `packages/cli/src/page/share.ts`（share の組み立て・ハッシュ・id 生成・CIDR 検証）
 - [ ] 管理 UI の ShareDialog（共有 URL の発行・パスワード・IP 制限・再発行・停止）
 
-受け入れ: 管理 UI で社外共有 URL を発行し、社内ログインなしで開ける。共有を停止すると URL が使えなくなる。
+受け入れ: 管理 UI で外部共有 URL を発行し、ログインなしで開ける。共有を停止すると URL が使えなくなる。
 
 デプロイ後に確認したい点:
 

@@ -4,7 +4,7 @@
 
 ## 全体構成
 
-構成図: [architecture.drawio](architecture.drawio)（draw.io 形式。VS Code の Draw.io Integration 拡張か [app.diagrams.net](https://app.diagrams.net) で開く）。社外共有（`/s/*`、KVS、share projector）を追加する前の図のままで、更新していない。
+構成図: [architecture.drawio](architecture.drawio)（draw.io 形式。VS Code の Draw.io Integration 拡張か [app.diagrams.net](https://app.diagrams.net) で開く）。外部共有（`/s/*`、KVS、share projector）を追加する前の図のままで、更新していない。
 
 ```text
    ブラウザ（管理UI）                        CLI（okiba）
@@ -32,9 +32,9 @@
         ▲
         │ OAC                              │ 参照
    CloudFront（pages.share.example.jp / UNTRUSTED、単一 Distribution）
-        └ デフォルトビヘイビア＝/p/*（社内。/p/ 以外は 404。Signed Cookie 必須、独自ドメイン導入後）
+        └ デフォルトビヘイビア＝/p/*（内部。/p/ 以外は 404。Signed Cookie 必須、独自ドメイン導入後）
              CloudFront Function: /p/<user>/... → /pages/<user>@<domain>/... + index.html 補完
-        └ /s/* ビヘイビア（社外共有。KVS 参照、Basic / IP 制限、Signed Cookie は付けない）
+        └ /s/* ビヘイビア（外部共有。KVS 参照、Basic / IP 制限、Signed Cookie は付けない）
              CloudFront Function: /s/<share-id>/... → KVS の投影先へ rewrite
         └ /errors/* ビヘイビア（カスタムエラーレスポンス専用。関数なし。
              BucketDeployment が pages バケットの errors/ に配置した固定ページを配信）
@@ -56,13 +56,13 @@ Lambda は次の 4 つ。どれも小さく独立している。API Gateway は�
 - Signed Cookie 発行（独自ドメイン導入後）
 - cleanup（期限切れと孤児の削除）
 - PreSignUp（メールドメイン制限。Google IdP 追加時）
-- share projector（`.metadata.json` の `share` を CloudFront KeyValueStore へ投影。詳細は「社外共有」節）
+- share projector（`.metadata.json` の `share` を CloudFront KeyValueStore へ投影。詳細は「外部共有」節）
 
 このほかに、CDK の `BucketDeployment`（pages バケットの `errors/` に固定ページを配置するためだけのカスタムリソース Lambda）が存在する。これは IAM の境界の外にある処理として次節で扱う。
 
 CDK のスタックは 1 つとし、機能的・概念的な境界は Construct で表現する（auth / storage / delivery / app-site / cleanup / domains）。Stack 本体は各 Construct の組み立てだけを行う。スタック分割による cross-stack reference の複雑さは持ち込まない。
 
-DynamoDB、WAF、Lambda@Edge、API Gateway、S3 Lifecycle、presigned URL は使わない。CloudFront KeyValueStore は社外共有の投影先として採用したため、この対象からは外れる。
+DynamoDB、WAF、Lambda@Edge、API Gateway、S3 Lifecycle、presigned URL は使わない。CloudFront KeyValueStore は外部共有の投影先として採用したため、この対象からは外れる。
 
 ## origin と URL 空間
 
@@ -77,16 +77,16 @@ trusted な管理アプリと untrusted な共有ページを別 origin に分�
 
 | URL | 公開範囲 | 認証 | Distribution | S3 key |
 | --- | --- | --- | --- | --- |
-| `https://pages.share.example.jp/p/<user>/<slug>/` | 社内（ログイン必須） | Signed Cookie 必須（独自ドメイン導入後） | pages（`/p/*`） | `pages/<email>/<slug>/` |
-| `https://pages.share.example.jp/s/<share-id>/` | 社外（ページ作成者が発行した URL を知っている人） | 任意で Basic 認証・IP 制限 | pages（`/s/*`） | KVS の投影から解決（実体は `pages/<email>/<slug>/`） |
+| `https://pages.share.example.jp/p/<user>/<slug>/` | 内部（ログイン必須） | Signed Cookie 必須（独自ドメイン導入後） | pages（`/p/*`） | `pages/<email>/<slug>/` |
+| `https://pages.share.example.jp/s/<share-id>/` | 外部（ページ作成者が発行した URL を知っている人） | 任意で Basic 認証・IP 制限 | pages（`/s/*`） | KVS の投影から解決（実体は `pages/<email>/<slug>/`） |
 
 `<user>` はメールのローカル部だけを見せる。全員が同じ Workspace ドメインなので、ドメイン部は CloudFront Function で静的に補完する。
 
-社内 URL のパスに `/p/` を置くのは、社外共有用の `/s/` と名前空間を分けるためである。旧 `/<user>/<slug>/` は未公開だったため互換リダイレクトを持たない。
+内部 URL のパスに `/p/` を置くのは、外部共有用の `/s/` と名前空間を分けるためである。旧 `/<user>/<slug>/` は未公開だったため互換リダイレクトを持たない。
 
-ホスト名は `app` / `pages` の 2 つのままとする。社外への URL 共有はページ単位のオプトインとして実装した（詳細は「社外共有」節）。共有していないページは従来どおり社内ログイン必須である。
+ホスト名は `app` / `pages` の 2 つのままとする。外部への URL 共有はページ単位のオプトインとして実装した（詳細は「外部共有」節）。共有していないページは従来どおりログイン必須である。
 
-CloudFront の Distribution は app 用と pages 用の 2 つ。pages 用の 1 つに `/p/*`（社内）と `/s/*`（社外共有）の 2 ビヘイビアを持たせる。別 Distribution や第 3 ホストにはしない。理由は「社外共有」節にまとめる。
+CloudFront の Distribution は app 用と pages 用の 2 つ。pages 用の 1 つに `/p/*`（内部）と `/s/*`（外部共有）の 2 ビヘイビアを持たせる。別 Distribution や第 3 ホストにはしない。理由は「外部共有」節にまとめる。
 
 ## 認可は IAM ポリシーに委譲する
 
@@ -132,7 +132,7 @@ IAM の境界の外にある処理が 3 つある。いずれもレビュー対�
 
 ### Web
 
-Cognito User Pool に Google Workspace を外部 IdP として連携する。Managed Login を使う（ログイン画面を自作しない）。会社の Workspace ドメインのアカウントのみ許可する。
+Cognito User Pool に Google Workspace を外部 IdP として連携する。Managed Login を使う（ログイン画面を自作しない）。組織の Workspace ドメインのアカウントのみ許可する。
 
 メールドメイン制限は PreSignUp Lambda トリガーで実装する。`event.request.userAttributes.email` のドメインと `email_verified` を検証し、不一致なら reject する。
 
@@ -174,7 +174,7 @@ authenticated role の信頼ポリシー。`sts:TagSession` を忘れるとプ�
 
 クライアントは id_token を Identity Pool に渡し、一時 IAM クレデンシャルを得る。Cognito のアクセストークンには `email` クレームが入らないため、id_token を使う。
 
-### 社内ページの閲覧（Signed Cookie）※独自ドメイン導入後
+### 内部ページの閲覧（Signed Cookie）※独自ドメイン導入後
 
 pages Distribution に Trusted Key Group を設定する。CloudFront の公開鍵は CDK で作り、秘密鍵は SSM SecureString に置く。
 
@@ -184,7 +184,7 @@ pages Distribution に Trusted Key Group を設定する。CloudFront の公開�
 - `aws-jwt-verify`（AWS 公式ライブラリ）で JWKS 検証してから署名する
 - `Domain=.share.example.jp` / `Secure` / `HttpOnly` / `SameSite=Lax` で `CloudFront-Policy` / `CloudFront-Signature` / `CloudFront-Key-Pair-Id` を Set-Cookie
 
-Signed Cookie は閲覧専用で、漏れても社内ページの閲覧以外の権限を持たない。1 ページが複数ファイルを参照するため、Signed URL ではなく Signed Cookie を使う。有効期間は 24 時間。切れたら下記の再認証フローが走るだけなので、長さに神経質にならない。
+Signed Cookie は閲覧専用で、漏れても内部ページの閲覧以外の権限を持たない。1 ページが複数ファイルを参照するため、Signed URL ではなく Signed Cookie を使う。有効期間は 24 時間。切れたら下記の再認証フローが走るだけなので、長さに神経質にならない。
 
 管理 UI のセッション Cookie（もし持つなら）は `__Host-` プレフィックスを付ける。`__Host-` は `Domain` 指定付きでは設定できないため、pages 上の untrusted JS からの cookie tossing（親ドメイン Cookie の送りつけ）で app session を上書きできない。
 
@@ -237,7 +237,7 @@ pages/
 
 `expiresAt` が `null` なら無期限。クライアントが書くので自己申告だが、影響は自分の prefix とストレージコストだけで他人には及ばない。
 
-`share` は社外共有の設定で、無ければ社外共有していない。フィールドの詳細は「社外共有」節にある。
+`share` は外部共有の設定で、無ければ外部共有していない。フィールドの詳細は「外部共有」節にある。
 
 `.metadata.json` は配信対象 prefix の中にある。pages origin は untrusted であり、所有者メールがページ配下から読めても、管理アプリのセッションや他人のページには届かない。ユーザーが同名ファイルをアップロードすると正本と衝突するので、クライアントは `.metadata.json` をアップロード対象から除外する。
 
@@ -287,7 +287,7 @@ slug の指定は任意。web は省略時に乱数（小文字英数字 10 文�
 
 ## URL解決
 
-社内向けの公開 URL は `/p/<user>/<slug>/`。実装は `packages/infra/lib/functions/pages-router.js`（pages Distribution のデフォルトビヘイビアに viewer-request として付ける CloudFront Function。`/p/` 以外は 404 にする）。ランタイムは `cloudfront-js-2.0` を指定する（1.0 だと `String.prototype.endsWith` などが使えない）。
+内部向けの公開 URL は `/p/<user>/<slug>/`。実装は `packages/infra/lib/functions/pages-router.js`（pages Distribution のデフォルトビヘイビアに viewer-request として付ける CloudFront Function。`/p/` 以外は 404 にする）。ランタイムは `cloudfront-js-2.0` を指定する（1.0 だと `String.prototype.endsWith` などが使えない）。
 
 - `%2f` / `.` / `..` / 空セグメント / `.metadata.json` を含む URI は 404 にする
 - `@` を含む user を弾く。`/a@b.jp@example.jp/` のような入力で別ユーザーの prefix を指させないため
@@ -295,34 +295,34 @@ slug の指定は任意。web は省略時に乱数（小文字英数字 10 文�
 - 末尾 `/` なら `index.html` を補い、`/pages/<user>@<domain>/<slug>/...` へ書き換える。ドメイン名は CDK からビルド時に埋め込む
 - Lambda@Edge も S3 Website Hosting も使わない
 
-社外向けの URL 解決（`/s/*`）は別の CloudFront Function（`share-router.js`）が担う。詳細は次の「社外共有」節にまとめる。
+外部向けの URL 解決（`/s/*`）は別の CloudFront Function（`share-router.js`）が担う。詳細は次の「外部共有」節にまとめる。
 
-## 社外共有
+## 外部共有
 
-ページ単位で、社内ログインなしでも見られる URL を発行できる。正本は `.metadata.json` の `share` フィールドで、無ければそのページは社外共有していない。
+ページ単位で、ログインなしでも見られる URL を発行できる。正本は `.metadata.json` の `share` フィールドで、無ければそのページは外部共有していない。
 
 ### 同一 Distribution に `/s/*` を足した理由
 
-別 Distribution や第 3 ホストにはしていない。Trusted Key Group・CloudFront Function・Response Headers Policy・Cache Policy はいずれもビヘイビア単位で設定できるため、1 つの Distribution に `/p/*`（社内）と `/s/*`（社外共有）を共存させられる。
+別 Distribution や第 3 ホストにはしていない。Trusted Key Group・CloudFront Function・Response Headers Policy・Cache Policy はいずれもビヘイビア単位で設定できるため、1 つの Distribution に `/p/*`（内部）と `/s/*`（外部共有）を共存させられる。
 
 - Signed Cookie は今後も `/p/*` だけに付ける。`/s/*` には付けない
 - カスタムエラーレスポンス（404 → `errors/404.html`。403 は将来の Signed Cookie ログイン誘導のために設定しない）は Distribution 単位の設定だが、CloudFront Function が返したレスポンスには適用されない。そのため `/s/*` が返す 401 / 403 / 404 はこの導線に巻き込まれない
 
 Distribution 単位の設定は `/s/*` にも及ぶ副作用がある。
 
-- Geo restriction（JP のみ）は `/s/*` にも効くため、社外共有も日本国外からは見られない。現状は受容し、海外の相手に共有する要件が出たら別 Distribution を再検討する
+- Geo restriction（JP のみ）は `/s/*` にも効くため、外部共有も日本国外からは見られない。現状は受容し、海外の相手に共有する要件が出たら別 Distribution を再検討する
 - `enableIpv6: false` は pages Distribution 全体に効く。`/s/*` の CIDR 判定を IPv4 に絞るための設定である
 
 ### `/p/` と `/s/` が同一 origin であることのリスク評価
 
-社内ページには現状ページ単位のアクセス制御が無く、社内ユーザーなら誰でも読める。`/s/` の HTML がログイン済み社内ユーザーのブラウザで `/p/` を same-origin で読めても、その社内ユーザーが元々読めるもの以上には届かない。社外の閲覧者は Signed Cookie を持たないため `/p/` は読めない。Service Worker の scope はスクリプトのディレクトリ配下に限られ、S3 からは `Service-Worker-Allowed` ヘッダを返せないので、あるページの Service Worker が他のページの経路を奪うこともできない。
+内部ページには現状ページ単位のアクセス制御が無く、内部ユーザーなら誰でも読める。`/s/` の HTML がログイン済み内部ユーザーのブラウザで `/p/` を same-origin で読めても、その内部ユーザーが元々読めるもの以上には届かない。外部の閲覧者は Signed Cookie を持たないため `/p/` は読めない。Service Worker の scope はスクリプトのディレクトリ配下に限られ、S3 からは `Service-Worker-Allowed` ヘッダを返せないので、あるページの Service Worker が他のページの経路を奪うこともできない。
 
-もう一つ考えるべき経路がある。同じブラウザに残った別の共有ページの資格情報を使う手口である。社員が自分の共有ページ B（`/s/B/`）に JS を仕込むと、同じブラウザにキャッシュされた別ページ A（`/s/A/`）向けの Basic 資格情報（realm はどの共有 URL でも `okibasho` で共通なので、A 用に入力した認証情報がブラウザから B にも送られうる）や、A が許可している IP からのアクセスを使って `/s/A/` を same-origin で読める可能性がある。それでも結論は変わらない。B の作者は社員であり `/p/` から A の元ページをそのまま読めるうえ、この経路には A の share-id を事前に知っている必要がある。知らなければ `/s/A/` を開けない。B にアップロードされた HTML が第三者の CDN スクリプトを読み込んでいる場合は、その JS が A を読めればスクリプト提供元にも A の内容が渡りうる点だけは明記しておく。
+もう一つ考えるべき経路がある。同じブラウザに残った別の共有ページの資格情報を使う手口である。チームメンバーが自分の共有ページ B（`/s/B/`）に JS を仕込むと、同じブラウザにキャッシュされた別ページ A（`/s/A/`）向けの Basic 資格情報（realm はどの共有 URL でも `okibasho` で共通なので、A 用に入力した認証情報がブラウザから B にも送られうる）や、A が許可している IP からのアクセスを使って `/s/A/` を same-origin で読める可能性がある。それでも結論は変わらない。B の作者はチームメンバーであり `/p/` から A の元ページをそのまま読めるうえ、この経路には A の share-id を事前に知っている必要がある。知らなければ `/s/A/` を開けない。B にアップロードされた HTML が第三者の CDN スクリプトを読み込んでいる場合は、その JS が A を読めればスクリプト提供元にも A の内容が渡りうる点だけは明記しておく。
 
 したがって origin 分離の境界は「app と pages の間」のままで足りており、`/s/` を第 3 origin にする動機は無い。次のいずれかが起きたら再検討する。
 
-- ページ単位の社内アクセス制御を入れる
-- 社外ユーザーがアップロードできるようにする
+- ページ単位の内部アクセス制御を入れる
+- 外部ユーザーがアップロードできるようにする
 
 ### share-id とアクセス制御
 
@@ -346,9 +346,9 @@ CloudFront KeyValueStore には、正本（`.metadata.json` の `share`）から
 - 各エントリの「所有 prefix」は `p` または `t`。`p` / `t` は projector が S3 キー（`pages/<email>/<slug>/.metadata.json`）から導出する。`.metadata.json` の中身（owner / slug）は信用しない
 - どちらも無い・JSON 不正のエントリは、projector しか書かないため解釈できないものとして削除してよい
 
-墓標は、停止・再発行・削除・期限切れで消えた share-id を空きにせず、他のページがその id を使って旧 URL を横取りするのを防ぐ。以前は KVS から消えた直後の id を、別の社員がたまたま同じ id を書いた metadata で再利用できてしまう余地があった。墓標は消さない（KVS 5MB の上限に対して 30 人規模なら十分収まる）。
+墓標は、停止・再発行・削除・期限切れで消えた share-id を空きにせず、他のページがその id を使って旧 URL を横取りするのを防ぐ。以前は KVS から消えた直後の id を、別のチームメンバーがたまたま同じ id を書いた metadata で再利用できてしまう余地があった。墓標は消さない（KVS 5MB の上限に対して 30 人規模なら十分収まる）。
 
-投影は S3 イベントに頼らず、5 分ごとの全件 reconcile だけで行う。実装は `packages/infra/lib/lambda/share-projector/`。反映経路を 1 本にすることで、イベントの順序・重複・取りこぼしを考えなくて済むようにしている。反映は最大 5 分遅れるが、社内ツールとして許容する。
+投影は S3 イベントに頼らず、5 分ごとの全件 reconcile だけで行う。実装は `packages/infra/lib/lambda/share-projector/`。反映経路を 1 本にすることで、イベントの順序・重複・取りこぼしを考えなくて済むようにしている。反映は最大 5 分遅れるが、チーム向けツールとして許容する。
 
 - 対象 prefix は「metadata がある prefix」∪「KVS に生きているエントリまたは墓標がある prefix」の和集合。対象ごとに、その prefix の現在の `.metadata.json` を S3 から読み直して「あるべき状態」を決める。イベントの順序や重複には依存しない
 - あるべき状態が無いのは、metadata が無い / JSON 不正 / `share` 無し / `share` の検証に失敗 / `expiresAt` を過ぎている / KVS 値が 1KB を超える、のいずれか。この場合はその prefix の生きているエントリを全部墓標に置き換える
@@ -378,7 +378,7 @@ projector の `Errors` メトリクスに CloudWatch Alarm を付けている（
 
 エラーレスポンスの body は短い固定文言にする。
 
-### 社外向けに新たに塞いだもの
+### 外部向けに新たに塞いだもの
 
 - S3 の `NoSuchKey` エラー XML に `pages/<email>/<slug>/...` が出て、メールアドレスとキー構成が見えてしまう問題。CloudFront はオリジンが 400 以上を返すと viewer-response の CloudFront Function を実行しないため、当初検討していた viewer-response（error-scrubber）による差し替えは一度も動かない。代わりに Distribution のカスタムエラーレスポンス（404 → `/errors/404.html`）で差し替える。エラーページは owner や URL の情報を含まない固定文言の HTML で、`BucketDeployment` で pages バケットの `errors/` に配置し、関数を付けない `/errors/*` ビヘイビアから配信する。403 は将来の Signed Cookie ログイン誘導に使うため設定しない。roadmap の当初の課題（Phase 1「404 で S3 のエラー XML を返さない」）もこれで対応した。デプロイ後の確認はまだ済んでいない
 - `.metadata.json` の配信。share-router 側の文字列検査に加え、bucket policy でも CloudFront サービスプリンシパルからの `pages/*/.metadata.json` への `s3:GetObject` を Deny する（`packages/infra/lib/constructs/pages-storage.ts`）。Function の文字列比較だけだと、percent-encode されたパスの解釈に依存してしまうための二重化である
@@ -413,7 +413,7 @@ projector の `Errors` メトリクスに CloudWatch Alarm を付けている（
 
 metadata キーだけを拾う走査では、`.metadata.json` が一度も書けていない孤児を見つけられない。全キーをグループ化してから metadata の有無を見る。
 
-期限切れから実際に消えるまで最大 1 時間のズレが出る。社内ツールとして十分であり、その間は URL を知っていればまだ見られる。
+期限切れから実際に消えるまで最大 1 時間のズレが出る。チーム向けツールとして十分であり、その間は URL を知っていればまだ見られる。
 
 保存期間の変更は `.metadata.json` の `expiresAt` を書き換えるだけである。オブジェクトタグも Lifecycle も追随させない。`createdAt` は初回アップロードの値を維持する。
 
@@ -530,11 +530,11 @@ Response Headers Policy は CDK で付ける。アプリのコードは 1 行も
 | pages（`/p/*` `/s/*` 共通） | `X-Content-Type-Options: nosniff`、`Cross-Origin-Opener-Policy: same-origin`、`Content-Security-Policy: frame-ancestors 'none'`、`Referrer-Policy: no-referrer`、`X-Robots-Tag: noindex, nofollow` |
 | app | HSTS、`Content-Security-Policy: frame-ancestors 'none'` |
 
-`Referrer-Policy` と `X-Robots-Tag` は社外共有の追加に合わせて足した。share-id を含む URL が Referer 経由で外部に漏れるのと、検索エンジンに索引化されるのを防ぐ。
+`Referrer-Policy` と `X-Robots-Tag` は外部共有の追加に合わせて足した。share-id を含む URL が Referer 経由で外部に漏れるのと、検索エンジンに索引化されるのを防ぐ。
 
 CloudFront の Geo restriction を日本に絞る。無料である。WAF は月額コストが乗るので入れない。
 
-再アップロードは同じ key の上書きなので、CloudFront のキャッシュが残ると古い内容と新しい内容が混ざる。pages 側は短い TTL（60 秒）にする。invalidation は持たない。クライアントに `cloudfront:CreateInvalidation` を足すと IAM の境界が S3 の外へ広がり、権限を自分の prefix の S3 操作だけに絞る狙いを損なう。社内ツールとして最大 60 秒の遅れは許容する。app 配信の静的ファイルはハッシュ付きアセットを長期キャッシュし、シェルだけ短くする。
+再アップロードは同じ key の上書きなので、CloudFront のキャッシュが残ると古い内容と新しい内容が混ざる。pages 側は短い TTL（60 秒）にする。invalidation は持たない。クライアントに `cloudfront:CreateInvalidation` を足すと IAM の境界が S3 の外へ広がり、権限を自分の prefix の S3 操作だけに絞る狙いを損なう。チーム向けツールとして最大 60 秒の遅れは許容する。app 配信の静的ファイルはハッシュ付きアセットを長期キャッシュし、シェルだけ短くする。
 
 ## 入力の扱い
 
@@ -588,11 +588,11 @@ packages/
 
 ## やらないこと
 
-API Gateway / REST API / JWT Authorizer / DynamoDB / Lambda@Edge / WAF / S3 Lifecycle + オブジェクトタグ / presigned URL / `packages/api` / `packages/shared` / 既存 ALB との統合 / 社外共有専用の第 3 origin。
+API Gateway / REST API / JWT Authorizer / DynamoDB / Lambda@Edge / WAF / S3 Lifecycle + オブジェクトタグ / presigned URL / `packages/api` / `packages/shared` / 既存 ALB との統合 / 外部共有専用の第 3 origin。
 
-CloudFront KeyValueStore は社外共有の投影先として採用した。「使わない」の対象からは外れる。
+CloudFront KeyValueStore は外部共有の投影先として採用した。「使わない」の対象からは外れる。
 
-社外共有専用の第 3 origin は作らない。`/s/*` は既存の pages Distribution にビヘイビアとして追加しており、origin は増えていない（理由は「社外共有」節）。
+外部共有専用の第 3 origin は作らない。`/s/*` は既存の pages Distribution にビヘイビアとして追加しており、origin は増えていない（理由は「外部共有」節）。
 
 ALB は S3 をターゲットにできず、Lambda ターゲット経由だとレスポンス 1MB 上限で配信に使えないため、この構成には組み込みどころがない。
 

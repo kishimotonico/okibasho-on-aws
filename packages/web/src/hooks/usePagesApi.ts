@@ -35,6 +35,8 @@ export interface UploadInput {
   retention: Retention;
   /** 差し替えのとき、作成日時と保存期限を引き継ぐための既存メタデータ */
   existing?: PageMetadata | null;
+  /** 外部共有を新しく設定する場合だけ渡す。渡さなければ既存の share をそのまま引き継ぐ */
+  share?: PageShare;
   onProgress?: (completed: number, total: number) => void;
 }
 
@@ -93,7 +95,11 @@ export function usePagesApi(): PagesApi {
             email,
             input.slug,
             input.files,
-            { retention: input.retention, existingMetadata: input.existing ?? null },
+            {
+              retention: input.retention,
+              existingMetadata: input.existing ?? null,
+              share: input.share,
+            },
             input.onProgress,
           );
           return {

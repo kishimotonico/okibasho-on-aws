@@ -17,7 +17,7 @@ export function metadataObjectKey(email: string, slug: string): string {
   return pageObjectKey(email, slug, METADATA_FILE_NAME);
 }
 
-/** 社内向け公開 URL のパス。メールのローカル部だけを見せる */
+/** 内部向け公開 URL のパス。メールのローカル部だけを見せる */
 export function pageViewPath(userLocalPart: string, slug: string): string {
   return `/p/${userLocalPart}/${slug}/`;
 }

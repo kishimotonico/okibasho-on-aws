@@ -89,7 +89,7 @@ function pickPasswordChar(): string {
 }
 
 /**
- * 社外共有の Basic 認証パスワードを自動生成する。
+ * 外部共有の Basic 認証パスワードを自動生成する。
  * 紛らわしい文字を除いた小文字英数字31文字から棄却法で偏りなくサンプリングし、
  * 4文字×4組をハイフンでつなぐ（例: `k7mq-3xwp-9rtd-h2vn`）。約80bit。
  * validateSharePassword（8文字以上・印字可能ASCII）を満たす
@@ -240,7 +240,7 @@ export function validateAndNormalizeCidrs(
   return { ok: true, value: normalized };
 }
 
-/** 社外共有の閲覧 URL パス。`/s/<id>/` */
+/** 外部共有の閲覧 URL パス。`/s/<id>/` */
 export function buildShareViewPath(id: string): string {
   return `/s/${id}/`;
 }

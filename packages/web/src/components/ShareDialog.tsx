@@ -8,12 +8,13 @@ import {
   validateShareUsername,
   type PageShare,
 } from '@cli/page';
-import { RefreshCw, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { ConfirmAlertDialog } from '~/components/AlertDialog';
 import { CopyButton } from '~/components/CopyButton';
+import { ShareBasicFields } from '~/components/ShareBasicFields';
 import { Tooltip } from '~/components/Tooltip';
 import { UrlField } from '~/components/UrlField';
 import { formatJstDate } from '~/lib/expiration-status';
@@ -34,6 +35,13 @@ interface ShareDialogProps {
   /** 公開URLのホスト部分（末尾スラッシュなし）。usePagesApi().urlOrigin */
   pagesBaseUrl: string;
   onSave: (share: PageShare | null) => Promise<void>;
+  /**
+   * Composer から「今回新しく外部公開した」直後に開くときだけ渡す。
+   * 渡すと開いた瞬間から完了画面（発行しました）で始まる。null はパスワード無しの発行
+   * （URL だけの完了画面）、値ありはそのユーザー名・平文パスワードを表示する。
+   * 省略時（undefined）は通常どおり設定フォームから始まる
+   */
+  openIssuedCredentials?: { username: string; password: string } | null;
 }
 
 interface FormErrors {
@@ -75,8 +83,15 @@ function buildShareUrl(pagesBaseUrl: string, id: string): string {
   return `${base}${buildShareViewPath(id)}`;
 }
 
-/** 社外共有の発行・設定変更・再発行・停止をひとつのダイアログでまとめる */
-export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: ShareDialogProps) {
+/** 外部共有の発行・設定変更・再発行・停止をひとつのダイアログでまとめる */
+export function ShareDialog({
+  open,
+  onOpenChange,
+  page,
+  pagesBaseUrl,
+  onSave,
+  openIssuedCredentials,
+}: ShareDialogProps) {
   const existingShare = page.share ?? null;
 
   const [withBasic, setWithBasic] = useState(Boolean(existingShare?.basic));
@@ -108,10 +123,19 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
     setErrors({});
     setNotice(null);
     setConfirmAction(null);
-    setCompletion(null);
+    // Composer から「今回新しく外部公開した」直後に開いたときは、完了画面から始める
+    setCompletion(
+      openIssuedCredentials !== undefined && existingShare
+        ? {
+            action: 'issue',
+            shareUrl: buildShareUrl(pagesBaseUrl, existingShare.id),
+            credentials: openIssuedCredentials,
+          }
+        : null,
+    );
     // page.slug が変わったとき（別ページを開いたとき）だけ初期化すれば十分
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, page.slug]);
+  }, [open, page.slug, openIssuedCredentials]);
 
   /** パスワード欄に生成済みの値を入れる。再生成・新規生成・変更モードへ入るときの両方で使う */
   const handleGeneratePassword = () => {
@@ -469,54 +493,17 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
                         </div>
                       </div>
                     ) : (
-                      <div className="share-form__row">
-                        <div className="share-form__field">
-                          <label className="share-form__field-label" htmlFor="share-username">
-                            {messages.shareUsernameLabel}
-                          </label>
-                          <input
-                            id="share-username"
-                            type="text"
-                            value={username}
-                            autoComplete="off"
-                            disabled={saving}
-                            onChange={(event) => setUsername(event.target.value)}
-                          />
-                          {errors.username ? (
-                            <p className="field-error">{errors.username}</p>
-                          ) : null}
-                        </div>
-
-                        <div className="share-form__field share-form__field--password">
-                          <label className="share-form__field-label" htmlFor="share-password">
-                            {messages.sharePasswordLabel}
-                          </label>
-                          <div className="share-form__password-input">
-                            <input
-                              id="share-password"
-                              type="text"
-                              value={password}
-                              autoComplete="new-password"
-                              disabled={saving}
-                              onChange={(event) => setPassword(event.target.value)}
-                            />
-                            <Tooltip label={messages.sharePasswordRegenerate}>
-                              <button
-                                type="button"
-                                className="icon-button"
-                                aria-label={messages.sharePasswordRegenerate}
-                                disabled={saving}
-                                onClick={handleGeneratePassword}
-                              >
-                                <RefreshCw size={16} strokeWidth={1.75} aria-hidden />
-                              </button>
-                            </Tooltip>
-                          </div>
-                          {errors.password ? (
-                            <p className="field-error">{errors.password}</p>
-                          ) : null}
-                        </div>
-                      </div>
+                      <ShareBasicFields
+                        idPrefix="share"
+                        username={username}
+                        password={password}
+                        usernameError={errors.username}
+                        passwordError={errors.password}
+                        disabled={saving}
+                        onUsernameChange={setUsername}
+                        onPasswordChange={setPassword}
+                        onRegenerate={handleGeneratePassword}
+                      />
                     )}
                   </div>
                 ) : null}

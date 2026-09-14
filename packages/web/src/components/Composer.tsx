@@ -1,4 +1,12 @@
-import { generateRandomSlug } from '@cli/page';
+import {
+  buildShareBasic,
+  generateRandomSlug,
+  generateShareId,
+  generateSharePassword,
+  validateSharePassword,
+  validateShareUsername,
+  type PageShare,
+} from '@cli/page';
 import { useEffect, useRef, useState } from 'react';
 
 import type { ListedPage, Retention } from '~/api/pages';
@@ -6,9 +14,11 @@ import { BoxBubble } from '~/components/BoxBubble';
 import { DragOverlay } from '~/components/DragOverlay';
 import { PickLinks } from '~/components/PickLinks';
 import { RetentionToggle } from '~/components/RetentionToggle';
+import { ShareBasicFields } from '~/components/ShareBasicFields';
 import { isSlugInvalid, SlugField } from '~/components/SlugField';
 import { UploadBoxIcon } from '~/components/UploadBoxIcon';
 import { UploadResult } from '~/components/UploadResult';
+import { VisibilityToggle, type PageVisibility } from '~/components/VisibilityToggle';
 import { usePagesApi } from '~/hooks/usePagesApi';
 import { useUploadFlow } from '~/hooks/useUploadFlow';
 import { useWindowFileDrag } from '~/hooks/useWindowFileDrag';
@@ -27,13 +37,27 @@ interface ComposerProps {
   retired: ComposerSignal;
   /** ページの削除中（route 側のトランジション） */
   deleting: boolean;
-  onUploaded: (slug: string) => void;
+  /**
+   * 今回新しく外部公開した場合だけ第2引数を渡す（パスワード無しなら null）。
+   * route 側はこれを合図に、完了画面から始まる ShareDialog を自動で開く
+   */
+  onUploaded: (
+    slug: string,
+    sharedCredentials?: { username: string; password: string } | null,
+  ) => void;
   onDelete: (slug: string) => void;
-  /** 「社外共有…」。今アップロードしたページの ShareDialog を開く（route 側で一元管理） */
+  /** 「外部共有…」。今アップロードしたページの ShareDialog を開く（route 側で一元管理） */
   onShare: (slug: string) => void;
 }
 
 const DEFAULT_RETENTION: Retention = 'temporary';
+const DEFAULT_VISIBILITY: PageVisibility = 'internal';
+const DEFAULT_SHARE_USERNAME = 'guest';
+
+interface ShareErrors {
+  username?: string;
+  password?: string;
+}
 
 /** ドロップして公開するフォーム。状態は useUploadFlow、ドラッグは useWindowFileDrag が持つ */
 export function Composer({
@@ -53,11 +77,105 @@ export function Composer({
 
   const [slug, setSlug] = useState(() => initialSlug ?? generateRandomSlug());
   const [retention, setRetention] = useState<Retention>(DEFAULT_RETENTION);
+  const [visibility, setVisibility] = useState<PageVisibility>(DEFAULT_VISIBILITY);
+  const [withPassword, setWithPassword] = useState(true);
+  const [shareUsername, setShareUsername] = useState(DEFAULT_SHARE_USERNAME);
+  const [sharePassword, setSharePassword] = useState('');
+  const [shareErrors, setShareErrors] = useState<ShareErrors>({});
+  // アップロード成功のタイミングで「今回新しく外部公開したか」を判別するための一時置き場。
+  // Composer の state は uploading 中も残るので、submit の直前に決めた内容をここへ控える
+  const lastAppliedShareRef = useRef<{
+    share: PageShare;
+    plainPassword: string | null;
+  } | null>(null);
 
-  const flow = useUploadFlow({ pages, slug, retention, onSlugChange: setSlug, onUploaded });
+  // 対象 slug が既に外部共有中なら、公開範囲の選択を固定して既存の share を維持する
+  const existingPageForSlug = pages.find((page) => page.slug === slug.trim());
+  const lockedShare = existingPageForSlug?.share ?? null;
+
+  useEffect(() => {
+    // 「外部にも公開」＋「パスワードをかける」を選んだ直後は、生成済みパスワードを最初から入れておく
+    if (visibility === 'external' && withPassword && !sharePassword) {
+      setSharePassword(generateSharePassword());
+    }
+  }, [visibility, withPassword, sharePassword]);
+
+  /**
+   * 公開範囲の選択を検証・組み立てる。エラーがあればフィールド直下に出してアップロードを止める。
+   * 外部共有中のページへの差し替え、または「内部のみ」なら share は undefined（既存を引き継ぐ/共有しない）
+   */
+  const resolveShareForUpload = async (): Promise<
+    { ok: true; share?: PageShare } | { ok: false }
+  > => {
+    if (lockedShare || visibility === 'internal') {
+      setShareErrors({});
+      return { ok: true, share: undefined };
+    }
+    if (!withPassword) {
+      setShareErrors({});
+      return { ok: true, share: { id: generateShareId() } };
+    }
+
+    const usernameErrors = validateShareUsername(shareUsername);
+    const passwordErrors = validateSharePassword(sharePassword);
+    if (usernameErrors[0] || passwordErrors[0]) {
+      setShareErrors({
+        username: usernameErrors[0]?.message,
+        password: passwordErrors[0]?.message,
+      });
+      return { ok: false };
+    }
+
+    const result = await buildShareBasic(shareUsername, sharePassword);
+    if (!result.ok) {
+      const nextErrors: ShareErrors = {};
+      for (const error of result.errors) {
+        nextErrors[error.field as 'username' | 'password'] = error.message;
+      }
+      setShareErrors(nextErrors);
+      return { ok: false };
+    }
+
+    setShareErrors({});
+    return { ok: true, share: { id: generateShareId(), basic: result.value } };
+  };
+
+  /** share を検証・確定してから run を呼ぶ。無効なら run を呼ばずアップロードを止める */
+  const withShare = async (run: (share?: PageShare) => void): Promise<void> => {
+    const result = await resolveShareForUpload();
+    if (!result.ok) {
+      return;
+    }
+    lastAppliedShareRef.current = result.share
+      ? { share: result.share, plainPassword: withPassword ? sharePassword : null }
+      : null;
+    run(result.share);
+  };
+
+  const flow = useUploadFlow({
+    pages,
+    slug,
+    retention,
+    onSlugChange: setSlug,
+    onUploaded: (uploadedSlug) => {
+      const applied = lastAppliedShareRef.current;
+      lastAppliedShareRef.current = null;
+      if (!applied) {
+        onUploaded(uploadedSlug);
+        return;
+      }
+      onUploaded(
+        uploadedSlug,
+        applied.share.basic
+          ? { username: applied.share.basic.username, password: applied.plainPassword ?? '' }
+          : null,
+      );
+    },
+  });
   const isDragging = useWindowFileDrag({
     enabled: flow.accepts,
-    onDrop: flow.submitDataTransfer,
+    onDrop: (dataTransfer) =>
+      void withShare((share) => flow.submitDataTransfer(dataTransfer, share)),
   });
 
   // 一覧からの合図に合わせて状態を直す。描画中の setState は React の
@@ -97,6 +215,7 @@ export function Composer({
   const overwrite = state.kind === 'confirming';
   const progressLabel =
     state.kind === 'uploading' && state.total > 1 ? `${state.completed}/${state.total}` : '1件';
+  const sharePanelOpen = visibility === 'external' && !lockedShare;
 
   return (
     <div className="upload-panel">
@@ -144,6 +263,11 @@ export function Composer({
               onAnother={() => {
                 setSlug(generateRandomSlug());
                 setRetention(DEFAULT_RETENTION);
+                setVisibility(DEFAULT_VISIBILITY);
+                setWithPassword(true);
+                setShareUsername(DEFAULT_SHARE_USERNAME);
+                setSharePassword('');
+                setShareErrors({});
                 flow.reset();
               }}
             />
@@ -160,7 +284,7 @@ export function Composer({
                 fileInputRef={fileInputRef}
                 disabled={busy}
                 onBeforePick={flow.cancel}
-                onPick={flow.submitFiles}
+                onPick={(files) => void withShare((share) => flow.submitFiles(files, share))}
               />
             </>
           )}
@@ -183,6 +307,54 @@ export function Composer({
               userPath={api.userPath}
             />
             <RetentionToggle value={retention} onChange={setRetention} disabled={busy} />
+            <VisibilityToggle
+              value={visibility}
+              onChange={setVisibility}
+              disabled={busy}
+              locked={Boolean(lockedShare)}
+            />
+            <div
+              className={`share-visibility-panel${sharePanelOpen ? ' share-visibility-panel--open' : ''}`}
+              aria-hidden={!sharePanelOpen}
+              inert={!sharePanelOpen}
+            >
+              <div className="share-visibility-panel__inner">
+                <div className="checkbox-field">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={withPassword}
+                      disabled={busy}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setWithPassword(checked);
+                        if (checked) {
+                          setSharePassword((current) => current || generateSharePassword());
+                        }
+                      }}
+                    />
+                    {messages.shareVisibilityWithPassword}
+                  </label>
+                </div>
+                {withPassword ? (
+                  <div className="share-form__group">
+                    <ShareBasicFields
+                      idPrefix="composer-share"
+                      username={shareUsername}
+                      password={sharePassword}
+                      usernameError={shareErrors.username}
+                      passwordError={shareErrors.password}
+                      disabled={busy}
+                      onUsernameChange={setShareUsername}
+                      onPasswordChange={setSharePassword}
+                      onRegenerate={() => setSharePassword(generateSharePassword())}
+                    />
+                  </div>
+                ) : (
+                  <p className="field-hint">{messages.shareNoProtectionNotice}</p>
+                )}
+              </div>
+            </div>
           </>
         ) : null}
       </div>

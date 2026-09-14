@@ -203,15 +203,15 @@ describe('PagesList', () => {
     ).toBeInTheDocument();
   });
 
-  it('社外共有中のページだけ、slug の横に地球儀のボタンを表示する（保護なしは Globe）', () => {
+  it('外部共有中のページだけ、slug の横に地球儀のボタンを表示する（保護なしは Globe）', () => {
     renderList({
       pages: [page('alpha'), page('beta', { share: { id: 'a'.repeat(22) } })],
     });
 
     expect(
-      within(rowOf('beta')).getByRole('button', { name: /^社外共有中・誰でも閲覧可/ }),
+      within(rowOf('beta')).getByRole('button', { name: /^外部共有中・誰でも閲覧可/ }),
     ).toBeInTheDocument();
-    expect(within(rowOf('alpha')).queryByRole('button', { name: /^社外共有中/ })).toBeNull();
+    expect(within(rowOf('alpha')).queryByRole('button', { name: /^外部共有中/ })).toBeNull();
   });
 
   it('パスワードや IP 制限がある共有は、区別できるよう別のアイコン（GlobeLock）のボタンにする', () => {
@@ -228,7 +228,7 @@ describe('PagesList', () => {
 
     expect(
       within(rowOf('gamma')).getByRole('button', {
-        name: /^社外共有中・パスワード \/ IP 制限あり/,
+        name: /^外部共有中・パスワード \/ IP 制限あり/,
       }),
     ).toBeInTheDocument();
   });
@@ -239,17 +239,17 @@ describe('PagesList', () => {
       pages: [page('alpha'), page('beta', { share: { id: 'a'.repeat(22) } })],
     });
 
-    await user.click(within(rowOf('beta')).getByRole('button', { name: /^社外共有中/ }));
+    await user.click(within(rowOf('beta')).getByRole('button', { name: /^外部共有中/ }));
 
     expect(onShare).toHaveBeenCalledWith('beta');
   });
 
-  it('kebab の「社外共有…」は onShare を slug 付きで呼ぶ（ShareDialog の開閉は route 側の仕事）', async () => {
+  it('kebab の「外部共有…」は onShare を slug 付きで呼ぶ（ShareDialog の開閉は route 側の仕事）', async () => {
     const user = userEvent.setup();
     const { onShare } = renderList();
 
     await user.click(within(rowOf('beta')).getByRole('button', { name: 'betaの操作' }));
-    await user.click(screen.getByRole('menuitem', { name: '社外共有…' }));
+    await user.click(screen.getByRole('menuitem', { name: '外部共有…' }));
 
     expect(onShare).toHaveBeenCalledWith('beta');
   });

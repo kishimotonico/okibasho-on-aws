@@ -281,7 +281,7 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'ファイルを選ぶ' })).toBeInTheDocument();
   });
 
-  it('成功結果は UrlField（リンク+コピー）と「社外共有…」を持つ', async () => {
+  it('成功結果は UrlField（リンク+コピー）と「外部共有…」を持つ', async () => {
     const user = userEvent.setup();
     upload.mockResolvedValue(uploaded('1111111111'));
     const { onShare } = renderComposer();
@@ -295,7 +295,7 @@ describe('Composer', () => {
     await user.click(screen.getByRole('button', { name: 'URLをコピー' }));
     expect(await screen.findByRole('button', { name: 'コピーしました' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '社外共有…' }));
+    await user.click(screen.getByRole('button', { name: '外部共有…' }));
     expect(onShare).toHaveBeenCalledWith('1111111111');
   });
 

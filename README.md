@@ -1,6 +1,6 @@
 # okibasho
 
-社内向けの HTML 共有サービス。生成した HTML やモックを、URL ひとつで社内メンバーへ共有する。
+ちょっとした HTML・アーティファクトを共有するための AWS スタック。生成した HTML やモックを、URL ひとつでチームメンバーへ共有する。
 
 認可は IAM ポリシーに委譲する。ブラウザと CLI は Cognito Identity Pool 経由の一時クレデンシャルで S3 を直接操作し、API Gateway は持たない。
 

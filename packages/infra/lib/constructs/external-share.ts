@@ -22,7 +22,7 @@ export interface ExternalShareProps {
 }
 
 /**
- * 社外共有(/s/*)のエッジ投影を担う一式。
+ * 外部共有(/s/*)のエッジ投影を担う一式。
  *
  * .metadata.json の share フィールドが正本で、KVSはエッジで参照するための投影に過ぎない。
  * S3イベントには依存せず、5分ごとの全件reconcileだけでKVSを追従させる

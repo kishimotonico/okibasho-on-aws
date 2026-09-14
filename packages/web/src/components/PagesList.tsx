@@ -19,7 +19,7 @@ interface PagesListProps {
   onReupload: (slug: string) => void;
   onRetentionChange: (page: ListedPage, retention: Retention) => void;
   onDelete: (page: ListedPage) => void;
-  /** 「社外共有…」。ShareDialog の開閉は route 側で一元管理する */
+  /** 「外部共有…」。ShareDialog の開閉は route 側で一元管理する */
   onShare: (slug: string) => void;
 }
 
