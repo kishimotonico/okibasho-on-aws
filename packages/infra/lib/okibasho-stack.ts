@@ -19,8 +19,9 @@ export interface OkibashoStackProps extends StackProps {
  *   - S3 (private, Public Access Block)
  *   - CloudFront x2 (app / pages) + OAC
  *   - Cognito User Pool + Identity Pool (Web/CLI の 2 App Client)
- *   - CloudFront KeyValueStore + share projector Lambda（外部共有(/s/*)のエッジ投影。ShareProjection）
- *   - EventBridge Rule（15分ごとの安全網）+ S3通知（metadataの作成・削除で即時起動）
+ *   - CloudFront KeyValueStore + share projector Lambda（外部共有(/s/*)のエッジ投影に加え、
+ *     期限切れページの削除・孤児回収も担う。ShareProjection。別のcleanup Lambdaは作らない）
+ *   - EventBridge Rule（1時間ごとの安全網 + cleanup）+ S3通知（metadataの作成・削除で即時起動）
  *   - Route 53 / ACM（domains 設定時のみ）
  */
 export class OkibashoStack extends Stack {

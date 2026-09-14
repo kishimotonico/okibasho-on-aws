@@ -299,10 +299,10 @@ describe('OkibashoStack', () => {
   });
 
   describe('ShareProjection', () => {
-    it('projector LambdaはS3への権限がmeta/配下に絞られ、KVSへは必要な操作だけを許可する', () => {
+    it('projector LambdaはS3への読み取りがmeta/配下に絞られ、削除はpages/・meta/両方に、KVSへは必要な操作だけを許可する', () => {
       const template = synth();
 
-      // projector / cleanup 等の本体Lambdaに加えて、S3通知配線用のCDK管理Lambda(BucketNotificationsHandler)が1つ増える
+      // projector(share投影 + cleanup)本体Lambdaに加えて、S3通知配線用のCDK管理Lambda(BucketNotificationsHandler)が1つ増える
       template.resourceCountIs('AWS::Lambda::Function', 4);
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs22.x',
@@ -342,8 +342,18 @@ describe('OkibashoStack', () => {
       );
       const s3GetResource = s3GetStatement?.Resource as
         { 'Fn::Join'?: [string, unknown[]] } | undefined;
-      // ページ成果物本体は読ませず、meta/ 配下だけに絞られている
+      // ページ成果物本体は読ませず、meta/ 配下だけに絞られている(GetObjectはpages/*を含まない)
       expect(s3GetResource?.['Fn::Join']?.[1]).toContain('/meta/*');
+      expect(JSON.stringify(s3GetResource)).not.toContain('/pages/*');
+
+      const s3DeleteStatement = statements.find(
+        (st) =>
+          st.Action === 's3:DeleteObject' ||
+          (Array.isArray(st.Action) && st.Action.includes('s3:DeleteObject')),
+      );
+      // 期限切れ削除・孤児回収のため、削除だけはpages/*・meta/*の両方に許可する
+      expect(JSON.stringify(s3DeleteStatement?.Resource)).toContain('/pages/*');
+      expect(JSON.stringify(s3DeleteStatement?.Resource)).toContain('/meta/*');
 
       const s3ListStatement = statements.find(
         (st) =>
@@ -351,16 +361,16 @@ describe('OkibashoStack', () => {
           (Array.isArray(st.Action) && st.Action.includes('s3:ListBucket')),
       );
       expect(s3ListStatement?.Condition).toMatchObject({
-        StringLike: { 's3:prefix': ['meta/*'] },
+        StringLike: { 's3:prefix': ['meta/*', 'pages/*'] },
       });
     });
 
-    it('metadataの作成・削除のS3通知と、EventBridgeの15分ごとの安全網Ruleの両方でreconcileを起動する', () => {
+    it('metadataの作成・削除のS3通知と、EventBridgeの1時間ごとのRule(安全網 + cleanup)の両方で起動する', () => {
       const template = synth();
 
       template.resourceCountIs('AWS::Events::Rule', 1);
       template.hasResourceProperties('AWS::Events::Rule', {
-        ScheduleExpression: 'rate(15 minutes)',
+        ScheduleExpression: 'rate(1 hour)',
       });
 
       // pagesバケットのS3通知がprefix=meta/・suffix=.jsonのCreated/Removedをprojectorへ流す

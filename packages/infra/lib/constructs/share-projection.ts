@@ -12,21 +12,23 @@ import { EventType, type Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export interface ShareProjectionProps {
-  /** pages bucket。projectorがここからmeta/配下のmetadataを読む */
+  /** pages bucket。projectorがmeta/配下のmetadataを読み、期限切れ・孤児のpages/配下を削除する */
   readonly pagesBucket: Bucket;
 }
 
 /**
  * share-id → S3 prefix の投影(CloudFront KVS)と、それを正本(meta/配下のmetadataの
- * share フィールド)から作り直す projector Lambda。
+ * share フィールド)から作り直す projector Lambda。roadmap.md の cleanup Lambda(期限切れ削除・
+ * 孤児回収)はこの Lambda の定期処理に統合しており、別 Lambda としては作らない。
  *
  * 外部共有のエッジ側(share-router.js と /s/* ビヘイビア)は PagesDelivery が持つ。
- * このConstructはKVSへの書き込み経路(projectorとそのトリガー)だけを担う。
+ * このConstructはKVSへの書き込み経路とページのお掃除(projectorとそのトリガー)だけを担う。
  *
- * projectorはmetadataの作成・削除のS3イベントと15分ごとの安全網スケジュールの両方から起動する。
- * S3イベントは該当ページだけを投影し(ページ単位でUpdateKeysを呼ぶ)、スケジュールだけが
- * meta/全件とKVS全件を突き合わせる冪等なreconcileを行う。KVSのキーはprefixから決まるtagのため、
- * イベントの順序・重複には依存しない(取りこぼしだけは安全網のスケジュールが拾う)。
+ * projectorはmetadataの作成・削除のS3イベントと1時間ごとのスケジュールの両方から起動する。
+ * S3イベントは該当ページだけを投影し(ページ単位でUpdateKeysを呼ぶ)、スケジュールは
+ * 「期限切れページの削除」「孤児(metadataの無い成果物prefix)の回収」
+ * 「meta/全件とKVS全件の突き合わせ」を順に行う冪等な処理。KVSのキーはprefixから決まるtagのため、
+ * イベントの順序・重複には依存しない(取りこぼしはスケジュールが最大1時間遅れで拾う)。
  */
 export class ShareProjection extends Construct {
   readonly keyValueStore: KeyValueStore;
@@ -66,7 +68,8 @@ export class ShareProjection extends Construct {
         },
       },
       description:
-        'share projector: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影する',
+        'share projector: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影し、' +
+        '期限切れページの削除・孤児回収も行う',
     });
 
     // 同時実行1で詰まった古い非同期呼び出しを溜め込まない。5分より古い呼び出しは
@@ -93,10 +96,20 @@ export class ShareProjection extends Construct {
     this.projector.addToRolePolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,
+        actions: ['s3:DeleteObject'],
+        // 期限切れページ・孤児の削除用。ページ成果物(pages/*)とmetadata(meta/*)の両方が対象
+        resources: [pagesBucket.arnForObjects('pages/*'), pagesBucket.arnForObjects('meta/*')],
+      }),
+    );
+
+    this.projector.addToRolePolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
         actions: ['s3:ListBucket'],
         resources: [pagesBucket.bucketArn],
         conditions: {
-          StringLike: { 's3:prefix': ['meta/*'] },
+          // meta/* は投影・reconcile用、pages/* は孤児回収の走査用
+          StringLike: { 's3:prefix': ['meta/*', 'pages/*'] },
         },
       }),
     );
@@ -117,7 +130,11 @@ export class ShareProjection extends Construct {
     );
   }
 
-  /** metadataの作成・削除で即時に起動し、15分ごとのスケジュールを安全網として重ねる */
+  /**
+   * metadataの作成・削除で即時に起動し、1時間ごとのスケジュールを重ねる。
+   * スケジュールは「S3イベントの取りこぼしを拾う安全網」と「cleanup(期限切れ削除・孤児回収)」を
+   * 兼ねる。取りこぼしの回復は最大1時間になるが、社内 `/p/` の cleanup 反映と同じ許容範囲とする
+   */
   private wireTriggers(pagesBucket: Bucket): void {
     this.projector.addEventSource(
       new S3EventSource(pagesBucket, {
@@ -126,10 +143,10 @@ export class ShareProjection extends Construct {
       }),
     );
 
-    new Rule(this, 'SafetyNetRule', {
-      schedule: Schedule.rate(Duration.minutes(15)),
+    new Rule(this, 'ScheduleRule', {
+      schedule: Schedule.rate(Duration.hours(1)),
       targets: [new LambdaFunction(this.projector)],
-      description: 'S3イベントの取りこぼしを拾う安全網(15分毎)',
+      description: '安全網 + cleanup(期限切れ削除・孤児回収・KVS全件突き合わせ)を1時間毎に実行',
     });
   }
 }

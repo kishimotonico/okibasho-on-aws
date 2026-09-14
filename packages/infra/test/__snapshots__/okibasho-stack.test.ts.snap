@@ -2310,7 +2310,7 @@ function buildQueryString(querystring) {
           },
           "S3Key": "<asset-hash>.zip",
         },
-        "Description": "share projector: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影する",
+        "Description": "share projector: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影し、期限切れページの削除・孤児回収も行う",
         "Environment": {
           "Variables": {
             "KVS_ARN": {
@@ -2403,11 +2403,46 @@ function buildQueryString(querystring) {
               },
             },
             {
+              "Action": "s3:DeleteObject",
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/pages/*",
+                    ],
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/meta/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
               "Action": "s3:ListBucket",
               "Condition": {
                 "StringLike": {
                   "s3:prefix": [
                     "meta/*",
+                    "pages/*",
                   ],
                 },
               },
@@ -2446,10 +2481,10 @@ function buildQueryString(querystring) {
       },
       "Type": "AWS::IAM::Policy",
     },
-    "ShareProjectionSafetyNetRule18DB1459": {
+    "ShareProjectionScheduleRule4041A7FB": {
       "Properties": {
-        "Description": "S3イベントの取りこぼしを拾う安全網(15分毎)",
-        "ScheduleExpression": "rate(15 minutes)",
+        "Description": "安全網 + cleanup(期限切れ削除・孤児回収・KVS全件突き合わせ)を1時間毎に実行",
+        "ScheduleExpression": "rate(1 hour)",
         "State": "ENABLED",
         "Targets": [
           {
@@ -2465,7 +2500,7 @@ function buildQueryString(querystring) {
       },
       "Type": "AWS::Events::Rule",
     },
-    "ShareProjectionSafetyNetRuleAllowEventRuleOkibashoShareProjectionProjectorFunction0978B34C4490DF9F": {
+    "ShareProjectionScheduleRuleAllowEventRuleOkibashoShareProjectionProjectorFunction0978B34C3FCDAC39": {
       "Properties": {
         "Action": "lambda:InvokeFunction",
         "FunctionName": {
@@ -2477,7 +2512,7 @@ function buildQueryString(querystring) {
         "Principal": "events.amazonaws.com",
         "SourceArn": {
           "Fn::GetAtt": [
-            "ShareProjectionSafetyNetRule18DB1459",
+            "ShareProjectionScheduleRule4041A7FB",
             "Arn",
           ],
         },

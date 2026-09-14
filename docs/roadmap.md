@@ -91,7 +91,7 @@
 
 ## Phase 5: 仕上げ
 
-- [ ] EventBridge Scheduler + cleanup Lambda（期限切れ削除・孤児回収）
+- [x] EventBridge Scheduler + cleanup（期限切れ削除・孤児回収）。別Lambdaは作らず、share projectorの1時間ごとのスケジュール処理に統合した（[plan-performance-tuning.md](plan-performance-tuning.md) フェーズ4）
 - [ ] Google IdP 追加 + メールドメイン制限（PreSignUp トリガー）
 - [ ] CLI の npm 配布
 - [ ] CI（typecheck / test / synth）、GitHub Actions OIDC

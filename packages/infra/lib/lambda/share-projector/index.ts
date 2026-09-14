@@ -1,11 +1,20 @@
+import { extractS3Records, type S3EventRecordLike } from './dispatch.js';
 import { applyPlan, listAllActualEntries, redactId } from './kvs-client.js';
 import { computeDiff } from './plan.js';
 import { computeShareTag } from './tag.js';
-import { getMetadataJson, listAllMetadataKeys } from './s3-client.js';
+import {
+  deleteObjectsChunked,
+  deletePagePrefix,
+  getMetadataJson,
+  listAllMetadataKeys,
+  listPagePrefixesWithLastModified,
+} from './s3-client.js';
 import type { DiffPlan } from './types.js';
 import {
   buildDesiredEntry,
   decodeS3EventKey,
+  isExpired,
+  isPastOrphanGracePeriod,
   prefixFromMetadataKey,
   serializeKvsValue,
 } from './validate.js';
@@ -21,14 +30,11 @@ function requireEnv(name: string): string {
   return value;
 }
 
-interface S3EventRecordLike {
-  s3?: { object?: { key?: string } };
-}
-
 /**
- * S3イベント(meta/配下のJSONの作成・削除)と15分ごとの安全網スケジュールの両方から起動される。
+ * S3イベント(meta/配下のJSONの作成・削除)と1時間ごとのスケジュールの両方から起動される。
  * S3イベントはそのページだけを投影し(ページ単位でUpdateKeysを呼ぶ。all-or-nothingで
- * 他ページを巻き込まないため)、スケジュールだけがmeta/全件とKVS全件を突き合わせる
+ * 他ページを巻き込まないため)、スケジュールは「期限切れページの削除」「孤児の回収」
+ * 「meta/全件とKVS全件の突き合わせ」の3つを順に行う(定期処理をcleanupと統合したもの)
  */
 export async function handler(event: unknown): Promise<void> {
   const records = extractS3Records(event);
@@ -38,21 +44,7 @@ export async function handler(event: unknown): Promise<void> {
     return;
   }
   console.log('trigger=schedule');
-  await handleReconcile();
-}
-
-function extractS3Records(event: unknown): S3EventRecordLike[] | null {
-  if (typeof event !== 'object' || event === null || !('Records' in event)) {
-    return null;
-  }
-  const records = (event as { Records?: unknown }).Records;
-  if (!Array.isArray(records)) {
-    return null;
-  }
-  const isS3Records = records.every(
-    (record) => typeof record === 'object' && record !== null && 's3' in record,
-  );
-  return isS3Records ? (records as S3EventRecordLike[]) : null;
+  await handleSchedule();
 }
 
 /** イベントのキーをデコードしてprefixを導出し、重複を除いてページ単位で処理する */
@@ -95,7 +87,24 @@ async function projectPage(prefix: string, metadataKey: string, now: Date): Prom
   console.log(`project: prefix=${prefix} ${serialized ? 'put' : 'delete'} tag=${redactId(tag)}`);
 }
 
-async function handleReconcile(): Promise<void> {
+interface MetaEntry {
+  key: string;
+  prefix: string;
+  tag: string;
+  metadataRaw: unknown;
+}
+
+/**
+ * 1時間ごとのスケジュール処理。
+ * 1. 期限切れページの削除(成果物 → metadataの順)
+ * 2. 孤児(成果物はあるがmetadataが無い prefix。猶予24時間)の回収
+ * 3. meta/全件とKVS全件の突き合わせ
+ *
+ * 期限切れページの削除を先に行うが、KVSの突き合わせに使う desired は
+ * (削除前に読んだ)metadataから buildDesiredEntry で計算するため、期限切れ分は
+ * どのみち null(=削除対象)になる。物理削除の順序に関わらず同じ実行内で整合する
+ */
+async function handleSchedule(): Promise<void> {
   const now = new Date();
   const metadataKeys = await listAllMetadataKeys(PAGES_BUCKET);
 
@@ -104,15 +113,65 @@ async function handleReconcile(): Promise<void> {
     .filter((entry): entry is { key: string; prefix: string } => entry.prefix !== null);
 
   // reconcile 1回の所要時間がそのまま反映の待ち時間になるので、独立な読み取りは並列にする
-  const desiredEntries = await mapWithConcurrency(entries, 8, async ({ key, prefix }) => {
+  const metaEntries: MetaEntry[] = await mapWithConcurrency(entries, 8, async ({ key, prefix }) => {
     const tag = await computeShareTag(prefix);
     const metadataRaw = await getMetadataJson(PAGES_BUCKET, key);
-    const desired = buildDesiredEntry(metadataRaw, prefix, now);
-    const value = desired ? serializeKvsValue(desired.value) : null;
-    return [tag, value] as const;
+    return { key, prefix, tag, metadataRaw };
   });
 
-  const desired = new Map(desiredEntries);
+  await deleteExpiredPages(metaEntries, now);
+  await reclaimOrphanPages(metaEntries, now);
+  await reconcileKvs(metaEntries, now);
+}
+
+/** expiresAtを過ぎているページを削除する。ページ成果物 → metadataの順(web/CLIの削除と同じ順) */
+async function deleteExpiredPages(metaEntries: MetaEntry[], now: Date): Promise<void> {
+  const expired = metaEntries.filter((entry) => {
+    const metadata = entry.metadataRaw;
+    const expiresAt =
+      typeof metadata === 'object' && metadata !== null
+        ? (metadata as Record<string, unknown>).expiresAt
+        : undefined;
+    return isExpired(expiresAt, now);
+  });
+
+  for (const entry of expired) {
+    await deletePagePrefix(PAGES_BUCKET, entry.prefix);
+    await deleteObjectsChunked(PAGES_BUCKET, [entry.key]);
+    console.log(`cleanup: expired prefix=${entry.prefix}`);
+  }
+}
+
+/**
+ * 孤児(pages/配下にオブジェクトはあるがmeta/配下にmetadataが無いprefix)を回収する。
+ * アップロードは成果物 → metadataの順に書くため、アップロード中のページを誤って消さないよう
+ * そのprefix配下の最新更新から24時間経っているものだけを対象にする
+ */
+async function reclaimOrphanPages(metaEntries: MetaEntry[], now: Date): Promise<void> {
+  const metadataPrefixes = new Set(metaEntries.map((entry) => entry.prefix));
+  const pagePrefixes = await listPagePrefixesWithLastModified(PAGES_BUCKET);
+
+  for (const [prefix, lastModified] of pagePrefixes) {
+    if (metadataPrefixes.has(prefix)) {
+      continue;
+    }
+    if (!isPastOrphanGracePeriod(lastModified, now)) {
+      continue;
+    }
+    await deletePagePrefix(PAGES_BUCKET, prefix);
+    console.log(`cleanup: orphan prefix=${prefix}`);
+  }
+}
+
+/** meta/全件から求めた「あるべき状態」とKVS全件を突き合わせる */
+async function reconcileKvs(metaEntries: MetaEntry[], now: Date): Promise<void> {
+  const desired = new Map(
+    metaEntries.map((entry) => {
+      const built = buildDesiredEntry(entry.metadataRaw, entry.prefix, now);
+      const value = built ? serializeKvsValue(built.value) : null;
+      return [entry.tag, value] as const;
+    }),
+  );
   const actual = await listAllActualEntries(KVS_ARN);
 
   const plan = computeDiff(desired, actual);
