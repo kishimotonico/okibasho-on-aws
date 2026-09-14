@@ -1,5 +1,5 @@
 import type { Retention } from '@okibasho/core';
-import { EllipsisVertical, Globe, GlobeLock, SquareArrowOutUpRight } from 'lucide-react';
+import { EllipsisVertical, GlobeLock, SquareArrowOutUpRight } from 'lucide-react';
 import { useRef } from 'react';
 
 import { CopyButton } from '~/components/CopyButton';
@@ -36,9 +36,6 @@ export function PageRow({
   const reuploadSelectedRef = useRef(false);
 
   const expiration = getExpirationStatus(page.expiresAt);
-  const isProtected = Boolean(page.share?.basic) || Boolean(page.share?.allowedCidrs?.length);
-  const shareTooltip = isProtected ? messages.shareActiveProtected : messages.shareActiveOpen;
-  const ShareIcon = isProtected ? GlobeLock : Globe;
   const rowClass = [
     'page-row',
     expiration.kind === 'expired' ? 'page-row--expired' : '',
@@ -53,14 +50,14 @@ export function PageRow({
         <div className="page-row__title">
           <h3>{page.slug}</h3>
           {page.share ? (
-            <Tooltip label={shareTooltip}>
+            <Tooltip label={messages.shareActive}>
               <button
                 type="button"
                 className="page-row__share-button"
-                aria-label={shareTooltip}
+                aria-label={messages.shareActive}
                 onClick={() => onShare(page)}
               >
-                <ShareIcon size={13} strokeWidth={1.75} aria-hidden />
+                <GlobeLock size={13} strokeWidth={1.75} aria-hidden />
               </button>
             </Tooltip>
           ) : null}

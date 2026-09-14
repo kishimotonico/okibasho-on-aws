@@ -140,10 +140,6 @@ function HomePage() {
   const [highlight, setHighlight] = useState<ComposerSignal>(null);
   // ShareDialog の開閉は一覧・成功結果ブロックのどちらから開いても同じ経路になるよう、ここで一元管理する
   const [shareSlug, setShareSlug] = useState<string | null>(null);
-  // Composer で今回新しく外部公開したときだけ入る。値があれば ShareDialog を完了画面から開く
-  const [shareIssuedCredentials, setShareIssuedCredentials] = useState<
-    { username: string; password: string } | null | undefined
-  >(undefined);
   // pages から都度探すことで、保存後に一覧が更新されるとダイアログの表示（共有URLなど）も追随する
   const sharePage = shareSlug ? (pages.find((page) => page.slug === shareSlug) ?? null) : null;
 
@@ -205,14 +201,10 @@ function HomePage() {
     setBasePages((current) => applyPagesAction(current, { type: 'upsert', page: updated }));
   };
 
-  const handleUploaded = (
-    page: ListedPage,
-    sharedCredentials?: { username: string; password: string } | null,
-  ) => {
+  const handleUploaded = (page: ListedPage, openShare?: boolean) => {
     setHighlight((current) => nextSignal(current, page.slug));
     setBasePages((current) => applyPagesAction(current, { type: 'upsert', page }));
-    if (sharedCredentials !== undefined) {
-      setShareIssuedCredentials(sharedCredentials);
+    if (openShare) {
       setShareSlug(page.slug);
     }
   };
@@ -223,7 +215,6 @@ function HomePage() {
   };
 
   const handleShare = (slug: string) => {
-    setShareIssuedCredentials(undefined);
     setShareSlug(slug);
   };
 
@@ -261,13 +252,11 @@ function HomePage() {
           onOpenChange={(open) => {
             if (!open) {
               setShareSlug(null);
-              setShareIssuedCredentials(undefined);
             }
           }}
           page={sharePage}
           pagesBaseUrl={api.urlOrigin}
           onSave={(share) => handleShareChange(sharePage, share)}
-          openIssuedCredentials={shareIssuedCredentials}
         />
       ) : null}
     </div>

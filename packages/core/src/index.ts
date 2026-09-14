@@ -32,27 +32,13 @@ export {
 export { SLUG_PATTERN, generateRandomSlug, isValidSlug } from './page/slug.js';
 export { SHARE_TAG_LENGTH, computeShareTag } from './page/tag.js';
 export {
-  SHARE_CIDR_MAX_COUNT,
-  SHARE_CIDR_MIN_COUNT,
   SHARE_ID_PATTERN,
-  SHARE_PASSWORD_MAX_LENGTH,
-  SHARE_PASSWORD_MIN_LENGTH,
-  SHARE_USERNAME_MAX_LENGTH,
-  SHARE_USERNAME_MIN_LENGTH,
-  buildShareBasic,
+  SHARE_USERNAME,
   buildShareViewPath,
   generateShareId,
   generateSharePassword,
-  generateShareSalt,
-  hashSharePassword,
   isValidShareId,
-  validateAndNormalizeCidrs,
-  validateSharePassword,
-  validateShareUsername,
   type PageShare,
-  type PageShareBasic,
-  type ShareValidationError,
-  type ShareValidationResult,
 } from './page/share.js';
 export { type UploadPathValidationResult, validateUploadPath } from './page/upload-path.js';
 export {

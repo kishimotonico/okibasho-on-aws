@@ -7,7 +7,7 @@ import { FakeS3Store } from './fake-s3.js';
 
 const email = 'tanaka@example.jp';
 const now = '2026-08-26T00:00:00.000Z';
-const share = { id: 'a'.repeat(22), allowedCidrs: ['203.0.113.0/24'] };
+const share = { id: 'a'.repeat(22), password: 'k7mq-3xwp-9rtd-h2vn', allowedIps: ['203.0.113.5'] };
 
 function setup() {
   const fake = new FakeS3Store();
@@ -88,7 +88,7 @@ describe('createPageStore', () => {
 
   it('share を渡したときだけ既存の share を差し替える', async () => {
     const { store } = setup();
-    const next = { id: 'b'.repeat(22) };
+    const next = { id: 'b'.repeat(22), password: 'q9zh-4tep-8mwc-r2yn' };
 
     const metadata = await store.upload('q3-report', [html()], {
       retention: 'permanent',

@@ -1,12 +1,13 @@
 import type { DesiredEntry, ShareKvsValue, ValidatedShare } from './types.js';
 
 const SHARE_ID_RE = /^[A-Za-z0-9_-]{22}$/;
-const SALT_RE = /^[A-Za-z0-9_-]{22}$/;
-const HASH_RE = /^[0-9a-f]{64}$/;
-/** 制御文字と ':' を含まない、1〜64文字 */
-const USERNAME_RE = /^[^\x00-\x1f\x7f:]{1,64}$/;
+/** 自動生成パスワードの想定範囲。印字可能ASCII、1〜128文字 */
+const PASSWORD_RE = /^[\x20-\x7e]{1,128}$/;
 
-const MAX_CIDRS = 20;
+/** Basic認証のユーザー名は固定。router側のb値組み立てもこの値を使う */
+const SHARE_USERNAME = 'guest';
+
+const MAX_IPS = 20;
 const KVS_VALUE_MAX_BYTES = 1024;
 
 export function isValidShareId(id: unknown): id is string {
@@ -20,55 +21,25 @@ function isValidIPv4Octets(octets: string[]): boolean {
   return octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255);
 }
 
-export function isValidCidr(cidr: unknown): cidr is string {
-  if (typeof cidr !== 'string') {
+/** IPv4アドレス1件(完全一致用。CIDR表記は受け付けない) */
+export function isValidIp(ip: unknown): ip is string {
+  if (typeof ip !== 'string') {
     return false;
   }
-  const slash = cidr.indexOf('/');
-  if (slash === -1) {
-    return false;
-  }
-  const address = cidr.slice(0, slash);
-  const prefixText = cidr.slice(slash + 1);
-  if (!/^\d{1,2}$/.test(prefixText)) {
-    return false;
-  }
-  const prefix = Number(prefixText);
-  if (prefix < 0 || prefix > 32) {
-    return false;
-  }
-  return isValidIPv4Octets(address.split('.'));
+  return isValidIPv4Octets(ip.split('.'));
 }
 
-function isValidBasic(basic: unknown): basic is ValidatedShare['basic'] {
-  if (basic === undefined) {
+function isValidAllowedIps(allowedIps: unknown): allowedIps is string[] | undefined {
+  if (allowedIps === undefined) {
     return true;
   }
-  if (typeof basic !== 'object' || basic === null) {
+  if (!Array.isArray(allowedIps)) {
     return false;
   }
-  const record = basic as Record<string, unknown>;
-  return (
-    typeof record.username === 'string' &&
-    USERNAME_RE.test(record.username) &&
-    typeof record.salt === 'string' &&
-    SALT_RE.test(record.salt) &&
-    typeof record.hash === 'string' &&
-    HASH_RE.test(record.hash)
-  );
-}
-
-function isValidAllowedCidrs(allowedCidrs: unknown): allowedCidrs is string[] | undefined {
-  if (allowedCidrs === undefined) {
-    return true;
-  }
-  if (!Array.isArray(allowedCidrs)) {
+  if (allowedIps.length < 1 || allowedIps.length > MAX_IPS) {
     return false;
   }
-  if (allowedCidrs.length < 1 || allowedCidrs.length > MAX_CIDRS) {
-    return false;
-  }
-  return allowedCidrs.every(isValidCidr);
+  return allowedIps.every(isValidIp);
 }
 
 /** metadata の share フィールドを検証する。壊れていれば null (=共有無し) */
@@ -80,19 +51,16 @@ export function validateShare(share: unknown): ValidatedShare | null {
   if (!isValidShareId(record.id)) {
     return null;
   }
-  if (!isValidBasic(record.basic)) {
+  if (typeof record.password !== 'string' || !PASSWORD_RE.test(record.password)) {
     return null;
   }
-  if (!isValidAllowedCidrs(record.allowedCidrs)) {
+  if (!isValidAllowedIps(record.allowedIps)) {
     return null;
   }
 
-  const result: ValidatedShare = { id: record.id };
-  if (record.basic !== undefined) {
-    result.basic = record.basic as ValidatedShare['basic'];
-  }
-  if (record.allowedCidrs !== undefined) {
-    result.allowedCidrs = record.allowedCidrs as string[];
+  const result: ValidatedShare = { id: record.id, password: record.password };
+  if (record.allowedIps !== undefined) {
+    result.allowedIps = record.allowedIps as string[];
   }
   return result;
 }
@@ -130,12 +98,13 @@ export function prefixFromMetadataKey(s3Key: string): string | null {
 }
 
 export function buildShareKvsValue(prefix: string, share: ValidatedShare): ShareKvsValue {
-  const value: ShareKvsValue = { p: prefix, id: share.id };
-  if (share.basic) {
-    value.b = `${share.basic.salt}:${share.basic.hash}`;
-  }
-  if (share.allowedCidrs && share.allowedCidrs.length > 0) {
-    value.c = share.allowedCidrs;
+  const value: ShareKvsValue = {
+    p: prefix,
+    id: share.id,
+    b: Buffer.from(`${SHARE_USERNAME}:${share.password}`, 'utf-8').toString('base64'),
+  };
+  if (share.allowedIps && share.allowedIps.length > 0) {
+    value.ips = share.allowedIps;
   }
   return value;
 }

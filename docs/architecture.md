@@ -28,7 +28,7 @@
    Lambda（PageMaintenance、同時実行1。アラームは持たない）
         │ UpdateKeys（IfMatch）
         ▼
-   CloudFront KeyValueStore（tag → S3 prefix / share-id / Basic / CIDR の投影。
+   CloudFront KeyValueStore（tag → S3 prefix / share-id / パスワード / IP 完全一致リストの投影。
                              1 ページ 1 キーで、停止・削除・期限切れはキーの削除、
                              再発行は同じキーの上書き）
         ▲
@@ -77,7 +77,7 @@ trusted な管理アプリと untrusted な共有ページを別 origin に分�
 | URL | 公開範囲 | 認証 | Distribution | S3 key |
 | --- | --- | --- | --- | --- |
 | `https://pages.share.example.jp/p/<user>/<slug>/` | 内部（ログイン必須） | Signed Cookie 必須（独自ドメイン導入後） | pages（`/p/*`） | `pages/<email>/<slug>/` |
-| `https://pages.share.example.jp/s/<tag><share-id>/` | 外部（ページ作成者が発行した URL を知っている人） | 任意で Basic 認証・IP 制限 | pages（`/s/*`） | KVS の投影から解決（実体は `pages/<email>/<slug>/`） |
+| `https://pages.share.example.jp/s/<tag><share-id>/` | 外部（ページ作成者が発行した URL を知っている人） | 自動生成パスワードによる Basic 認証（常時）＋任意でIP制限 | pages（`/s/*`） | KVS の投影から解決（実体は `pages/<email>/<slug>/`） |
 
 `<user>` はメールのローカル部だけを見せる。全員が同じ Workspace ドメインなので、ドメイン部は CloudFront Function で静的に補完する。
 
@@ -131,7 +131,7 @@ authenticated role の権限ポリシーが唯一のセキュリティ境界で�
 
 IAM の境界の外にある処理が 2 つある。いずれもレビュー対象である。
 
-- PageMaintenance Lambda: `meta/` 配下の metadata を全件読める（Basic 認証のハッシュも含む）。`s3:GetObject` は `meta/*` に絞っており、ページ成果物本体は読めない。`s3:DeleteObject` は期限切れ削除のために `pages/*` と `meta/*` の両方に及ぶ、prefix 制限の無い削除権限を持つ。書き込みは CloudFront KeyValueStore の `UpdateKeys`（と確認用の `GetKey`）で、pages バケットへの書き込み権限（`PutObject`）は持たない
+- PageMaintenance Lambda: `meta/` 配下の metadata を全件読める（外部共有の平文パスワードも含む）。`s3:GetObject` は `meta/*` に絞っており、ページ成果物本体は読めない。`s3:DeleteObject` は期限切れ削除のために `pages/*` と `meta/*` の両方に及ぶ、prefix 制限の無い削除権限を持つ。書き込みは CloudFront KeyValueStore の `UpdateKeys`（と確認用の `GetKey`）で、pages バケットへの書き込み権限（`PutObject`）は持たない
 - エラーページ配置ロール（`BucketDeployment` のカスタムリソース Lambda）: `errors/` 配下にだけ書ける。CDK は destination バケット全体への書き込みを付与するため、bucket policy の Deny で絞っている
 
 これらは prefix を跨いで S3 を操作できる分、authenticated role より広い権限を持つ。デプロイ操作を行える者（PowerUser 相当のアクセス）は元々この構成の信頼境界の内側にいる前提であり、Lambda 実行ロールをユーザー単位・機能単位にこれ以上細分化することは目指さない。
@@ -236,12 +236,8 @@ meta/
   "expiresAt": "2026-09-25T04:00:00Z",
   "share": {
     "id": "V1StGXR8_Z5jdHi6B-myT",
-    "basic": {
-      "username": "guest",
-      "salt": "dGhpcyBpcyBhIHNhbHQ",
-      "hash": "…sha256の16進64桁…"
-    },
-    "allowedCidrs": ["203.0.113.0/24"]
+    "password": "k7mq-3xwp-9rtd-h2vn",
+    "allowedIps": ["203.0.113.5"]
   }
 }
 ```
@@ -325,7 +321,7 @@ metadata の無い pages/ 配下のファイルは削除しない。metadata を
 Distribution 単位の設定は `/s/*` にも及ぶ副作用がある。
 
 - Geo restriction（JP のみ）は `/s/*` にも効くため、外部共有も日本国外からは見られない。現状は受容し、海外の相手に共有する要件が出たら別 Distribution を再検討する
-- `enableIpv6: false` は pages Distribution 全体に効く。`/s/*` の CIDR 判定を IPv4 に絞るための設定である
+- `enableIpv6: false` は pages Distribution 全体に効く。`/s/*` の IP 完全一致判定を IPv4 に絞るための設定である
 
 ### `/p/` と `/s/` が同一 origin であることのリスク評価
 
@@ -343,7 +339,7 @@ Distribution 単位の設定は `/s/*` にも及ぶ副作用がある。
 外部共有 URL は `/s/<tag><share-id>/`（33 文字）で、前半 11 文字が tag、後半 22 文字が share-id である。
 
 - tag は `base64url(SHA-256(UTF-8(prefix)))` の先頭 11 文字（66bit）。`prefix` はページ成果物の prefix（`pages/<email>/<slug>/`、末尾 `/` あり）そのもので、tag を計算するときだけの小文字化・正規化はしない。ページの prefix から一意に決まるため、KVS のキーとして使える
-- share-id はクライアント（web / CLI）が CSPRNG で生成する 128bit の値を base64url（パディングなし）にした 22 文字（`/^[A-Za-z0-9_-]{22}$/`）。tag だけでは推測できないため、share-id 自体が推測困難な credential であり、Basic 認証や IP 制限はその上に足す二要素目という位置付けである。試行回数制限は無い
+- share-id はクライアント（web / CLI）が CSPRNG で生成する 128bit の値を base64url（パディングなし）にした 22 文字（`/^[A-Za-z0-9_-]{22}$/`）。tag だけでは推測できないため、share-id 自体が推測困難な credential であり、Basic 認証や IP 制限はその上に足す追加の防御という位置付けである。試行回数制限は無い
 - 固定テストベクター（`packages/core/src/page/tag.ts`・infra の同名テストで一致を確認する）:
 
   | prefix | tag |
@@ -351,9 +347,8 @@ Distribution 単位の設定は `/s/*` にも及ぶ副作用がある。
   | `pages/alice@example.com/hello/` | `prgdKq0F-Hu` |
   | `pages/tanaka@example.jp/q3-report/` | `XLCXXgKt3re` |
 
-- Basic 認証のユーザー名・パスワードは印字可能な ASCII に限る。ブラウザと CloudFront Function で非 ASCII の文字コード解釈がずれ、ハッシュが一致しなくなるため
-- パスワードは平文で保存しない（salt 付き SHA-256）。UI にも再表示しない
-- IP 制限は IPv4 CIDR を 1〜20 件
+- 保護はパスワード（Basic 認証）だけを標準とし、ユーザー名は `guest` 固定・自由入力にしない。パスワードはシステムが `generateSharePassword`（`@okibasho/core`）で自動生成する（手入力は受け付けない）。metadata は所有者本人しか読めない IAM 境界の内側にあるため、ハッシュ化・salt はやめて平文で持つ。管理 UI はいつでも再表示・コピーできる（「最初の1回だけ表示」の完了画面は持たない）
+- IP 制限は「IPv4アドレスの完全一致リスト」（1〜20件）として仕組みだけ残す。CIDR のような範囲指定・正規化はしない。管理 UI には出さず、metadata の直接編集で設定する運用にする。既存の IP リストは、web で共有を作り直しても消さず引き継ぐ
 
 tag の衝突（66bit）は考慮しない。1 万ページ規模でも偶然の衝突は 10⁻¹³ 程度である。
 
@@ -362,12 +357,13 @@ tag の衝突（66bit）は考慮しない。1 万ページ規模でも偶然の
 CloudFront KeyValueStore には、正本（metadataの `share`）から導出した投影だけを置く。キーは tag（1 ページ 1 キー）、値は次の JSON 文字列（1KB 以内。超えたらそのエントリは投影しない）。
 
 ```json
-{ "p": "pages/<email>/<slug>/", "id": "V1StGXR8_Z5jdHi6B-myT", "b": "<salt>:<hash>", "c": ["203.0.113.0/24"] }
+{ "p": "pages/<email>/<slug>/", "id": "V1StGXR8_Z5jdHi6B-myT", "b": "Z3Vlc3Q6azdtcS0zeHdwLTlydGQtaDJ2bg==", "ips": ["203.0.113.5"] }
 ```
 
 - `p` はそのページの prefix、`id` は share-id。router 側は URL 後半 22 文字とこの `id` を照合する
-- `b` は Basic 設定があるときだけ、`c` は CIDR があるときだけ
-- キーが prefix から一意に決まるため、旧仕様（キーがクライアントの選ぶ share-id だった頃）にあった墓標・hijack 判定・prefix の辞書順による先勝ちは無くなった。あるページの tag は常にそのページだけが使う。再発行は同じキーの値の上書き、共有の停止・削除・期限切れはキーの削除で表す
+- `b` は `base64("guest:" + パスワード)`。パスワードは常に設定されているため `b` は必須で、router 側は `Authorization` ヘッダと `"Basic " + b` を文字列比較するだけで Basic 認証を判定できる（ハッシュ比較も `crypto` も使わない）
+- `ips` は IP 制限（完全一致リスト）があるときだけ。router 側は `ips.indexOf(clientIp) !== -1` だけで判定する
+- キーが prefix から一意に決まるため、旧仕様（キーがクライアントの選ぶ share-id だった頃）にあった墓標・hijack 判定・prefix の辞書順による先勝ちは無くなった。あるページの tag は常にそのページだけが使う。URL の再発行とパスワードの作り直しは「作り直す」という1つの操作にまとめてあり、同じキーの値を上書きする。共有の停止・削除・期限切れはキーの削除で表す
 
 投影は 2 つの経路から行う。実装は `packages/infra/lib/lambda/page-maintenance/`。
 
@@ -394,8 +390,8 @@ Lambda の失敗は CloudWatch Logs と Lambda の `Errors` メトリクスで�
 2. `%2f` / `.` / `..` / 空セグメント → 404（`/p/*` と同じパス検査）
 3. id が `/^[A-Za-z0-9_-]{33}$/` に合わなければ 404。合えば前半 11 文字を tag、後半 22 文字を share-id として分ける
 4. tag で KVS を get し、値が無い・パース失敗・`id` が share-id と一致しなければ 404
-5. `allowedCidrs`（`c`）があり viewer の IP がどれにも入らない → 403
-6. `basic`（`b`）があり `Authorization` が一致しない → 401 + `WWW-Authenticate: Basic realm="okibasho", charset="UTF-8"`
+5. `ips` があり viewer の IP がどれとも完全一致しない → 403
+6. `Authorization` が `"Basic " + b` と一致しない → 401 + `WWW-Authenticate: Basic realm="okibasho", charset="UTF-8"`（パスワードは常に設定されているため、この判定は常に行う）
 7. URI を投影先の prefix（`p`）+ rest に書き換える（末尾 `/` なら `index.html` を補完）。`Authorization` ヘッダは削除して転送しない
 
 エラーレスポンスの body は短い固定文言にする。

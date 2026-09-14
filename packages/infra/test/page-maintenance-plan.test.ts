@@ -18,7 +18,7 @@ describe('computeDiff', () => {
     expect(plan.deletes).toEqual([]);
   });
 
-  it('値の変更: 同じtagでも値(CIDRなど)が変わっていればputし直す', () => {
+  it('値の変更: 同じtagでも値(IP制限など)が変わっていればputし直す', () => {
     const plan = computeDiff(new Map([[TAG_A, VALUE_A2]]), new Map([[TAG_A, VALUE_A]]));
     expect(plan.puts).toEqual([{ key: TAG_A, value: VALUE_A2 }]);
     expect(plan.deletes).toEqual([]);

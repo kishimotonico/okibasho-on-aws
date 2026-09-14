@@ -140,8 +140,8 @@ describe('runUpload', () => {
     const metadataKey = metadataObjectKey(TEST_EMAIL, 'shared-page');
     const share = {
       id: 'abcdefghijklmnopqrstuv',
-      basic: { username: 'guest', salt: 'saltsaltsaltsaltsaltsa', hash: 'a'.repeat(64) },
-      allowedCidrs: ['203.0.113.0/24'],
+      password: 'k7mq-3xwp-9rtd-h2vn',
+      allowedIps: ['203.0.113.5'],
     };
     store.objects.set(metadataKey, {
       body: Buffer.from(

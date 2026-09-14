@@ -4,21 +4,21 @@ export interface ShareKvsValue {
   p: string;
   /** 22文字のshare-id。router側はURLの後半22文字とここを照合する */
   id: string;
-  /** Basic認証が設定されているときだけ。 "<salt>:<hash>" */
-  b?: string;
-  /** IPv4 CIDR許可リスト。設定されているときだけ */
-  c?: string[];
+  /**
+   * base64("guest:"+password)。router側は `"Basic " + b` とAuthorizationヘッダを
+   * そのまま文字列比較するだけでBasic認証を判定できる。パスワードは常に設定されているため必須
+   */
+  b: string;
+  /** 完全一致で許可するIPv4アドレス。設定されているときだけ */
+  ips?: string[];
 }
 
 /** metadata の share フィールド(検証済み) */
 export interface ValidatedShare {
   id: string;
-  basic?: {
-    username: string;
-    salt: string;
-    hash: string;
-  };
-  allowedCidrs?: string[];
+  /** 自動生成された平文パスワード。常に設定されている */
+  password: string;
+  allowedIps?: string[];
 }
 
 /** あるprefixについて「あるべき状態」。shareが無効・期限切れなどならnull(呼び出し元が判定する) */

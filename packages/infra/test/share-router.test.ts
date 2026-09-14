@@ -2,7 +2,6 @@ import { readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
-import * as nodeCrypto from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 type CloudFrontQueryEntry = {
@@ -55,19 +54,14 @@ function createFakeCf(store: Map<string, string>) {
 function loadHandler(store: Map<string, string>): (event: HandlerEvent) => Promise<HandlerResult> {
   let source = readFileSync(functionPath, 'utf-8');
   // cloudfront-js-2.0 専用の import はNode vmでは動かないので、偽実装に差し替える
-  source = source.replace("import crypto from 'crypto';", '');
   source = source.replace("import cf from 'cloudfront';", '');
 
   const sandbox: {
     handler?: (event: HandlerEvent) => Promise<HandlerResult>;
-    crypto: typeof nodeCrypto;
     cf: ReturnType<typeof createFakeCf>;
-    Buffer: typeof Buffer;
     console: Console;
   } = {
-    crypto: nodeCrypto,
     cf: createFakeCf(store),
-    Buffer,
     console,
   };
   runInNewContext(source, sandbox);
@@ -100,10 +94,6 @@ function makeEvent(
   };
 }
 
-function sha256Hex(input: string): string {
-  return nodeCrypto.createHash('sha256').update(input).digest('hex');
-}
-
 function basicAuthHeader(username: string, password: string): string {
   return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 }
@@ -111,6 +101,8 @@ function basicAuthHeader(username: string, password: string): string {
 const TAG = 'AAAAAAAAAAA'; // 11文字, [A-Za-z0-9_-]
 const SHARE_ID = 'BBBBBBBBBBBBBBBBBBBBBB'; // 22文字, [A-Za-z0-9_-]
 const ID = TAG + SHARE_ID; // 33文字。URLの /s/<id>/ 部分
+const PASSWORD = 'k7mq-3xwp-9rtd-h2vn';
+const B_FIELD = basicAuthHeader('guest', PASSWORD).slice('Basic '.length);
 
 describe('share-router', () => {
   it('コードサイズは10KB以下(CloudFront Functionsの上限)', () => {
@@ -169,104 +161,98 @@ describe('share-router', () => {
   });
 
   it('tagはKVSにあるが値のidが後半22文字と一致しないと404を返す(再発行後の旧URLなど)', async () => {
-    store.set(TAG, JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: 'c'.repeat(22) }));
+    store.set(
+      TAG,
+      JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: 'c'.repeat(22), b: B_FIELD }),
+    );
     const result = await handler(makeEvent(`/s/${ID}/`));
     expect(result).toMatchObject({ statusCode: 404, body: 'Not Found' });
   });
 
-  it('制限が無ければ /p 相当の prefix + rest へrewriteし、末尾スラッシュはindex.htmlを補完する', async () => {
-    store.set(TAG, JSON.stringify({ p: 'pages/tanaka@example.jp/q3-report/', id: SHARE_ID }));
-    const result = await handler(makeEvent(`/s/${ID}/`));
-    expect(result).toMatchObject({
-      uri: '/pages/tanaka@example.jp/q3-report/index.html',
-    });
-  });
-
-  it('アセットパスもrewriteされる', async () => {
-    store.set(TAG, JSON.stringify({ p: 'pages/tanaka@example.jp/q3-report/', id: SHARE_ID }));
-    const result = await handler(makeEvent(`/s/${ID}/assets/app.css`));
-    expect(result).toMatchObject({
-      uri: '/pages/tanaka@example.jp/q3-report/assets/app.css',
-    });
-  });
-
-  it('Authorizationヘッダはオリジンへ転送しない', async () => {
-    store.set(TAG, JSON.stringify({ p: 'pages/tanaka@example.jp/q3-report/', id: SHARE_ID }));
-    const event = makeEvent(`/s/${ID}/`, { authorization: 'Basic garbage' });
-    const result = (await handler(event)) as CloudFrontRequest;
-    expect(result.headers.authorization).toBeUndefined();
-  });
-
   describe('IP制限', () => {
-    it('CIDRに含まれるIPは許可する', async () => {
+    it('完全一致するIPは許可する', async () => {
       store.set(
         TAG,
-        JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: SHARE_ID, c: ['203.0.113.0/24'] }),
+        JSON.stringify({
+          p: 'pages/tanaka@example.jp/q3/',
+          id: SHARE_ID,
+          b: B_FIELD,
+          ips: ['203.0.113.5'],
+        }),
       );
-      const result = await handler(makeEvent(`/s/${ID}/`, { ip: '203.0.113.5' }));
+      const result = await handler(
+        makeEvent(`/s/${ID}/`, {
+          ip: '203.0.113.5',
+          authorization: basicAuthHeader('guest', PASSWORD),
+        }),
+      );
       expect(result).toMatchObject({ uri: '/pages/tanaka@example.jp/q3/index.html' });
     });
 
-    it('CIDRに含まれないIPは403を返す', async () => {
+    it('リストに無いIPは403を返す(Basic認証より先に判定する)', async () => {
       store.set(
         TAG,
-        JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: SHARE_ID, c: ['203.0.113.0/24'] }),
+        JSON.stringify({
+          p: 'pages/tanaka@example.jp/q3/',
+          id: SHARE_ID,
+          b: B_FIELD,
+          ips: ['203.0.113.5'],
+        }),
       );
       const result = await handler(makeEvent(`/s/${ID}/`, { ip: '198.51.100.9' }));
       expect(result).toMatchObject({ statusCode: 403 });
     });
 
-    it('/32(単一IP)は完全一致だけ許可する', async () => {
-      store.set(
-        TAG,
-        JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: SHARE_ID, c: ['203.0.113.5/32'] }),
-      );
-      expect(await handler(makeEvent(`/s/${ID}/`, { ip: '203.0.113.5' }))).toMatchObject({
-        uri: expect.any(String),
-      });
-      expect(await handler(makeEvent(`/s/${ID}/`, { ip: '203.0.113.6' }))).toMatchObject({
-        statusCode: 403,
-      });
-    });
-
-    it('/0は常に一致する(左シフト32のJS仕様に依存しない実装になっている)', async () => {
-      store.set(
-        TAG,
-        JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: SHARE_ID, c: ['0.0.0.0/0'] }),
-      );
-      const result = await handler(makeEvent(`/s/${ID}/`, { ip: '8.8.8.8' }));
-      expect(result).toMatchObject({ uri: expect.any(String) });
-    });
-
-    it('複数CIDRのいずれかに一致すれば許可する', async () => {
+    it('複数件のいずれかに一致すれば許可する', async () => {
       store.set(
         TAG,
         JSON.stringify({
           p: 'pages/tanaka@example.jp/q3/',
           id: SHARE_ID,
-          c: ['198.51.100.0/24', '203.0.113.0/24'],
+          b: B_FIELD,
+          ips: ['198.51.100.9', '203.0.113.5'],
         }),
       );
-      const result = await handler(makeEvent(`/s/${ID}/`, { ip: '203.0.113.9' }));
+      const result = await handler(
+        makeEvent(`/s/${ID}/`, {
+          ip: '203.0.113.5',
+          authorization: basicAuthHeader('guest', PASSWORD),
+        }),
+      );
       expect(result).toMatchObject({ uri: expect.any(String) });
     });
   });
 
   describe('Basic認証', () => {
-    const salt = 'saltsaltsaltsaltsaltsa';
-    const username = 'tanaka';
-    const password = 'sup3r-secret';
-    const hash = sha256Hex(`${salt}:${username}:${password}`);
-
     beforeEach(() => {
       store.set(
         TAG,
-        JSON.stringify({
-          p: 'pages/tanaka@example.jp/q3/',
-          id: SHARE_ID,
-          b: `${salt}:${hash}`,
+        JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: SHARE_ID, b: B_FIELD }),
+      );
+    });
+
+    it('制限が無ければ prefix + rest へrewriteし、末尾スラッシュはindex.htmlを補完する', async () => {
+      const result = await handler(
+        makeEvent(`/s/${ID}/`, { authorization: basicAuthHeader('guest', PASSWORD) }),
+      );
+      expect(result).toMatchObject({ uri: '/pages/tanaka@example.jp/q3/index.html' });
+    });
+
+    it('アセットパスもrewriteされる', async () => {
+      const result = await handler(
+        makeEvent(`/s/${ID}/assets/app.css`, {
+          authorization: basicAuthHeader('guest', PASSWORD),
         }),
       );
+      expect(result).toMatchObject({ uri: '/pages/tanaka@example.jp/q3/assets/app.css' });
+    });
+
+    it('Authorizationヘッダはオリジンへ転送しない', async () => {
+      const event = makeEvent(`/s/${ID}/`, {
+        authorization: basicAuthHeader('guest', PASSWORD),
+      });
+      const result = (await handler(event)) as CloudFrontRequest;
+      expect(result.headers.authorization).toBeUndefined();
     });
 
     it('Authorizationヘッダが無いと401とWWW-Authenticateを返す', async () => {
@@ -279,16 +265,16 @@ describe('share-router', () => {
       });
     });
 
-    it('正しいusername/passwordなら通す', async () => {
-      const result = await handler(
-        makeEvent(`/s/${ID}/`, { authorization: basicAuthHeader(username, password) }),
-      );
-      expect(result).toMatchObject({ uri: '/pages/tanaka@example.jp/q3/index.html' });
-    });
-
     it('パスワードが違うと401を返す', async () => {
       const result = await handler(
-        makeEvent(`/s/${ID}/`, { authorization: basicAuthHeader(username, 'wrong-password') }),
+        makeEvent(`/s/${ID}/`, { authorization: basicAuthHeader('guest', 'wrong-password') }),
+      );
+      expect(result).toMatchObject({ statusCode: 401 });
+    });
+
+    it('ユーザー名が違うと401を返す(ユーザー名はguest固定)', async () => {
+      const result = await handler(
+        makeEvent(`/s/${ID}/`, { authorization: basicAuthHeader('tanaka', PASSWORD) }),
       );
       expect(result).toMatchObject({ statusCode: 401 });
     });
