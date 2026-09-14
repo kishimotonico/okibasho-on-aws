@@ -410,7 +410,7 @@ describe('ShareDialog', () => {
 
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(null));
     expect(
-      await screen.findByText('無効になるまで5分ほどかかることがあります。'),
+      await screen.findByText('無効になるまで少し時間がかかることがあります。'),
     ).toBeInTheDocument();
   });
 
@@ -437,7 +437,7 @@ describe('ShareDialog', () => {
     const share = onSave.mock.calls[0]?.[0];
     expect(share.id).not.toBe('a'.repeat(22));
     expect(
-      await screen.findByText('新しいURLに切り替わるまで5分ほどかかることがあります。'),
+      await screen.findByText('新しいURLに切り替わるまで少し時間がかかることがあります。'),
     ).toBeInTheDocument();
   });
 
@@ -472,7 +472,7 @@ describe('ShareDialog', () => {
     // パスワードを変えていないので完了画面には切り替わらず、フォームにとどまる
     expect(screen.queryByRole('heading', { name: '設定を保存しました' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '設定を保存' })).toBeInTheDocument();
-    expect(await screen.findByText('反映まで5分ほどかかることがあります。')).toBeInTheDocument();
+    expect(await screen.findByText('反映まで少し時間がかかることがあります。')).toBeInTheDocument();
   });
 
   it('共有中: 「変更」を押すと生成済みパスワードの入力欄が開き、「取り消す」で読み取り表示へ戻る', async () => {

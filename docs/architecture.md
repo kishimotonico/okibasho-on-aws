@@ -23,8 +23,8 @@
         ▼
    S3（pages バケット・完全 private・Public Access Block）
         ▲
-        │ 5分ごとに全件読み取り
-   Lambda（share projector、同時実行1）── Errors に CloudWatch Alarm（ALERT_EMAIL があれば SNS 通知）
+        │ .metadata.json の作成・削除で即時 / 15分ごとの安全網で全件読み取り
+   Lambda（share projector、同時実行1。アラームは持たない）
         │ UpdateKeys（IfMatch）
         ▼
    CloudFront KeyValueStore（share-id → S3 prefix / Basic / CIDR の投影。
@@ -60,7 +60,7 @@ Lambda は次の 4 つ。どれも小さく独立している。API Gateway は�
 
 このほかに、CDK の `BucketDeployment`（pages バケットの `errors/` に固定ページを配置するためだけのカスタムリソース Lambda）が存在する。これは IAM の境界の外にある処理として次節で扱う。
 
-CDK のスタックは 1 つとし、機能的・概念的な境界は Construct で表現する（auth / storage / delivery / app-site / cleanup / domains）。Stack 本体は各 Construct の組み立てだけを行う。スタック分割による cross-stack reference の複雑さは持ち込まない。
+CDK のスタックは 1 つとし、機能的・概念的な境界は Construct で表現する（auth / storage / delivery / projection / app-site / cleanup / domains）。Stack 本体は各 Construct の組み立てだけを行う。スタック分割による cross-stack reference の複雑さは持ち込まない。
 
 DynamoDB、WAF、Lambda@Edge、API Gateway、S3 Lifecycle、presigned URL は使わない。CloudFront KeyValueStore は外部共有の投影先として採用したため、この対象からは外れる。
 
@@ -125,8 +125,8 @@ authenticated role の権限ポリシーが唯一のセキュリティ境界で�
 IAM の境界の外にある処理が 3 つある。いずれもレビュー対象である。
 
 - cleanup Lambda: prefix 制限のない削除権限を持つ
-- share projector: `pages/` 配下の `.metadata.json` を全件読める（Basic 認証のハッシュも含む）。書き込みは CloudFront KeyValueStore の `UpdateKeys` だけで、pages バケットへの書き込み権限は持たない
-- `BucketDeployment` のカスタムリソース Lambda（`packages/infra/lib/constructs/pages-storage.ts` の `ErrorPagesDeployment`）: pages バケットへの書き込み権限を持つ。実際に管理する範囲は `errors/` prefix（カスタムエラーページ）だけである
+- share projector: `pages/` 配下の `.metadata.json` を全件読める（Basic 認証のハッシュも含む）。`s3:GetObject` は `pages/*/.metadata.json` に絞っており、ページ成果物本体は読めない。書き込みは CloudFront KeyValueStore の `UpdateKeys` だけで、pages バケットへの書き込み権限は持たない
+- エラーページ配置ロール（`BucketDeployment` のカスタムリソース Lambda）: `errors/` 配下にだけ書ける。CDK は destination バケット全体への書き込みを付与するため、bucket policy の Deny で絞っている
 
 ## 認証
 
@@ -346,12 +346,14 @@ CloudFront KeyValueStore には、正本（`.metadata.json` の `share`）から
 - 各エントリの「所有 prefix」は `p` または `t`。`p` / `t` は projector が S3 キー（`pages/<email>/<slug>/.metadata.json`）から導出する。`.metadata.json` の中身（owner / slug）は信用しない
 - どちらも無い・JSON 不正のエントリは、projector しか書かないため解釈できないものとして削除してよい
 
-墓標は、停止・再発行・削除・期限切れで消えた share-id を空きにせず、他のページがその id を使って旧 URL を横取りするのを防ぐ。以前は KVS から消えた直後の id を、別のチームメンバーがたまたま同じ id を書いた metadata で再利用できてしまう余地があった。墓標は消さない（KVS 5MB の上限に対して 30 人規模なら十分収まる）。
+墓標は、停止・再発行・削除・期限切れで消えた share-id を空きにせず、旧 URL を知っている別のチームメンバーが自分のページに同じ id を書いて横取りするのを防ぐ。墓標は消さない（KVS 5MB の上限に対して 30 人規模なら十分収まる）。
 
-投影は S3 イベントに頼らず、5 分ごとの全件 reconcile だけで行う。実装は `packages/infra/lib/lambda/share-projector/`。反映経路を 1 本にすることで、イベントの順序・重複・取りこぼしを考えなくて済むようにしている。反映は最大 5 分遅れるが、チーム向けツールとして許容する。
+投影は「`.metadata.json` の作成・削除の S3 通知」と「15 分ごとの安全網スケジュール」の両方から同じ全件 reconcile を起動する。実装は `packages/infra/lib/lambda/share-projector/`。handler はイベントの中身を使わず、常に「今の pages/ 配下の全 `.metadata.json`」と「KVS 全件」を突き合わせる。部分更新を持たないため、イベントの順序・重複・取りこぼしに依存しない。通常は数秒〜十数秒で反映され、S3 通知が漏れても 15 分以内に安全網が追いつく。prefix ごとの `.metadata.json` は同時実行数 8 程度の並列で読む（reconcile 1 回の所要時間がそのまま反映の待ち時間になるため）。
+
+projector は同時実行 1 なので、連続したイベントは非同期呼び出しとして直列に並ぶ。reconcile は冪等なので何度実行されても壊れない。5 分より古い呼び出しは破棄し（`maxEventAge`）、リトライは 1 回（`retryAttempts`）に絞り、取りこぼしは安全網のスケジュールに任せる。
 
 - 対象 prefix は「metadata がある prefix」∪「KVS に生きているエントリまたは墓標がある prefix」の和集合。対象ごとに、その prefix の現在の `.metadata.json` を S3 から読み直して「あるべき状態」を決める。イベントの順序や重複には依存しない
-- あるべき状態が無いのは、metadata が無い / JSON 不正 / `share` 無し / `share` の検証に失敗 / `expiresAt` を過ぎている / KVS 値が 1KB を超える、のいずれか。この場合はその prefix の生きているエントリを全部墓標に置き換える
+- あるべき状態が無いのは、metadata が無い / JSON 不正 / `expiresAt` が ISO 文字列でも `null` でもない(形式異常) / `expiresAt` を過ぎている / `share` 無し / `share` の検証に失敗 / KVS 値が 1KB を超える、のいずれか。この場合はその prefix の生きているエントリを全部墓標に置き換える
 - 同じ prefix に生きたエントリが複数残ることがある（reconcile は全部見る。先頭 1 件だけ見ない）
 - あるべき id が既に別 prefix の所有物（生き/墓標問わず）であれば書かない（hijack 警告としてログに出す）。このとき、同じ prefix の生きているエントリで id が異なるものは墓標にする
 - それ以外は、同じ prefix の生きているエントリで id が異なるものを墓標にしたうえで、あるべき id を put する。同じ prefix の墓標であれば復活してよい（例: 期限切れ後に保存期間を延ばした場合）。値が変わらないときは書かない
@@ -363,7 +365,7 @@ cleanup Lambda は KVS を直接知らない。期限切れ（`expiresAt` 超過
 
 共有を OFF にする操作は `share` フィールドを削除すること。URL の再発行は `share.id` の差し替えで行う。どちらも旧 id は墓標として KVS に残り続け、再利用されない。
 
-projector の `Errors` メトリクスに CloudWatch Alarm を付けている（5 分で 1 件以上、欠損データは notBreaching）。projector は共有停止・期限切れの反映経路そのものであり、壊れても気づけないと停止した共有が見え続けるおそれがあるため。環境変数 `ALERT_EMAIL`（`packages/infra/.env.example` 参照）を設定すると SNS Topic 経由でメール通知する。未設定ならアラームは作るが通知はしない。
+projector の失敗は CloudWatch Logs と Lambda の `Errors` メトリクスで確認する。通知先を運用しないため、アラームは持たない。
 
 ### エッジでの判定順（`/s/*` viewer-request）
 
@@ -380,7 +382,7 @@ projector の `Errors` メトリクスに CloudWatch Alarm を付けている（
 
 ### 外部向けに新たに塞いだもの
 
-- S3 の `NoSuchKey` エラー XML に `pages/<email>/<slug>/...` が出て、メールアドレスとキー構成が見えてしまう問題。CloudFront はオリジンが 400 以上を返すと viewer-response の CloudFront Function を実行しないため、当初検討していた viewer-response（error-scrubber）による差し替えは一度も動かない。代わりに Distribution のカスタムエラーレスポンス（404 → `/errors/404.html`）で差し替える。エラーページは owner や URL の情報を含まない固定文言の HTML で、`BucketDeployment` で pages バケットの `errors/` に配置し、関数を付けない `/errors/*` ビヘイビアから配信する。403 は将来の Signed Cookie ログイン誘導に使うため設定しない。roadmap の当初の課題（Phase 1「404 で S3 のエラー XML を返さない」）もこれで対応した。デプロイ後の確認はまだ済んでいない
+- S3 の `NoSuchKey` エラー XML に `pages/<email>/<slug>/...` が出て、メールアドレスとキー構成が見えてしまう問題。Distribution のカスタムエラーレスポンス（404 → `/errors/404.html`）で差し替える。viewer-response の CloudFront Function はオリジンが 400 以上を返すと実行されないため使えない。エラーページは owner や URL の情報を含まない固定文言の HTML で、`BucketDeployment` で pages バケットの `errors/` に配置し、関数を付けない `/errors/*` ビヘイビアから配信する。配置ロールは bucket policy の Deny で `errors/` 配下にだけ書けるようにしている。403 は将来の Signed Cookie ログイン誘導に使うため設定しない。デプロイ後の確認はまだ済んでいない
 - `.metadata.json` の配信。share-router 側の文字列検査に加え、bucket policy でも CloudFront サービスプリンシパルからの `pages/*/.metadata.json` への `s3:GetObject` を Deny する（`packages/infra/lib/constructs/pages-storage.ts`）。Function の文字列比較だけだと、percent-encode されたパスの解釈に依存してしまうための二重化である
 - Referer 経由の share-id 漏れ。Response Headers Policy に `Referrer-Policy: no-referrer` を追加した
 - 検索エンジンによる索引化。同じポリシーに `X-Robots-Tag: noindex, nofollow` を追加した
@@ -487,13 +489,14 @@ lib/
   constructs/
     auth.ts                  UserPool / Managed Login / App Client x2 /
                              IdentityPool / authenticated role / principal tag
-    pages-storage.ts         pages バケット（private, PAB, CORS）/ errors/ への BucketDeployment /
+    pages-storage.ts         pages バケット（private, PAB, CORS）/ errors/ への BucketDeployment
+                             （配置ロールは bucket policy の Deny で errors/ だけに限定）/
                              .metadata.json への bucket policy Deny
     pages-delivery.ts        pages Distribution / OAC / CloudFront Function（/p/* /s/*）/
                              /errors/* ビヘイビアとカスタムエラーレスポンス /
                              Response Headers Policy / Geo restriction
-    external-share.ts        CloudFront KeyValueStore + share projector Lambda
-                             （5 分ごとの全件 reconcile。Errors アラーム）
+    share-projection.ts      CloudFront KeyValueStore + share projector Lambda
+                             （S3 イベント + 15 分ごとの安全網で全件 reconcile。アラームは持たない）
     app-delivery.ts          app バケット + Distribution + SPA 用 CloudFront Function
 ```
 

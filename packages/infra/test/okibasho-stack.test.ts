@@ -144,6 +144,25 @@ describe('OkibashoStack', () => {
       expect(JSON.stringify(denyMetadata?.Resource)).toContain('.metadata.json');
     });
 
+    it('ErrorPagesDeploymentの配置ロールは errors/ 以外へ書き込めない', () => {
+      const template = synth();
+
+      const policies = Object.values(template.findResources('AWS::S3::BucketPolicy'));
+      const statements = policies.flatMap(
+        (p) => (p.Properties?.PolicyDocument?.Statement ?? []) as Array<Record<string, unknown>>,
+      );
+
+      const denyDeploy = statements.find(
+        (st) => st.Sid === 'DenyErrorPagesDeploymentRoleOutsideErrorsPrefix',
+      );
+      expect(denyDeploy?.Effect).toBe('Deny');
+      expect(denyDeploy?.Action).toEqual(
+        expect.arrayContaining(['s3:PutObject*', 's3:DeleteObject*', 's3:Abort*']),
+      );
+      expect(JSON.stringify(denyDeploy?.NotResource)).toContain('errors/*');
+      expect(denyDeploy?.Resource).toBeUndefined();
+    });
+
     it('ブラウザからの直接 S3 アクセス用に CORS で GET/PUT/POST/DELETE/HEAD を許可する', () => {
       const template = synth();
 
@@ -293,11 +312,12 @@ describe('OkibashoStack', () => {
     });
   });
 
-  describe('ExternalShare', () => {
-    it('projector LambdaはS3への権限がpages/*に絞られ、KVSへは必要な操作だけを許可する', () => {
+  describe('ShareProjection', () => {
+    it('projector LambdaはS3への権限が.metadata.jsonに絞られ、KVSへは必要な操作だけを許可する', () => {
       const template = synth();
 
-      template.resourceCountIs('AWS::Lambda::Function', 3);
+      // projector / cleanup 等の本体Lambdaに加えて、S3通知配線用のCDK管理Lambda(BucketNotificationsHandler)が1つ増える
+      template.resourceCountIs('AWS::Lambda::Function', 4);
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs22.x',
         Architectures: ['arm64'],
@@ -333,7 +353,8 @@ describe('OkibashoStack', () => {
       );
       const s3GetResource = s3GetStatement?.Resource as
         { 'Fn::Join'?: [string, unknown[]] } | undefined;
-      expect(s3GetResource?.['Fn::Join']?.[1]).toContain('/pages/*');
+      // ページ成果物本体は読ませず、.metadata.json だけに絞られている
+      expect(s3GetResource?.['Fn::Join']?.[1]).toContain('/pages/*/.metadata.json');
 
       const s3ListStatement = statements.find(
         (st) =>
@@ -345,33 +366,49 @@ describe('OkibashoStack', () => {
       });
     });
 
-    it('S3イベントには依存せず、EventBridgeの5分ごとのRuleだけで全件reconcileする', () => {
+    it('.metadata.jsonの作成・削除のS3通知と、EventBridgeの15分ごとの安全網Ruleの両方でreconcileを起動する', () => {
       const template = synth();
 
       template.resourceCountIs('AWS::Events::Rule', 1);
       template.hasResourceProperties('AWS::Events::Rule', {
-        ScheduleExpression: 'rate(5 minutes)',
+        ScheduleExpression: 'rate(15 minutes)',
       });
 
-      // S3イベント通知(Custom::S3BucketNotifications)はもう無い
-      template.resourceCountIs('Custom::S3BucketNotifications', 0);
+      // pagesバケットのS3通知がprefix=pages/・suffix=.metadata.jsonのCreated/Removedをprojectorへ流す
+      const notifications = Object.values(template.findResources('Custom::S3BucketNotifications'));
+      expect(notifications).toHaveLength(1);
+      const notificationConfig = notifications[0]?.Properties?.NotificationConfiguration as
+        { LambdaFunctionConfigurations?: Array<Record<string, unknown>> } | undefined;
+      const lambdaConfigs = notificationConfig?.LambdaFunctionConfigurations ?? [];
+      expect(lambdaConfigs).toHaveLength(2);
+      const events = lambdaConfigs.map((c) => c.Events).sort();
+      expect(events).toEqual([['s3:ObjectCreated:*'], ['s3:ObjectRemoved:*']]);
+      for (const config of lambdaConfigs) {
+        const rules = (
+          config.Filter as { Key?: { FilterRules?: Array<{ Name: string; Value: string }> } }
+        )?.Key?.FilterRules;
+        expect(rules).toEqual(
+          expect.arrayContaining([
+            { Name: 'prefix', Value: 'pages/' },
+            { Name: 'suffix', Value: '.metadata.json' },
+          ]),
+        );
+      }
     });
 
-    it('projectorのErrorsメトリクスにCloudWatch Alarmを持つ(ALERT_EMAIL未設定なのでSNS通知は無い)', () => {
+    it('非同期呼び出しは5分で打ち切り、リトライは1回だけにする(古い呼び出しを溜め込まず安全網に任せる)', () => {
       const template = synth();
 
-      template.resourceCountIs('AWS::CloudWatch::Alarm', 1);
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: 'Errors',
-        Namespace: 'AWS/Lambda',
-        Threshold: 1,
-        EvaluationPeriods: 1,
-        Period: 300,
-        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
-        TreatMissingData: 'notBreaching',
+      template.hasResourceProperties('AWS::Lambda::EventInvokeConfig', {
+        MaximumEventAgeInSeconds: 300,
+        MaximumRetryAttempts: 1,
       });
+    });
 
-      // 未設定状態で合成しているのでSNS Topicは作らない
+    it('通知先を運用しないためアラームは持たない', () => {
+      const template = synth();
+
+      template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
       template.resourceCountIs('AWS::SNS::Topic', 0);
       template.resourceCountIs('AWS::SNS::Subscription', 0);
     });

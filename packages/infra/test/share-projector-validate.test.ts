@@ -130,6 +130,11 @@ describe('isExpired', () => {
   it('nullなら無期限なので期限切れではない', () => {
     expect(isExpired(null, now)).toBe(false);
   });
+
+  it('undefinedや非文字列は期限切れではない(呼び出し元がmetadata不正として別途弾く)', () => {
+    expect(isExpired(undefined, now)).toBe(false);
+    expect(isExpired(123, now)).toBe(false);
+  });
 });
 
 describe('buildShareKvsValue / serializeKvsValue', () => {
@@ -224,5 +229,37 @@ describe('buildDesiredEntry', () => {
   it('metadata自体がオブジェクトでなければ null', () => {
     expect(buildDesiredEntry(null, prefix, now)).toBeNull();
     expect(buildDesiredEntry('broken', prefix, now)).toBeNull();
+  });
+
+  it('expiresAtがundefined(欠落)なら metadata不正として null', () => {
+    const metadata = {
+      slug: 'q3',
+      owner: 'tanaka@example.jp',
+      createdAt: '2025-01-01T00:00:00Z',
+      share: { id: VALID_ID },
+    };
+    expect(buildDesiredEntry(metadata, prefix, now)).toBeNull();
+  });
+
+  it('expiresAtが非文字列(数値など)なら metadata不正として null', () => {
+    const metadata = {
+      slug: 'q3',
+      owner: 'tanaka@example.jp',
+      createdAt: '2025-01-01T00:00:00Z',
+      expiresAt: 12345,
+      share: { id: VALID_ID },
+    };
+    expect(buildDesiredEntry(metadata, prefix, now)).toBeNull();
+  });
+
+  it('expiresAtがパース不能な文字列なら metadata不正として null', () => {
+    const metadata = {
+      slug: 'q3',
+      owner: 'tanaka@example.jp',
+      createdAt: '2025-01-01T00:00:00Z',
+      expiresAt: 'not-a-date',
+      share: { id: VALID_ID },
+    };
+    expect(buildDesiredEntry(metadata, prefix, now)).toBeNull();
   });
 });

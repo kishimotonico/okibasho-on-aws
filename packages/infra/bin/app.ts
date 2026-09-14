@@ -19,5 +19,4 @@ new OkibashoStack(app, 'Okibasho', {
   },
   emailDomain: config.emailDomain,
   domains: config.domains,
-  alertEmail: config.alertEmail,
 });

@@ -2,37 +2,36 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Duration } from 'aws-cdk-lib';
 import { KeyValueStore } from 'aws-cdk-lib/aws-cloudfront';
-import { ComparisonOperator, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
-import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { S3EventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import type { Bucket } from 'aws-cdk-lib/aws-s3';
-import { Topic } from 'aws-cdk-lib/aws-sns';
-import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
+import { EventType, type Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
-export interface ExternalShareProps {
+export interface ShareProjectionProps {
   /** pages bucket。projectorがここから.metadata.jsonを読む */
   readonly pagesBucket: Bucket;
-  /** projectorのErrorsアラーム通知先。未設定ならアラームは作るがSNS通知はしない */
-  readonly alertEmail?: string;
 }
 
 /**
- * 外部共有(/s/*)のエッジ投影を担う一式。
+ * share-id → S3 prefix の投影(CloudFront KVS)と、それを正本(.metadata.json の
+ * share フィールド)から作り直す projector Lambda。
  *
- * .metadata.json の share フィールドが正本で、KVSはエッジで参照するための投影に過ぎない。
- * S3イベントには依存せず、5分ごとの全件reconcileだけでKVSを追従させる
- * (CloudFront FunctionはKVSしか見ないため、反映まで最大5分程度の遅延が生じる)。
+ * 外部共有のエッジ側(share-router.js と /s/* ビヘイビア)は PagesDelivery が持つ。
+ * このConstructはKVSへの書き込み経路(projectorとそのトリガー)だけを担う。
+ *
+ * projectorは冪等な全件reconcile 1本だけを持ち、.metadata.jsonの作成・削除のS3イベントと
+ * 15分ごとの安全網スケジュールの両方から起動する。イベントの中身は入力に使わないので、
+ * イベントの順序・重複・取りこぼしに依存しない。
  */
-export class ExternalShare extends Construct {
+export class ShareProjection extends Construct {
   readonly keyValueStore: KeyValueStore;
   readonly projector: NodejsFunction;
 
-  constructor(scope: Construct, id: string, props: ExternalShareProps) {
+  constructor(scope: Construct, id: string, props: ShareProjectionProps) {
     super(scope, id);
 
     this.keyValueStore = new KeyValueStore(this, 'ShareKeyValueStore', {
@@ -67,9 +66,15 @@ export class ExternalShare extends Construct {
       description: 'share projector: .metadata.jsonのshareフィールドをCloudFront KVSへ投影する',
     });
 
+    // 同時実行1で詰まった古い非同期呼び出しを溜め込まない。5分より古い呼び出しは
+    // 捨て、追従は安全網のスケジュールに任せる(reconcileは冪等なので再実行で壊れない)
+    this.projector.configureAsyncInvoke({
+      maxEventAge: Duration.minutes(5),
+      retryAttempts: 1,
+    });
+
     this.grantLeastPrivilege(props.pagesBucket);
-    this.wireReconcileRule();
-    this.wireErrorAlarm(props.alertEmail);
+    this.wireTriggers(props.pagesBucket);
   }
 
   private grantLeastPrivilege(pagesBucket: Bucket): void {
@@ -77,7 +82,8 @@ export class ExternalShare extends Construct {
       new PolicyStatement({
         effect: Effect.ALLOW,
         actions: ['s3:GetObject'],
-        resources: [pagesBucket.arnForObjects('pages/*')],
+        // projectorが読むのは .metadata.json だけ。ページ成果物本体は読ませない
+        resources: [pagesBucket.arnForObjects('pages/*/.metadata.json')],
       }),
     );
 
@@ -105,36 +111,19 @@ export class ExternalShare extends Construct {
     );
   }
 
-  /** S3イベントは使わず、5分ごとの全件reconcileだけでKVSを追従させる */
-  private wireReconcileRule(): void {
-    new Rule(this, 'ReconcileRule', {
-      schedule: Schedule.rate(Duration.minutes(5)),
+  /** .metadata.jsonの作成・削除で即時に起動し、15分ごとのスケジュールを安全網として重ねる */
+  private wireTriggers(pagesBucket: Bucket): void {
+    this.projector.addEventSource(
+      new S3EventSource(pagesBucket, {
+        events: [EventType.OBJECT_CREATED, EventType.OBJECT_REMOVED],
+        filters: [{ prefix: 'pages/', suffix: '.metadata.json' }],
+      }),
+    );
+
+    new Rule(this, 'SafetyNetRule', {
+      schedule: Schedule.rate(Duration.minutes(15)),
       targets: [new LambdaFunction(this.projector)],
-      description: 'share projector の全件reconcile(5分毎)',
+      description: 'S3イベントの取りこぼしを拾う安全網(15分毎)',
     });
-  }
-
-  /** projectorが失敗し続けているのに誰も気づけない事態を避けるためのアラーム */
-  private wireErrorAlarm(alertEmail: string | undefined): void {
-    const alarm = this.projector
-      .metricErrors({ period: Duration.minutes(5) })
-      .createAlarm(this, 'ProjectorErrorsAlarm', {
-        threshold: 1,
-        evaluationPeriods: 1,
-        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        // 実行が無い(=呼ばれていない)ことをエラー扱いにはしない
-        treatMissingData: TreatMissingData.NOT_BREACHING,
-        alarmDescription: 'share projectorが5分間隔のreconcileで失敗している',
-      });
-
-    if (!alertEmail) {
-      return;
-    }
-
-    const topic = new Topic(this, 'AlertTopic', {
-      displayName: 'okibasho share projector alerts',
-    });
-    topic.addSubscription(new EmailSubscription(alertEmail));
-    alarm.addAlarmAction(new SnsAction(topic));
   }
 }

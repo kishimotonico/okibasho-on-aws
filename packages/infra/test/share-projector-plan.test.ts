@@ -181,6 +181,22 @@ describe('computeDiff', () => {
     expect(plan.hijackWarnings).toEqual([]);
   });
 
+  it('壊れたエントリと同じidを複数prefixが同時にdesireしても、辞書順で先の1つだけがputし残りはhijack警告になる(同じKeyのput重複を避ける)', () => {
+    const plan = computeDiff(
+      new Map([
+        [PREFIX_B, desired(ID_A, PREFIX_B)],
+        [PREFIX_A, desired(ID_A, PREFIX_A)],
+      ]),
+      [brokenEntry(ID_A)],
+    );
+    // PREFIX_B ('pages/suzuki@...') < PREFIX_A ('pages/tanaka@...') (辞書順)
+    expect(plan.puts).toEqual([{ key: ID_A, value: JSON.stringify({ p: PREFIX_B }) }]);
+    expect(plan.deletes).toEqual([]);
+    expect(plan.hijackWarnings).toEqual([
+      { prefix: PREFIX_A, id: ID_A, occupiedByPrefix: PREFIX_B },
+    ]);
+  });
+
   it('値が同じなら墓標をputし直さない(墓標のno-op自体は起きないが、生存エントリのno-opは維持される)', () => {
     const plan = computeDiff(new Map([[PREFIX_A, desired(ID_A, PREFIX_A)]]), [
       liveEntry(ID_A, PREFIX_A),

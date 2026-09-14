@@ -44,10 +44,15 @@ export function computeDiff(
     }
   }
 
-  // 既存エントリの無いidを複数prefixが同時に狙っているケースを先に解決する(辞書順で先勝ち)
+  // 既存エントリの無いidを複数prefixが同時に狙っているケースを先に解決する(辞書順で先勝ち)。
+  // 所有prefixを持たない壊れたエントリは占有済みに数えない(数えると同じKeyのputが重複しうる)
   const contendersById = new Map<string, string[]>();
   for (const [prefix, desired] of desiredByPrefix) {
-    if (desired === null || entryById.has(desired.id)) {
+    if (desired === null) {
+      continue;
+    }
+    const occupant = entryById.get(desired.id);
+    if (occupant !== undefined && occupant.prefix !== undefined) {
       continue;
     }
     const list = contendersById.get(desired.id) ?? [];
@@ -75,7 +80,8 @@ export function computeDiff(
     }
 
     const occupant = entryById.get(desired.id);
-    const occupiedByPrefix = occupant ? occupant.prefix : virtualOwnerById.get(desired.id);
+    const occupiedByPrefix =
+      occupant?.prefix !== undefined ? occupant.prefix : virtualOwnerById.get(desired.id);
 
     if (occupiedByPrefix !== undefined && occupiedByPrefix !== prefix) {
       hijackWarnings.push({ prefix, id: desired.id, occupiedByPrefix });

@@ -895,6 +895,167 @@ function handler(event) {
       },
       "Type": "AWS::Cognito::UserPoolClient",
     },
+    "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691": {
+      "DependsOn": [
+        "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC",
+      ],
+      "Properties": {
+        "Code": {
+          "ZipFile": "import boto3  # type: ignore
+import json
+import logging
+import urllib.request
+
+s3 = boto3.client("s3")
+
+EVENTBRIDGE_CONFIGURATION = 'EventBridgeConfiguration'
+CONFIGURATION_TYPES = ["TopicConfigurations", "QueueConfigurations", "LambdaFunctionConfigurations"]
+
+def handler(event: dict, context):
+  response_status = "SUCCESS"
+  error_message = ""
+  try:
+    props = event["ResourceProperties"]
+    notification_configuration = props["NotificationConfiguration"]
+    managed = props.get('Managed', 'true').lower() == 'true'
+    skipDestinationValidation = props.get('SkipDestinationValidation', 'false').lower() == 'true'
+    stack_id = event['StackId']
+    old = event.get("OldResourceProperties", {}).get("NotificationConfiguration", {})
+    if managed:
+      config = handle_managed(event["RequestType"], notification_configuration)
+    else:
+      config = handle_unmanaged(props["BucketName"], stack_id, event["RequestType"], notification_configuration, old)
+    s3.put_bucket_notification_configuration(Bucket=props["BucketName"], NotificationConfiguration=config, SkipDestinationValidation=skipDestinationValidation)
+  except Exception as e:
+    logging.exception("Failed to put bucket notification configuration")
+    response_status = "FAILED"
+    error_message = f"Error: {str(e)}. "
+  finally:
+    submit_response(event, context, response_status, error_message)
+
+def handle_managed(request_type, notification_configuration):
+  if request_type == 'Delete':
+    return {}
+  return notification_configuration
+
+def handle_unmanaged(bucket, stack_id, request_type, notification_configuration, old):
+  def get_id(n):
+    n['Id'] = ''
+    sorted_notifications = sort_filter_rules(n)
+    strToHash=json.dumps(sorted_notifications, sort_keys=True).replace('"Name": "prefix"', '"Name": "Prefix"').replace('"Name": "suffix"', '"Name": "Suffix"')
+    return f"{stack_id}-{hash(strToHash)}"
+  def with_id(n):
+    n['Id'] = get_id(n)
+    return n
+
+  external_notifications = {}
+  existing_notifications = s3.get_bucket_notification_configuration(Bucket=bucket)
+  for t in CONFIGURATION_TYPES:
+    if request_type == 'Update':
+        old_incoming_ids = [get_id(n) for n in old.get(t, [])]
+        external_notifications[t] = [n for n in existing_notifications.get(t, []) if not get_id(n) in old_incoming_ids]      
+    elif request_type == 'Delete':
+        external_notifications[t] = [n for n in existing_notifications.get(t, []) if not n['Id'].startswith(f"{stack_id}-")]
+    elif request_type == 'Create':
+        external_notifications[t] = [n for n in existing_notifications.get(t, [])]
+  if EVENTBRIDGE_CONFIGURATION in existing_notifications:
+    external_notifications[EVENTBRIDGE_CONFIGURATION] = existing_notifications[EVENTBRIDGE_CONFIGURATION]
+
+  if request_type == 'Delete':
+    return external_notifications
+
+  notifications = {}
+  for t in CONFIGURATION_TYPES:
+    external = external_notifications.get(t, [])
+    incoming = [with_id(n) for n in notification_configuration.get(t, [])]
+    notifications[t] = external + incoming
+
+  if EVENTBRIDGE_CONFIGURATION in notification_configuration:
+    notifications[EVENTBRIDGE_CONFIGURATION] = notification_configuration[EVENTBRIDGE_CONFIGURATION]
+  elif EVENTBRIDGE_CONFIGURATION in external_notifications:
+    notifications[EVENTBRIDGE_CONFIGURATION] = external_notifications[EVENTBRIDGE_CONFIGURATION]
+
+  return notifications
+
+def submit_response(event: dict, context, response_status: str, error_message: str):
+  response_body = json.dumps(
+    {
+      "Status": response_status,
+      "Reason": f"{error_message}See the details in CloudWatch Log Stream: {context.log_stream_name}",
+      "PhysicalResourceId": event.get("PhysicalResourceId") or event["LogicalResourceId"],
+      "StackId": event["StackId"],
+      "RequestId": event["RequestId"],
+      "LogicalResourceId": event["LogicalResourceId"],
+      "NoEcho": False,
+    }
+  ).encode("utf-8")
+  headers = {"content-type": "", "content-length": str(len(response_body))}
+  try:
+    req = urllib.request.Request(url=event["ResponseURL"], headers=headers, data=response_body, method="PUT")
+    with urllib.request.urlopen(req) as response:
+      print(response.read().decode("utf-8"))
+    print("Status code: " + response.reason)
+  except Exception as e:
+      print("send(..) failed executing request.urlopen(..): " + str(e))
+
+def sort_filter_rules(json_obj):
+  if not isinstance(json_obj, dict):
+      return json_obj
+  for key, value in json_obj.items():
+      if isinstance(value, dict):
+          json_obj[key] = sort_filter_rules(value)
+      elif isinstance(value, list):
+          json_obj[key] = [sort_filter_rules(item) for item in value]
+  if "Filter" in json_obj and "Key" in json_obj["Filter"] and "FilterRules" in json_obj["Filter"]["Key"]:
+      filter_rules = json_obj["Filter"]["Key"]["FilterRules"]
+      sorted_filter_rules = sorted(filter_rules, key=lambda x: x["Name"])
+      json_obj["Filter"]["Key"]["FilterRules"] = sorted_filter_rules
+  return json_obj",
+        },
+        "Description": "AWS CloudFormation handler for "Custom::S3BucketNotifications" resources (@aws-cdk/aws-s3)",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC",
+            "Arn",
+          ],
+        },
+        "Runtime": "python3.13",
+        "Timeout": 300,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
     "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C81C01536": {
       "DependsOn": [
         "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRoleDefaultPolicy88902FDF",
@@ -1111,212 +1272,6 @@ function handler(event) {
         ],
       },
       "Type": "AWS::IAM::Role",
-    },
-    "ExternalShareProjectorErrorsAlarm130B4506": {
-      "Properties": {
-        "AlarmDescription": "share projectorが5分間隔のreconcileで失敗している",
-        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
-        "Dimensions": [
-          {
-            "Name": "FunctionName",
-            "Value": {
-              "Ref": "ExternalShareProjectorFunction4F1FBA81",
-            },
-          },
-        ],
-        "EvaluationPeriods": 1,
-        "MetricName": "Errors",
-        "Namespace": "AWS/Lambda",
-        "Period": 300,
-        "Statistic": "Sum",
-        "Threshold": 1,
-        "TreatMissingData": "notBreaching",
-      },
-      "Type": "AWS::CloudWatch::Alarm",
-    },
-    "ExternalShareProjectorFunction4F1FBA81": {
-      "DependsOn": [
-        "ExternalShareProjectorFunctionServiceRoleDefaultPolicy66CEBB0A",
-        "ExternalShareProjectorFunctionServiceRole91D92E0E",
-      ],
-      "Properties": {
-        "Architectures": [
-          "arm64",
-        ],
-        "Code": {
-          "S3Bucket": {
-            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
-          },
-          "S3Key": "<asset-hash>.zip",
-        },
-        "Description": "share projector: .metadata.jsonのshareフィールドをCloudFront KVSへ投影する",
-        "Environment": {
-          "Variables": {
-            "KVS_ARN": {
-              "Fn::GetAtt": [
-                "ExternalShareShareKeyValueStore350AA4C3",
-                "Arn",
-              ],
-            },
-            "PAGES_BUCKET": {
-              "Ref": "PagesStorageBucketDFEB6C7C",
-            },
-          },
-        },
-        "Handler": "index.handler",
-        "MemorySize": 256,
-        "ReservedConcurrentExecutions": 1,
-        "Role": {
-          "Fn::GetAtt": [
-            "ExternalShareProjectorFunctionServiceRole91D92E0E",
-            "Arn",
-          ],
-        },
-        "Runtime": "nodejs22.x",
-        "Timeout": 60,
-      },
-      "Type": "AWS::Lambda::Function",
-    },
-    "ExternalShareProjectorFunctionServiceRole91D92E0E": {
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Statement": [
-            {
-              "Action": "sts:AssumeRole",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "lambda.amazonaws.com",
-              },
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-        "ManagedPolicyArns": [
-          {
-            "Fn::Join": [
-              "",
-              [
-                "arn:",
-                {
-                  "Ref": "AWS::Partition",
-                },
-                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-              ],
-            ],
-          },
-        ],
-      },
-      "Type": "AWS::IAM::Role",
-    },
-    "ExternalShareProjectorFunctionServiceRoleDefaultPolicy66CEBB0A": {
-      "Properties": {
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Action": "s3:GetObject",
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "PagesStorageBucketDFEB6C7C",
-                        "Arn",
-                      ],
-                    },
-                    "/pages/*",
-                  ],
-                ],
-              },
-            },
-            {
-              "Action": "s3:ListBucket",
-              "Condition": {
-                "StringLike": {
-                  "s3:prefix": [
-                    "pages/*",
-                  ],
-                },
-              },
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "PagesStorageBucketDFEB6C7C",
-                  "Arn",
-                ],
-              },
-            },
-            {
-              "Action": [
-                "cloudfront-keyvaluestore:DescribeKeyValueStore",
-                "cloudfront-keyvaluestore:ListKeys",
-                "cloudfront-keyvaluestore:UpdateKeys",
-              ],
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "ExternalShareShareKeyValueStore350AA4C3",
-                  "Arn",
-                ],
-              },
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-        "PolicyName": "ExternalShareProjectorFunctionServiceRoleDefaultPolicy66CEBB0A",
-        "Roles": [
-          {
-            "Ref": "ExternalShareProjectorFunctionServiceRole91D92E0E",
-          },
-        ],
-      },
-      "Type": "AWS::IAM::Policy",
-    },
-    "ExternalShareReconcileRule1D17CCF9": {
-      "Properties": {
-        "Description": "share projector の全件reconcile(5分毎)",
-        "ScheduleExpression": "rate(5 minutes)",
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::GetAtt": [
-                "ExternalShareProjectorFunction4F1FBA81",
-                "Arn",
-              ],
-            },
-            "Id": "Target0",
-          },
-        ],
-      },
-      "Type": "AWS::Events::Rule",
-    },
-    "ExternalShareReconcileRuleAllowEventRuleOkibashoExternalShareProjectorFunction5C540B7FBE195711": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "ExternalShareProjectorFunction4F1FBA81",
-            "Arn",
-          ],
-        },
-        "Principal": "events.amazonaws.com",
-        "SourceArn": {
-          "Fn::GetAtt": [
-            "ExternalShareReconcileRule1D17CCF9",
-            "Arn",
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "ExternalShareShareKeyValueStore350AA4C3": {
-      "Properties": {
-        "Comment": "/s/<share-id>/ -> pages S3キーの投影(正本は.metadata.jsonのshareフィールド)",
-        "Name": "OkibashoExternalShareShareKeyValueStore1E31F9E4",
-      },
-      "Type": "AWS::CloudFront::KeyValueStore",
     },
     "PagesDeliveryCachePolicy7BBA6710": {
       "Properties": {
@@ -1886,7 +1841,7 @@ function buildQueryString(querystring) {
             {
               "KeyValueStoreARN": {
                 "Fn::GetAtt": [
-                  "ExternalShareShareKeyValueStore350AA4C3",
+                  "ShareProjectionShareKeyValueStore1933799C",
                   "Arn",
                 ],
               },
@@ -1907,6 +1862,28 @@ function buildQueryString(querystring) {
         },
       },
       "Type": "AWS::CloudFront::Function",
+    },
+    "PagesStorageBucketAllowBucketNotificationsToOkibashoShareProjectionProjectorFunction0978B34C9F766793": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "ShareProjectionProjectorFunction873BDA55",
+            "Arn",
+          ],
+        },
+        "Principal": "s3.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId",
+        },
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "PagesStorageBucketDFEB6C7C",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
     },
     "PagesStorageBucketDFEB6C7C": {
       "DeletionPolicy": "Retain",
@@ -1972,6 +1949,107 @@ function buildQueryString(querystring) {
       },
       "Type": "AWS::S3::Bucket",
       "UpdateReplacePolicy": "Retain",
+    },
+    "PagesStorageBucketNotifications556F6CD5": {
+      "DependsOn": [
+        "PagesStorageBucketAllowBucketNotificationsToOkibashoShareProjectionProjectorFunction0978B34C9F766793",
+        "PagesStorageBucketNotificationsHandlerPolicyF43DDC22",
+        "PagesStorageBucketPolicy0CFFCC9C",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "PagesStorageBucketDFEB6C7C",
+        },
+        "Managed": true,
+        "NotificationConfiguration": {
+          "LambdaFunctionConfigurations": [
+            {
+              "Events": [
+                "s3:ObjectCreated:*",
+              ],
+              "Filter": {
+                "Key": {
+                  "FilterRules": [
+                    {
+                      "Name": "suffix",
+                      "Value": ".metadata.json",
+                    },
+                    {
+                      "Name": "prefix",
+                      "Value": "pages/",
+                    },
+                  ],
+                },
+              },
+              "LambdaFunctionArn": {
+                "Fn::GetAtt": [
+                  "ShareProjectionProjectorFunction873BDA55",
+                  "Arn",
+                ],
+              },
+            },
+            {
+              "Events": [
+                "s3:ObjectRemoved:*",
+              ],
+              "Filter": {
+                "Key": {
+                  "FilterRules": [
+                    {
+                      "Name": "suffix",
+                      "Value": ".metadata.json",
+                    },
+                    {
+                      "Name": "prefix",
+                      "Value": "pages/",
+                    },
+                  ],
+                },
+              },
+              "LambdaFunctionArn": {
+                "Fn::GetAtt": [
+                  "ShareProjectionProjectorFunction873BDA55",
+                  "Arn",
+                ],
+              },
+            },
+          ],
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691",
+            "Arn",
+          ],
+        },
+        "SkipDestinationValidation": false,
+      },
+      "Type": "Custom::S3BucketNotifications",
+    },
+    "PagesStorageBucketNotificationsHandlerPolicyF43DDC22": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:PutBucketNotification",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "PagesStorageBucketDFEB6C7C",
+                  "Arn",
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "PagesStorageBucketNotificationsHandlerPolicyF43DDC22",
+        "Roles": [
+          {
+            "Ref": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
     },
     "PagesStorageBucketPolicy0CFFCC9C": {
       "Properties": {
@@ -2101,6 +2179,37 @@ function buildQueryString(querystring) {
             },
             {
               "Action": [
+                "s3:PutObject*",
+                "s3:DeleteObject*",
+                "s3:Abort*",
+              ],
+              "Effect": "Deny",
+              "NotResource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "PagesStorageBucketDFEB6C7C",
+                        "Arn",
+                      ],
+                    },
+                    "/errors/*",
+                  ],
+                ],
+              },
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265",
+                    "Arn",
+                  ],
+                },
+              },
+              "Sid": "DenyErrorPagesDeploymentRoleOutsideErrorsPrefix",
+            },
+            {
+              "Action": [
                 "s3:GetObject",
                 "s3:ListBucket",
               ],
@@ -2199,6 +2308,201 @@ function buildQueryString(querystring) {
       },
       "Type": "Custom::CDKBucketDeployment",
       "UpdateReplacePolicy": "Delete",
+    },
+    "ShareProjectionProjectorFunction873BDA55": {
+      "DependsOn": [
+        "ShareProjectionProjectorFunctionServiceRoleDefaultPolicy6B9FBAA5",
+        "ShareProjectionProjectorFunctionServiceRoleBC8C3B11",
+      ],
+      "Properties": {
+        "Architectures": [
+          "arm64",
+        ],
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "<asset-hash>.zip",
+        },
+        "Description": "share projector: .metadata.jsonのshareフィールドをCloudFront KVSへ投影する",
+        "Environment": {
+          "Variables": {
+            "KVS_ARN": {
+              "Fn::GetAtt": [
+                "ShareProjectionShareKeyValueStore1933799C",
+                "Arn",
+              ],
+            },
+            "PAGES_BUCKET": {
+              "Ref": "PagesStorageBucketDFEB6C7C",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "MemorySize": 256,
+        "ReservedConcurrentExecutions": 1,
+        "Role": {
+          "Fn::GetAtt": [
+            "ShareProjectionProjectorFunctionServiceRoleBC8C3B11",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 60,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "ShareProjectionProjectorFunctionEventInvokeConfigC65417B8": {
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ShareProjectionProjectorFunction873BDA55",
+        },
+        "MaximumEventAgeInSeconds": 300,
+        "MaximumRetryAttempts": 1,
+        "Qualifier": "$LATEST",
+      },
+      "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "ShareProjectionProjectorFunctionServiceRoleBC8C3B11": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "ShareProjectionProjectorFunctionServiceRoleDefaultPolicy6B9FBAA5": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:GetObject",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "PagesStorageBucketDFEB6C7C",
+                        "Arn",
+                      ],
+                    },
+                    "/pages/*/.metadata.json",
+                  ],
+                ],
+              },
+            },
+            {
+              "Action": "s3:ListBucket",
+              "Condition": {
+                "StringLike": {
+                  "s3:prefix": [
+                    "pages/*",
+                  ],
+                },
+              },
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "PagesStorageBucketDFEB6C7C",
+                  "Arn",
+                ],
+              },
+            },
+            {
+              "Action": [
+                "cloudfront-keyvaluestore:DescribeKeyValueStore",
+                "cloudfront-keyvaluestore:ListKeys",
+                "cloudfront-keyvaluestore:UpdateKeys",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ShareProjectionShareKeyValueStore1933799C",
+                  "Arn",
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "ShareProjectionProjectorFunctionServiceRoleDefaultPolicy6B9FBAA5",
+        "Roles": [
+          {
+            "Ref": "ShareProjectionProjectorFunctionServiceRoleBC8C3B11",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "ShareProjectionSafetyNetRule18DB1459": {
+      "Properties": {
+        "Description": "S3イベントの取りこぼしを拾う安全網(15分毎)",
+        "ScheduleExpression": "rate(15 minutes)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "ShareProjectionProjectorFunction873BDA55",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "ShareProjectionSafetyNetRuleAllowEventRuleOkibashoShareProjectionProjectorFunction0978B34C4490DF9F": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "ShareProjectionProjectorFunction873BDA55",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "ShareProjectionSafetyNetRule18DB1459",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "ShareProjectionShareKeyValueStore1933799C": {
+      "Properties": {
+        "Comment": "/s/<share-id>/ -> pages S3キーの投影(正本は.metadata.jsonのshareフィールド)",
+        "Name": "OkibashoShareProjectionShareKeyValueStore19382CBF",
+      },
+      "Type": "AWS::CloudFront::KeyValueStore",
     },
   },
   "Rules": {

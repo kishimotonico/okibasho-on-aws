@@ -101,7 +101,7 @@
 
 ## Phase 6: 外部共有
 
-- [ ] CloudFront KeyValueStore + share projector Lambda（5 分ごとの全件 reconcile）
+- [ ] CloudFront KeyValueStore + share projector Lambda（S3 イベント + 15 分ごとの安全網で全件 reconcile）
 - [ ] pages Distribution に `/s/*` ビヘイビア（share-router.js）と `/errors/*` ビヘイビア（カスタムエラーレスポンス、BucketDeployment）を追加
 - [ ] `packages/cli/src/page/share.ts`（share の組み立て・ハッシュ・id 生成・CIDR 検証）
 - [ ] 管理 UI の ShareDialog（共有 URL の発行・パスワード・IP 制限・再発行・停止）
@@ -116,9 +116,8 @@
 - `Authorization` ヘッダを削除して転送しても OAC の署名が壊れないこと
 - 401 でブラウザの認証ダイアログが出ること
 - `Buffer` / `crypto.createHash` / `Number.isInteger` が CloudFront Functions runtime 2.0 で動き、コードサイズとコンピュート使用率が上限内に収まること
-- `.metadata.json` の作成・削除・書き換えが 5 分以内に KVS へ反映されること
+- `.metadata.json` の作成・削除・書き換えが数秒〜十数秒で KVS へ反映されること。S3 通知を止めても 15 分以内の安全網で追いつくこと
 - 墓標化した旧 id が 404 のままであること
-- share projector の Errors アラームと `ALERT_EMAIL` の通知が届くこと
 - SigV4A 署名（`@aws-sdk/signature-v4a` の副作用 import）が Lambda 実行環境で通るか
 - `NodejsFunction` の bundling（pnpm workspace 特有の PATH 調整を含む）が CI で動くか
 

@@ -2,9 +2,9 @@ import { CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
 import { AppDelivery } from './constructs/app-delivery.js';
 import { Auth } from './constructs/auth.js';
-import { ExternalShare } from './constructs/external-share.js';
 import { PagesDelivery } from './constructs/pages-delivery.js';
 import { PagesStorage } from './constructs/pages-storage.js';
+import { ShareProjection } from './constructs/share-projection.js';
 import type { DomainsConfig } from './config.js';
 
 export interface OkibashoStackProps extends StackProps {
@@ -12,8 +12,6 @@ export interface OkibashoStackProps extends StackProps {
   readonly emailDomain: string;
   /** 独自ドメイン設定。未設定ならデフォルトドメインで構築する */
   readonly domains?: DomainsConfig;
-  /** share projectorのErrorsアラームの通知先。未設定ならアラームは作るが通知はしない */
-  readonly alertEmail?: string;
 }
 
 /**
@@ -21,23 +19,22 @@ export interface OkibashoStackProps extends StackProps {
  *   - S3 (private, Public Access Block)
  *   - CloudFront x2 (app / pages) + OAC
  *   - Cognito User Pool + Identity Pool (Web/CLI の 2 App Client)
+ *   - CloudFront KeyValueStore + share projector Lambda（外部共有(/s/*)のエッジ投影。ShareProjection）
+ *   - EventBridge Rule（15分ごとの安全網）+ S3通知（.metadata.jsonの作成・削除で即時起動）
  *   - Route 53 / ACM（domains 設定時のみ）
- *
- * リソースが増えたら lib/ 配下を用途ごとに分割する。
  */
 export class OkibashoStack extends Stack {
   constructor(scope: Construct, id: string, props: OkibashoStackProps) {
     super(scope, id, props);
 
     const pagesStorage = new PagesStorage(this, 'PagesStorage');
-    const externalShare = new ExternalShare(this, 'ExternalShare', {
+    const shareProjection = new ShareProjection(this, 'ShareProjection', {
       pagesBucket: pagesStorage.bucket,
-      alertEmail: props.alertEmail,
     });
     const pagesDelivery = new PagesDelivery(this, 'PagesDelivery', {
       bucket: pagesStorage.bucket,
       emailDomain: props.emailDomain,
-      shareKeyValueStore: externalShare.keyValueStore,
+      shareKeyValueStore: shareProjection.keyValueStore,
     });
     const appDelivery = new AppDelivery(this, 'AppDelivery');
 

@@ -102,17 +102,27 @@ export function validateShare(share: unknown): ValidatedShare | null {
   return result;
 }
 
+/** expiresAt の期限切れ判定。文字列でなければ(null=無期限を含め)期限切れとしない。形式の検証は isValidExpiresAt が担う */
 export function isExpired(expiresAt: unknown, now: Date): boolean {
   if (typeof expiresAt !== 'string') {
     return false;
   }
   const expiry = new Date(expiresAt);
   if (Number.isNaN(expiry.getTime())) {
-    // パース不能な日付は安全側に倒して「期限切れ扱い」にはしない。
-    // 形式異常はmetadata自体の不正として別途弾かれる想定
     return false;
   }
   return expiry.getTime() <= now.getTime();
+}
+
+/** expiresAtが仕様(ISO文字列 または null)通りかどうか */
+function isValidExpiresAt(expiresAt: unknown): expiresAt is string | null {
+  if (expiresAt === null) {
+    return true;
+  }
+  if (typeof expiresAt !== 'string') {
+    return false;
+  }
+  return !Number.isNaN(new Date(expiresAt).getTime());
 }
 
 /** S3キー "pages/<email>/<slug>/.metadata.json" からprefixを導出する。metadataの中身(owner/slug)は信用しない */
@@ -163,6 +173,11 @@ export function buildDesiredEntry(
     return null;
   }
   const metadata = metadataRaw as Record<string, unknown>;
+
+  // expiresAt は ISO 文字列か null(無期限)のみ。それ以外は metadata 不正として共有無し
+  if (!isValidExpiresAt(metadata.expiresAt)) {
+    return null;
+  }
 
   if (isExpired(metadata.expiresAt, now)) {
     return null;

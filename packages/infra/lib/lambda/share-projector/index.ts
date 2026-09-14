@@ -16,24 +16,46 @@ function requireEnv(name: string): string {
 }
 
 /**
- * EventBridge Ruleから5分ごとに起動される。S3イベントには依存せず、常に
- * pages/配下の全.metadata.jsonとKVS全件を突き合わせる全件reconcileだけを行う
+ * S3イベント(.metadata.jsonの作成・削除)と15分ごとの安全網スケジュールの両方から起動される。
+ * イベントの中身は使わず、常にpages/配下の全.metadata.jsonとKVS全件を突き合わせる。
+ * トリガー種別だけはログに出す(アラームを持たないため、イベントが届いているかをLogsで追えるようにする)
  */
-export async function handler(): Promise<void> {
+export async function handler(event: unknown): Promise<void> {
+  console.log(`trigger=${describeTrigger(event)}`);
   await handleReconcile();
+}
+
+function describeTrigger(event: unknown): string {
+  if (
+    typeof event === 'object' &&
+    event !== null &&
+    'Records' in event &&
+    Array.isArray((event as { Records?: unknown }).Records)
+  ) {
+    const records = (event as { Records: unknown[] }).Records;
+    const isS3Records = records.every(
+      (record) => typeof record === 'object' && record !== null && 's3' in record,
+    );
+    if (isS3Records) {
+      return `s3 records=${records.length}`;
+    }
+  }
+  return 'schedule';
 }
 
 async function handleReconcile(): Promise<void> {
   const now = new Date();
   const metadataKeys = await listAllMetadataKeys(PAGES_BUCKET);
 
+  const prefixes = [...new Set(metadataKeys.map(prefixFromMetadataKey).filter((p) => p !== null))];
+  // reconcile 1回の所要時間がそのまま反映の待ち時間になるので、独立な読み取りは並列にする
+  const desiredEntries = await mapWithConcurrency(prefixes, 8, (prefix) =>
+    resolveDesiredForPrefix(prefix, now),
+  );
+
   const desiredByPrefix = new Map<string, DesiredEntry | null>();
-  for (const key of metadataKeys) {
-    const prefix = prefixFromMetadataKey(key);
-    if (!prefix) {
-      continue;
-    }
-    desiredByPrefix.set(prefix, await resolveDesiredForPrefix(prefix, now));
+  for (let i = 0; i < prefixes.length; i++) {
+    desiredByPrefix.set(prefixes[i]!, desiredEntries[i]!);
   }
 
   const actual = await listAllActualEntries(KVS_ARN);
@@ -54,6 +76,29 @@ async function resolveDesiredForPrefix(prefix: string, now: Date): Promise<Desir
   const metadataKey = `${prefix}.metadata.json`;
   const metadata = await getMetadataJson(PAGES_BUCKET, metadataKey);
   return buildDesiredEntry(metadata, prefix, now);
+}
+
+/** items を同時実行数 limit で mapper に通す。結果の並び順は items と一致する */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) {
+        return;
+      }
+      results[index] = await mapper(items[index]!);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
 }
 
 function logPlan(plan: DiffPlan): void {

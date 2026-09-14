@@ -29,7 +29,8 @@ export async function listAllActualEntries(kvsArn: string): Promise<ActualEntry[
 
   do {
     const result = await client.send(
-      new ListKeysCommand({ KvsARN: kvsArn, NextToken: nextToken, MaxResults: 100 }),
+      // MaxResults の API 上限は 50
+      new ListKeysCommand({ KvsARN: kvsArn, NextToken: nextToken, MaxResults: 50 }),
     );
     for (const item of result.Items ?? []) {
       if (!item.Key || item.Value === undefined) {

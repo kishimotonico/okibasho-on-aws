@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RemovalPolicy } from 'aws-cdk-lib';
-import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { Effect, type IRole, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket, BucketEncryption, HttpMethods } from 'aws-cdk-lib/aws-s3';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { Construct } from 'constructs';
@@ -38,11 +38,28 @@ export class PagesStorage extends Construct {
 
   /** カスタムエラーレスポンス(404)用の固定ページを errors/ prefix にだけ配置する */
   private deployErrorPages(): void {
-    new BucketDeployment(this, 'ErrorPagesDeployment', {
+    const deployment = new BucketDeployment(this, 'ErrorPagesDeployment', {
       sources: [Source.asset(join(dirname(fileURLToPath(import.meta.url)), '../static/errors'))],
       destinationBucket: this.bucket,
       destinationKeyPrefix: ERRORS_PREFIX,
     });
+    this.denyDeploymentRoleOutsideErrors(deployment.handlerRole);
+  }
+
+  /**
+   * 配置ロールが errors/ 以外へ書き込むのをDenyする。
+   * BucketDeployment はdestinationバケット全体への書き込みをgrantするため、bucket policy側で閉じ込める
+   */
+  private denyDeploymentRoleOutsideErrors(handlerRole: IRole): void {
+    this.bucket.addToResourcePolicy(
+      new PolicyStatement({
+        sid: 'DenyErrorPagesDeploymentRoleOutsideErrorsPrefix',
+        effect: Effect.DENY,
+        principals: [handlerRole],
+        actions: ['s3:PutObject*', 's3:DeleteObject*', 's3:Abort*'],
+        notResources: [this.bucket.arnForObjects(`${ERRORS_PREFIX}*`)],
+      }),
+    );
   }
 
   /**

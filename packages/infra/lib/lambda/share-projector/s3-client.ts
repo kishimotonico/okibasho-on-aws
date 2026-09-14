@@ -1,19 +1,32 @@
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
+import { parseMetadataJson } from './validate.js';
 
 const client = new S3Client({});
 
 const PAGES_PREFIX = 'pages/';
 const METADATA_SUFFIX = '/.metadata.json';
 
-/** .metadata.json を読む。無ければ null(=共有無しとして扱う入力になる) */
+/**
+ * .metadata.json を読む。無い・JSON不正なら null(=共有無し)。
+ * S3の取得エラー(NotFound以外)だけ再送出する。1件の壊れたmetadataで全体のreconcileを止めないため
+ */
 export async function getMetadataJson(bucket: string, key: string): Promise<unknown | null> {
+  const body = await getMetadataBody(bucket, key);
+  if (body === null) {
+    return null;
+  }
+  const parsed = parseMetadataJson(body);
+  if (parsed === null) {
+    console.warn(`.metadata.json のJSONパースに失敗した(共有無し扱いにする): key=${key}`);
+  }
+  return parsed;
+}
+
+async function getMetadataBody(bucket: string, key: string): Promise<string | null> {
   try {
     const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
     const body = await result.Body?.transformToString('utf-8');
-    if (!body) {
-      return null;
-    }
-    return JSON.parse(body);
+    return body ?? null;
   } catch (err) {
     if (isNotFound(err)) {
       return null;
