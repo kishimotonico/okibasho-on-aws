@@ -1,14 +1,12 @@
 import { messages } from '~/lib/messages';
 
-const NETWORK_MESSAGE = 'つながりません。接続を確かめて、もう一度どうぞ。';
-
 /**
  * S3 呼び出しの失敗を画面に出す日本語にする。
  * fetch のネットワークエラーは操作によらず同じ案内、それ以外は操作ごとの fallback。
  * 生のエラーメッセージ（AccessDenied など）は画面に出さない。
  */
 export function toUserMessage(error: unknown, fallback: string = messages.uploadFailed): string {
-  return isNetworkFailure(rawErrorText(error)) ? NETWORK_MESSAGE : fallback;
+  return isNetworkFailure(rawErrorText(error)) ? messages.networkError : fallback;
 }
 
 function rawErrorText(error: unknown): string {

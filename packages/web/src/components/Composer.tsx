@@ -88,8 +88,10 @@ export function Composer({
   const { state, bubble } = flow;
   const success = state.kind === 'success' ? state : null;
   const busy = state.kind === 'uploading';
-  // 差し替え確認とアップロード中は、どの slug を上書きするのかを枠で示す
-  const overwrite = state.kind === 'confirming' || busy;
+  // 差し替え確認中だけ、どの slug を上書きするのかを danger 系の枠で示す。
+  // アップロード中（新規も差し替えも）まで強調すると、新規 slug でも
+  // 「この名前が問題」という誤った合図になるため付けない
+  const overwrite = state.kind === 'confirming';
   const progressLabel =
     state.kind === 'uploading' && state.total > 1 ? `${state.completed}/${state.total}` : '1件';
 

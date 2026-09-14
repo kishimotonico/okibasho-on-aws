@@ -46,4 +46,50 @@ export const messages = {
   retentionDialogDescription: '保存期間を30日に変更しますか？',
   retentionDialogImmediateExpiry:
     '30日保存に戻すと、作成から30日以上経過しているため即座に期限切れになります。続行しますか？',
+
+  /** 汎用の確認操作 */
+  cancel: 'やめる',
+  replace: '差し替える',
+
+  /** ユーティリティメニュー */
+  menu: 'メニュー',
+  logout: 'ログアウト',
+
+  /** ログインコールバック */
+  loginFailed: 'ログインに失敗しました',
+  loginErrorTitle: 'ログインエラー',
+  loginInProgress: 'ログイン処理中...',
+
+  /** 404 */
+  notFoundTitle: 'ページが見つかりません',
+  notFoundDescription: 'アドレスが違うか、ページが削除されています。',
+  backToTop: 'トップへ戻る',
+
+  /** 公開URL（slug 入力） */
+  publicUrlLabel: '公開URL',
+  publicUrlAriaLabel: (urlOrigin: string, userPath: string, value: string) =>
+    userPath ? `公開URL ${urlOrigin}${userPath}${value}` : '公開URL',
+
+  /** 保存期間 */
+  retentionLabel: '保存期間',
+  retentionTemporaryOption: '30日',
+  retentionPermanentOption: '無期限',
+
+  /** 一覧の期限表示 */
+  expiredLabel: (dateLabel: string) => `期限切れ（${dateLabel}）`,
+  activeUntilLabel: (dateTimeLabel: string, daysRemaining: number) =>
+    `${dateTimeLabel} まで（あと${daysRemaining}日）`,
+
+  /** 通信エラー */
+  networkError: 'つながりません。接続を確かめて、もう一度どうぞ。',
+
+  /** アップロードの検証 */
+  validationFilesRequired: 'ファイルを選んでください',
+  validationTooManyFiles: (max: number) => `ファイルは ${max} 件までです`,
+  validationInvalidPath: (path: string) => `${path} は使えません`,
+  validationDuplicatePath: (path: string) => `${path} が重複しています`,
+  validationInvalidFileSize: (path: string) => `${path} のサイズが不正です`,
+  validationFileTooLarge: (path: string) => `${path} が大きすぎます`,
+  validationPageSizeExceeded: '合計サイズが上限を超えています',
+  validationMissingIndexHtml: 'index.html がありません',
 } as const;

@@ -48,7 +48,7 @@ export function SlugField({
   /** Esc で戻す値。フォーカスした時点の内容 */
   const focusValueRef = useRef(value);
 
-  const ariaLabel = userPath ? `公開URL ${urlOrigin}${userPath}${value}` : '公開URL';
+  const ariaLabel = messages.publicUrlAriaLabel(urlOrigin, userPath, value);
 
   const handleFocus = (event: FocusEvent<HTMLInputElement>) => {
     focusValueRef.current = value;
@@ -77,7 +77,7 @@ export function SlugField({
   return (
     <div className="url-field">
       <label className="field-label visually-hidden" htmlFor="public-url-slug">
-        公開URL
+        {messages.publicUrlLabel}
       </label>
       <div className={`url-input${overwrite ? ' url-input--overwrite' : ''}`} tabIndex={-1}>
         {userPath ? (

@@ -1,7 +1,8 @@
-import { Check, Copy, EllipsisVertical, SquareArrowOutUpRight } from 'lucide-react';
+import { EllipsisVertical, SquareArrowOutUpRight } from 'lucide-react';
 import { useRef } from 'react';
 
 import type { ListedPage, Retention } from '~/api/pages';
+import { CopyButton } from '~/components/CopyButton';
 import { Menu, MenuItem } from '~/components/Menu';
 import { Tooltip } from '~/components/Tooltip';
 import { getExpirationStatus } from '~/lib/expiration-status';
@@ -10,28 +11,28 @@ import { messages } from '~/lib/messages';
 interface PageRowProps {
   page: ListedPage;
   highlighted: boolean;
-  copied: boolean;
-  onCopy: (page: ListedPage) => void;
   onReupload: (page: ListedPage) => void;
   onRetentionChange: (page: ListedPage, retention: Retention) => void;
   onDelete: (page: ListedPage) => void;
+  /** コピーの失敗/成功を一覧の共通エラー表示へ伝える */
+  onCopyError?: () => void;
+  onCopySuccess?: () => void;
 }
 
 /** 一覧の1行。表示だけを受け持ち、操作はすべてコールバックで上へ渡す */
 export function PageRow({
   page,
   highlighted,
-  copied,
-  onCopy,
   onReupload,
   onRetentionChange,
   onDelete,
+  onCopyError,
+  onCopySuccess,
 }: PageRowProps) {
   // 「再アップロード」を選んだかどうか。メニューが閉じたあとに知る必要があるので ref で持つ
   const reuploadSelectedRef = useRef(false);
 
   const expiration = getExpirationStatus(page.expiresAt);
-  const copyLabel = copied ? messages.copied : messages.copyUrl;
   const rowClass = [
     'page-row',
     expiration.kind === 'expired' ? 'page-row--expired' : '',
@@ -67,20 +68,12 @@ export function PageRow({
             <SquareArrowOutUpRight size={16} strokeWidth={1.75} aria-hidden />
           </a>
         </Tooltip>
-        <Tooltip label={copyLabel}>
-          <button
-            type="button"
-            className={copied ? 'icon-button icon-button--copied' : 'icon-button'}
-            aria-label={copyLabel}
-            onClick={() => onCopy(page)}
-          >
-            {copied ? (
-              <Check size={16} strokeWidth={1.75} aria-hidden />
-            ) : (
-              <Copy size={16} strokeWidth={1.75} aria-hidden />
-            )}
-          </button>
-        </Tooltip>
+        <CopyButton
+          value={page.viewUrl}
+          variant="icon"
+          onError={onCopyError}
+          onCopied={onCopySuccess}
+        />
         <Menu
           label={messages.rowActions(page.slug)}
           tooltip={messages.moreActions}

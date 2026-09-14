@@ -1,5 +1,7 @@
 import { MAX_FILE_COUNT, MAX_FILE_SIZE, MAX_PAGE_SIZE, validateUploadPath } from '@cli/page';
 
+import { messages } from '~/lib/messages';
+
 import type { UploadFileEntry } from './collect-upload-files.js';
 
 export interface UploadValidationError {
@@ -15,7 +17,7 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
   if (files.length === 0) {
     errors.push({
       code: 'files_required',
-      message: 'ファイルを選んでください',
+      message: messages.validationFilesRequired,
     });
     return errors;
   }
@@ -23,7 +25,7 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
   if (files.length > MAX_FILE_COUNT) {
     errors.push({
       code: 'too_many_files',
-      message: `ファイルは ${MAX_FILE_COUNT} 件までです`,
+      message: messages.validationTooManyFiles(MAX_FILE_COUNT),
     });
   }
 
@@ -36,7 +38,7 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
     if (!pathResult.ok) {
       errors.push({
         code: 'invalid_path',
-        message: `${file.path} は使えません`,
+        message: messages.validationInvalidPath(file.path),
       });
       continue;
     }
@@ -45,7 +47,7 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
     if (seenPaths.has(normalizedPath)) {
       errors.push({
         code: 'duplicate_path',
-        message: `${normalizedPath} が重複しています`,
+        message: messages.validationDuplicatePath(normalizedPath),
       });
     } else {
       seenPaths.add(normalizedPath);
@@ -55,12 +57,12 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
     if (!Number.isInteger(size) || size < 0) {
       errors.push({
         code: 'invalid_file_size',
-        message: `${file.path} のサイズが不正です`,
+        message: messages.validationInvalidFileSize(file.path),
       });
     } else if (size > MAX_FILE_SIZE) {
       errors.push({
         code: 'file_too_large',
-        message: `${file.path} が大きすぎます`,
+        message: messages.validationFileTooLarge(file.path),
       });
     } else {
       totalSize += size;
@@ -74,14 +76,14 @@ export function validateUploadFiles(files: readonly UploadFileEntry[]): UploadVa
   if (totalSize > MAX_PAGE_SIZE) {
     errors.push({
       code: 'page_size_exceeded',
-      message: '合計サイズが上限を超えています',
+      message: messages.validationPageSizeExceeded,
     });
   }
 
   if (!hasIndexHtml) {
     errors.push({
       code: 'missing_index_html',
-      message: 'index.html がありません',
+      message: messages.validationMissingIndexHtml,
     });
   }
 

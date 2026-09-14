@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import type { ListedPage, Retention } from '~/api/pages';
 import { ConfirmAlertDialog } from '~/components/AlertDialog';
 import { PageRow } from '~/components/PageRow';
 import { messages } from '~/lib/messages';
 import { shouldWarnImmediateExpiryOnTemporary } from '~/lib/retention-warning';
-
-const COPY_FEEDBACK_MS = 2000;
 
 type ConfirmState =
   | { kind: 'delete'; page: ListedPage }
@@ -35,29 +33,8 @@ export function PagesList({
   onRetentionChange,
   onDelete,
 }: PagesListProps) {
-  const [copySlug, setCopySlug] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
-
-  useEffect(() => {
-    if (!copySlug) {
-      return;
-    }
-
-    const id = window.setTimeout(() => setCopySlug(null), COPY_FEEDBACK_MS);
-    return () => window.clearTimeout(id);
-  }, [copySlug]);
-
-  const handleCopy = async (page: ListedPage) => {
-    try {
-      await navigator.clipboard.writeText(page.viewUrl);
-      setCopySlug(page.slug);
-      setCopyError(null);
-    } catch {
-      setCopySlug(null);
-      setCopyError(messages.copyUrlFailed);
-    }
-  };
 
   // 無期限への変更は確認なし。30日へ戻すのと削除だけ確認する
   const handleRetentionChange = (page: ListedPage, retention: Retention) => {
@@ -117,9 +94,7 @@ export function PagesList({
         />
       ) : null}
 
-      {(error ?? copyError) ? (
-        <pre className="message message--error">{error ?? copyError}</pre>
-      ) : null}
+      {(error ?? copyError) ? <p className="message message--error">{error ?? copyError}</p> : null}
 
       {pages.length === 0 ? <p className="empty-note">{messages.listEmpty}</p> : null}
 
@@ -130,11 +105,11 @@ export function PagesList({
               key={page.slug}
               page={page}
               highlighted={page.slug === highlightSlug}
-              copied={page.slug === copySlug}
-              onCopy={(target) => void handleCopy(target)}
               onReupload={(target) => onReupload(target.slug)}
               onRetentionChange={handleRetentionChange}
               onDelete={(target) => setConfirm({ kind: 'delete', page: target })}
+              onCopyError={() => setCopyError(messages.copyUrlFailed)}
+              onCopySuccess={() => setCopyError(null)}
             />
           ))}
         </ul>

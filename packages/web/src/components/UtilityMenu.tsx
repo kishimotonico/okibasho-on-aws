@@ -3,6 +3,7 @@ import { CircleUser } from 'lucide-react';
 
 import { useAuth } from '~/auth/auth-context';
 import { Menu, MenuItem } from '~/components/Menu';
+import { messages } from '~/lib/messages';
 
 export function UtilityMenu() {
   const auth = useAuth();
@@ -15,11 +16,11 @@ export function UtilityMenu() {
   return (
     <div className="utility-menu">
       <Menu
-        label="メニュー"
-        tooltip="メニュー"
+        label={messages.menu}
+        tooltip={messages.menu}
         trigger={<CircleUser size={18} strokeWidth={1.75} aria-hidden />}
       >
-        <MenuItem onSelect={() => void auth.logout()}>ログアウト</MenuItem>
+        <MenuItem onSelect={() => void auth.logout()}>{messages.logout}</MenuItem>
       </Menu>
     </div>
   );

@@ -1,4 +1,5 @@
 import type { Retention } from '~/api/pages';
+import { messages } from '~/lib/messages';
 
 interface RetentionToggleProps {
   value: Retention;
@@ -11,7 +12,7 @@ export function RetentionToggle({ value, onChange, disabled }: RetentionTogglePr
   return (
     <div className="retention-field">
       <span className="field-label visually-hidden" id="retention-label">
-        保存期間
+        {messages.retentionLabel}
       </span>
       <div className="seg" role="group" aria-labelledby="retention-label">
         <button
@@ -21,7 +22,7 @@ export function RetentionToggle({ value, onChange, disabled }: RetentionTogglePr
           disabled={disabled}
           onClick={() => onChange('temporary')}
         >
-          30日
+          {messages.retentionTemporaryOption}
         </button>
         <button
           type="button"
@@ -30,7 +31,7 @@ export function RetentionToggle({ value, onChange, disabled }: RetentionTogglePr
           disabled={disabled}
           onClick={() => onChange('permanent')}
         >
-          無期限
+          {messages.retentionPermanentOption}
         </button>
       </div>
     </div>

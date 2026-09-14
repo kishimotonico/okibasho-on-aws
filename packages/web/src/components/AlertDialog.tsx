@@ -1,13 +1,15 @@
 import type { ReactNode } from 'react';
 import { AlertDialog as AlertDialogPrimitive } from 'radix-ui';
 
+import { messages } from '~/lib/messages';
+
 export function ConfirmAlertDialog({
   open,
   onOpenChange,
   title,
   description,
   confirmLabel,
-  cancelLabel = 'やめる',
+  cancelLabel = messages.cancel,
   danger = false,
   onConfirm,
 }: {

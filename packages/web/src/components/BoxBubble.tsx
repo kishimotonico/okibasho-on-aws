@@ -1,6 +1,8 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { useEffect, useId, useRef } from 'react';
 
+import { messages } from '~/lib/messages';
+
 export type BoxBubbleKind = 'error' | 'confirm' | 'success';
 
 const AUTO_CLOSE_MS = 6000;
@@ -140,7 +142,7 @@ export function BoxBubble({
                   onReplace?.();
                 }}
               >
-                差し替える
+                {messages.replace}
               </button>
               <button
                 type="button"
@@ -150,7 +152,7 @@ export function BoxBubble({
                   (onCancel ?? onClose)();
                 }}
               >
-                やめる
+                {messages.cancel}
               </button>
             </div>
           ) : null}

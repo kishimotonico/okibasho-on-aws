@@ -265,6 +265,40 @@ components:
 
 UI 部品は radix-ui（DropdownMenu / Tooltip / AlertDialog）を DESIGN のトークンで包んで使う。アイコンは lucide-react。slug 生成と検証、メタデータ型は `@cli/page` を web から参照する。箱アイコン（`UploadBoxIcon.tsx` / `upload-box-icon.ts`）はチューナーの幾何をそのまま移植したものなので、ライブラリで置き換えない。
 
+### ファイル構成
+
+```
+routes/index.tsx        一覧を loader で取得。route の state（composerSeed / retiredSlug /
+                         highlight / actionError）と useOptimistic を持つ
+routes/callback.tsx      Cognito のログインコールバック
+components/Composer.tsx フォームの骨組み。useUploadFlow と useWindowFileDrag をつなぐ
+  SlugField.tsx          公開URL。全選択・Esc・ツールチップの開閉を内包
+  RetentionToggle.tsx    30日 / 無期限
+  PickLinks.tsx          ファイルを選ぶ · フォルダを選ぶ（隠し input を内包）
+  UploadResult.tsx       URL・CopyButton・削除（確認ダイアログ）・次のファイルを置く
+  DragOverlay.tsx        ウィンドウ全体のドラッグ強調
+components/PagesList.tsx 一覧。表示専用（確認ダイアログとコピー失敗の表示だけ持つ）
+  PageRow.tsx             一覧の1行。表示とコールバック
+components/CopyButton.tsx   URLコピーの共通部品（UploadResult / PageRow の両方で使う）
+components/BoxBubble.tsx    箱の直下の吹き出し（error / confirm / success）
+components/{AlertDialog,Menu,Tooltip}.tsx  radix-ui のラッパー
+components/UtilityMenu.tsx  右上のログアウトメニュー
+hooks/useUploadFlow.ts     アップロードの状態機械（useReducer）
+hooks/useWindowFileDrag.ts ウィンドウ全体のドラッグ監視。isDragging だけ返す
+hooks/useCopyToClipboard.ts クリップボードへのコピーと一時表示状態（2秒で idle に戻る）
+hooks/usePagesApi.ts       認証・接続先・S3クライアント生成・エラー文言化を閉じた API
+api/pages.ts               S3 を叩く純粋な非同期関数（upload / remove / setRetention など）
+lib/messages.ts            画面に出す日本語の集約
+lib/to-user-message.ts     エラーを画面向けの日本語にする
+```
+
+### 状態の置き場所
+
+- **一覧データ**: `routes/index.tsx` の loader で取得し、`useOptimistic` で削除・保存期間変更を先に画面へ反映する。通信後に `router.invalidate()` で本物と入れ替える
+- **route から下ろす合図**: `composerSeed`（再アップロード）・`retiredSlug`（消えたページ）・`highlight`（成功行）は `{ slug, nonce }` の値を props で Composer / PagesList へ渡す。`forwardRef` や `useImperativeHandle` は使わない
+- **アップロードの状態**: `useUploadFlow` が `idle / checking / confirming / uploading / success / error` の判別共用体を `useReducer` で持つ。箱の吹き出し（`bubbleOf`）と箱アイコンの phase（`iconPhaseOf`）はこの状態から導出する
+- **コピーの表示**: `useCopyToClipboard` が `idle / copied / failed` を持ち、2秒で idle に戻す。`CopyButton` がこれを使い、一覧側の共通エラー表示へは `onError` / `onCopied` で伝える
+
 ## 確認と検証
 
 - 開発サーバー: `pnpm --filter @okibasho/web dev`（http://localhost:3000。Cognito の callback に登録済み）

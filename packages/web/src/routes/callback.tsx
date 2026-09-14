@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
+import { messages } from '~/lib/messages';
 
 export const Route = createFileRoute('/callback')({
   component: AuthCallbackPage,
@@ -27,7 +28,7 @@ function AuthCallbackPage() {
       })
       .catch((err: unknown) => {
         if (active) {
-          const message = err instanceof Error ? err.message : 'ログインに失敗しました';
+          const message = err instanceof Error ? err.message : messages.loginFailed;
           setError(message);
         }
       });
@@ -40,7 +41,7 @@ function AuthCallbackPage() {
   if (error) {
     return (
       <div className="page">
-        <h1>ログインエラー</h1>
+        <h1>{messages.loginErrorTitle}</h1>
         <p>{error}</p>
       </div>
     );
@@ -48,7 +49,7 @@ function AuthCallbackPage() {
 
   return (
     <div className="page">
-      <p>ログイン処理中...</p>
+      <p>{messages.loginInProgress}</p>
     </div>
   );
 }

@@ -75,7 +75,7 @@ MVP でやらないこと（UI に匂わせない）: 管理者ロール・RBAC�
 ## Evidence on Hand
 
 - 要件と設計のドキュメント: `docs/concept.md`（目的・MVP スコープ・完成イメージ）、`docs/architecture.md`（決定済み設計）、`docs/roadmap.md`（フェーズと受け入れ条件）、`docs/open-questions.md`（未確定論点）
-- 既存の管理 UI 実装: `packages/web/src/routes/`（index, callback）、`packages/web/src/components/`、`packages/web/src/styles/app.css`。単一 CSS ファイルにクラスベースのスタイル。トークン・コンポーネントライブラリは未導入
+- 既存の管理 UI 実装: `packages/web/src/routes/`（index, callback。一覧の取得と route の state）、`packages/web/src/components/`（表示）、`packages/web/src/hooks/`（アップロードの状態機械・API 呼び出し・コピー状態などのロジック）、`packages/web/src/api/pages.ts`（S3 を叩く純粋関数）、`packages/web/src/lib/messages.ts`（画面文言の集約）、`packages/web/src/styles/app.css`。単一 CSS ファイルにクラスベースのスタイル。トークン・コンポーネントライブラリは未導入
 - CLI の完成イメージ（コンソール出力例）は `docs/concept.md` にある
 - 存在しないもの: 実ユーザーの利用データ、テスティモニアル、スクリーンショット、ロゴ。これらを作らない・語らない
 

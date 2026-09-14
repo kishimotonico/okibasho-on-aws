@@ -1,3 +1,5 @@
+import { messages } from '~/lib/messages';
+
 /** 一覧に表示する保存期限の状態 */
 export type ExpirationStatus =
   | { kind: 'permanent'; label: '無期限' }
@@ -51,7 +53,7 @@ export function getExpirationStatus(
   now: Date = new Date(),
 ): ExpirationStatus {
   if (expiresAt === null) {
-    return { kind: 'permanent', label: '無期限' };
+    return { kind: 'permanent', label: messages.retentionPermanentOption };
   }
 
   const expires = new Date(expiresAt);
@@ -60,7 +62,7 @@ export function getExpirationStatus(
   if (msRemaining <= 0) {
     return {
       kind: 'expired',
-      label: `期限切れ（${formatJstDate(expiresAt)}）`,
+      label: messages.expiredLabel(formatJstDate(expiresAt)),
       expiresAt,
     };
   }
@@ -68,7 +70,7 @@ export function getExpirationStatus(
   const daysRemaining = Math.ceil(msRemaining / MS_PER_DAY);
   return {
     kind: 'active',
-    label: `${formatJstDateTime(expiresAt)} まで（あと${daysRemaining}日）`,
+    label: messages.activeUntilLabel(formatJstDateTime(expiresAt), daysRemaining),
     daysRemaining,
     expiresAt,
   };
