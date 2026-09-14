@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SHARE_TAG_LENGTH, computeShareTag } from '../src/page/tag.js';
 
 /**
- * 固定テストベクター。web / infra(page-maintenance) の同名テストと同じ値であることを確認する。
+ * 固定テストベクター。infra(page-maintenance) の同名テストと同じ値であることを確認する。
  * tag = base64url(SHA-256(UTF-8("pages/<email>/<slug>/")))の先頭11文字
  */
 const VECTORS: Array<{ email: string; slug: string; tag: string }> = [

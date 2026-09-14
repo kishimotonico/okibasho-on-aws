@@ -1,8 +1,9 @@
+import type { Retention } from '@okibasho/core';
 import { useState } from 'react';
 
-import type { ListedPage, Retention } from '~/api/pages';
 import { ConfirmAlertDialog } from '~/components/AlertDialog';
 import { PageRow } from '~/components/PageRow';
+import type { ListedPage } from '~/lib/listed-page';
 import { messages } from '~/lib/messages';
 import { shouldWarnImmediateExpiryOnTemporary } from '~/lib/retention-warning';
 

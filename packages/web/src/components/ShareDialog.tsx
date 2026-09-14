@@ -7,7 +7,7 @@ import {
   validateSharePassword,
   validateShareUsername,
   type PageShare,
-} from '@cli/page';
+} from '@okibasho/core';
 import { X } from 'lucide-react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useEffect, useState, type FormEvent } from 'react';

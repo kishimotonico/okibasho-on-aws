@@ -1,4 +1,4 @@
-import { DEFAULT_RETENTION_DAYS } from '@cli/page';
+import { DEFAULT_RETENTION_DAYS } from '@okibasho/core';
 
 /**
  * 無期限から 30 日（temporary）へ戻すときに即座に期限切れになるか。

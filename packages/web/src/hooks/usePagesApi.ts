@@ -1,21 +1,19 @@
-import { emailLocalPart, type PageMetadata, type PageShare } from '@cli/page';
+import {
+  buildViewUrl,
+  emailLocalPart,
+  type PageMetadata,
+  type PageShare,
+  type PageStore,
+  type Retention,
+} from '@okibasho/core';
 import { useMemo } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
-import {
-  buildViewUrl,
-  deletePage,
-  listedPageFromMetadata,
-  updatePageRetention,
-  updatePageShare,
-  uploadPage,
-  type ListedPage,
-  type Retention,
-  type UploadFileInput,
-} from '~/api/pages';
 import { getWebConfig } from '~/config/env';
+import type { UploadFileEntry } from '~/lib/collect-upload-files';
+import { listedPageFromMetadata, type ListedPage } from '~/lib/listed-page';
 import { messages } from '~/lib/messages';
-import { getPagesS3Client } from '~/lib/s3-client';
+import { getPageStore } from '~/lib/s3-client';
 import { toUserMessage } from '~/lib/to-user-message';
 
 /** message はそのまま画面に出せる日本語。生のエラーは入れない */
@@ -33,7 +31,7 @@ export function userMessage(error: unknown): string {
 
 export interface UploadInput {
   slug: string;
-  files: readonly UploadFileInput[];
+  files: readonly UploadFileEntry[];
   retention: Retention;
   /** 差し替えのとき、作成日時と保存期限を引き継ぐための既存メタデータ */
   existing?: PageMetadata | null;
@@ -56,8 +54,8 @@ export interface PagesApi {
 
 /**
  * ページに対する変更をまとめる。
- * 認証情報と接続先、S3 クライアントの生成、失敗の文言化をここで閉じるので、
- * コンポーネントは auth / config / S3Client を知らなくてよい。
+ * 認証情報と接続先、S3 の操作（PageStore）の生成、失敗の文言化、一覧の行への変換をここで閉じるので、
+ * コンポーネントは auth / config / S3 を知らなくてよい。
  */
 export function usePagesApi(): PagesApi {
   const { session } = useAuth();
@@ -66,11 +64,11 @@ export function usePagesApi(): PagesApi {
   return useMemo(() => {
     const urlOrigin = config.pagesBaseUrl.replace(/\/$/, '');
 
-    function client() {
+    function target() {
       if (!session) {
         throw new PagesApiError(messages.loginRequired);
       }
-      return { s3: getPagesS3Client(config, session.idToken), email: session.email };
+      return { store: getPageStore(config, session), email: session.email };
     }
 
     async function run<T>(fallback: string, action: () => Promise<T>): Promise<T> {
@@ -83,6 +81,19 @@ export function usePagesApi(): PagesApi {
       }
     }
 
+    /** 書き込み後の metadata を一覧の行にして返す */
+    function write(
+      fallback: string,
+      slug: string,
+      action: (store: PageStore) => Promise<PageMetadata>,
+    ): Promise<ListedPage> {
+      return run(fallback, async () => {
+        const { store, email } = target();
+        const metadata = await action(store);
+        return listedPageFromMetadata(email, slug, metadata, config.pagesBaseUrl);
+      });
+    }
+
     return {
       urlOrigin,
       userPath: session ? `/p/${emailLocalPart(session.email)}/` : '',
@@ -90,64 +101,29 @@ export function usePagesApi(): PagesApi {
       viewUrl: (slug) => (session ? buildViewUrl(config.pagesBaseUrl, session.email, slug) : ''),
 
       upload: (input) =>
-        run(messages.uploadFailed, async () => {
-          const { s3, email } = client();
-          const metadata = await uploadPage(
-            s3,
-            config.pagesBucket,
-            email,
+        write(messages.uploadFailed, input.slug, (store) =>
+          store.upload(
             input.slug,
-            input.files,
+            input.files.map(({ path, file }) => ({ path, body: file })),
             {
               retention: input.retention,
-              existingMetadata: input.existing ?? null,
+              existing: input.existing ?? null,
               share: input.share,
+              onProgress: input.onProgress,
             },
-            input.onProgress,
-          );
-          return listedPageFromMetadata(
-            email,
-            input.slug,
-            metadata,
-            buildViewUrl(config.pagesBaseUrl, email, input.slug),
-          );
-        }),
+          ),
+        ),
 
       remove: (slug) =>
         run(messages.removeFailed, async () => {
-          const { s3, email } = client();
-          await deletePage(s3, config.pagesBucket, email, slug);
+          await target().store.remove(slug);
         }),
 
       setRetention: (slug, retention) =>
-        run(messages.retentionChangeFailed, async () => {
-          const { s3, email } = client();
-          const metadata = await updatePageRetention(
-            s3,
-            config.pagesBucket,
-            email,
-            slug,
-            retention,
-          );
-          return listedPageFromMetadata(
-            email,
-            slug,
-            metadata,
-            buildViewUrl(config.pagesBaseUrl, email, slug),
-          );
-        }),
+        write(messages.retentionChangeFailed, slug, (store) => store.setRetention(slug, retention)),
 
       updateShare: (slug, share) =>
-        run(messages.shareUpdateFailed, async () => {
-          const { s3, email } = client();
-          const metadata = await updatePageShare(s3, config.pagesBucket, email, slug, share);
-          return listedPageFromMetadata(
-            email,
-            slug,
-            metadata,
-            buildViewUrl(config.pagesBaseUrl, email, slug),
-          );
-        }),
+        write(messages.shareUpdateFailed, slug, (store) => store.setShare(slug, share)),
     };
   }, [config, session]);
 }

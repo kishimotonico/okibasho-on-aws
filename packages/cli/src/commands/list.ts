@@ -1,21 +1,20 @@
 import type { S3Client } from '@aws-sdk/client-s3';
+import { createPageStore } from '@okibasho/core';
 import { ConfigError, resolveConfig, type ResolvedConfig } from '../config.js';
 import { emailFromIdToken } from '../id-token.js';
+import { createS3Client } from '../s3-client.js';
 import { ensureIdToken, TokenRefreshError } from '../token-refresh.js';
-import { createS3Client, listPages } from '../upload-client.js';
 
 export interface ListDeps {
   resolveConfig: typeof resolveConfig;
   ensureIdToken: typeof ensureIdToken;
   createS3Client: (config: ResolvedConfig, idToken: string) => S3Client;
-  listPages: typeof listPages;
 }
 
 export const defaultListDeps: ListDeps = {
   resolveConfig,
   ensureIdToken,
   createS3Client,
-  listPages,
 };
 
 export interface ListResult {
@@ -58,17 +57,22 @@ export async function runList(deps: ListDeps = defaultListDeps): Promise<ListRes
   }
 
   try {
-    const s3 = deps.createS3Client(config, idToken);
-    const pages = await deps.listPages(s3, config.bucket, email);
+    const store = createPageStore({
+      s3: deps.createS3Client(config, idToken),
+      bucket: config.bucket,
+      email,
+    });
+    const pages = await store.list();
+    pages.sort((a, b) => a.slug.localeCompare(b.slug));
 
     if (pages.length === 0) {
       console.log('ページはありません。');
       return { exitCode: 0 };
     }
 
-    for (const page of pages) {
-      const expires = page.expiresAt ?? 'permanent';
-      console.log(`${page.slug}\t${page.createdAt}\t${expires}`);
+    for (const { slug, metadata } of pages) {
+      const expires = metadata.expiresAt ?? 'permanent';
+      console.log(`${slug}\t${metadata.createdAt}\t${expires}`);
     }
 
     return { exitCode: 0 };

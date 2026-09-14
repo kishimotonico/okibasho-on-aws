@@ -4,9 +4,9 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ListedPage } from '~/api/pages';
 import { PagesList } from '~/components/PagesList';
 import { TooltipProvider } from '~/components/Tooltip';
+import type { ListedPage } from '~/lib/listed-page';
 
 function page(slug: string, overrides: Partial<ListedPage> = {}): ListedPage {
   return {

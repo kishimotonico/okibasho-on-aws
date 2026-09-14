@@ -1,4 +1,4 @@
-import { MAX_FILE_SIZE } from '@cli/page';
+import { MAX_FILE_SIZE } from '@okibasho/core';
 import { describe, expect, it } from 'vitest';
 
 import { validateUploadFiles } from '../src/lib/validate-upload';

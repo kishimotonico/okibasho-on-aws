@@ -1,11 +1,12 @@
+import type { Retention } from '@okibasho/core';
 import { EllipsisVertical, Globe, GlobeLock, SquareArrowOutUpRight } from 'lucide-react';
 import { useRef } from 'react';
 
-import type { ListedPage, Retention } from '~/api/pages';
 import { CopyButton } from '~/components/CopyButton';
 import { Menu, MenuItem } from '~/components/Menu';
 import { Tooltip } from '~/components/Tooltip';
 import { getExpirationStatus } from '~/lib/expiration-status';
+import type { ListedPage } from '~/lib/listed-page';
 import { messages } from '~/lib/messages';
 
 interface PageRowProps {

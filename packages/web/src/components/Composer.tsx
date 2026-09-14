@@ -6,10 +6,10 @@ import {
   validateSharePassword,
   validateShareUsername,
   type PageShare,
-} from '@cli/page';
+  type Retention,
+} from '@okibasho/core';
 import { useEffect, useRef, useState } from 'react';
 
-import type { ListedPage, Retention } from '~/api/pages';
 import { BoxBubble } from '~/components/BoxBubble';
 import { DragOverlay } from '~/components/DragOverlay';
 import { PickLinks } from '~/components/PickLinks';
@@ -22,6 +22,7 @@ import { VisibilityToggle, type PageVisibility } from '~/components/VisibilityTo
 import { usePagesApi } from '~/hooks/usePagesApi';
 import { useUploadFlow } from '~/hooks/useUploadFlow';
 import { useWindowFileDrag } from '~/hooks/useWindowFileDrag';
+import type { ListedPage } from '~/lib/listed-page';
 import { messages } from '~/lib/messages';
 
 /** 一覧の操作をフォームへ伝えるための合図。同じ slug が続けて来ても分かるよう nonce を持つ */

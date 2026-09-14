@@ -62,14 +62,14 @@ MVP でやらないこと（UI に匂わせない）: 管理者ロール・RBAC�
 
 制約と用語:
 
-- slug: `[a-z0-9][a-z0-9_-]{0,63}`。小文字英数字・ハイフン・アンダースコアのみ、最大 64 文字。ユーザー単位で一意。大文字は暗黙変換しない。web では初期表示から `generateRandomSlug`（`packages/cli/src/page/slug.ts` を web と CLI で共有）で小文字英数字 10 文字を入れる。空欄で進めようとすると新しい slug を入れ直してから続行する。CLI は従来どおり `--name` 省略時にパス名から slug を作る
+- slug: `[a-z0-9][a-z0-9_-]{0,63}`。小文字英数字・ハイフン・アンダースコアのみ、最大 64 文字。ユーザー単位で一意。大文字は暗黙変換しない。web では初期表示から `generateRandomSlug`（`packages/core/src/page/slug.ts` を web と CLI で共有）で小文字英数字 10 文字を入れる。空欄で進めようとすると新しい slug を入れ直してから続行する。CLI は従来どおり `--name` 省略時にパス名から slug を作る
 - サイズ上限（クライアント側の目安。IAM では強制できない）: 1 ファイル 50 MB、1 ページ合計 200 MB、ファイル数 200
 - ページ直下に `index.html` が必須。dotfile などの無効なパスはスキップされる。単一ファイル選択では HTML のみ
 - 保存期間: temporary（作成から 30 日固定。変更時刻ではなく `createdAt` 起点）と permanent（無期限）。無期限から 30 日へ戻すと、作成から 30 日以上経過している場合は即座に期限切れになる
 - ページごとの metadata（`meta/<email>/<slug>.json`）: `{ createdAt, expiresAt, share? }`。slug と owner はキー由来なので metadata には持たない。`expiresAt` が null なら無期限
 - 一覧は `meta/<email>/` 配下を S3 ListObjectsV2 で列挙し、キー名から得た slug ごとに metadata を並列取得する。ページ数が増えると一覧はその分遅くなる。管理 UI の表示順は作成日時（`createdAt`）の新しい順で、S3 の取得順そのものは変えない。再アップロードでは `createdAt` が変わらないので並びも変わらない
 - UI 言語は日本語のみ。i18n は前提にしない（ユーザー確認済み）
-- 技術: TanStack Start（React 19）の SPA モード + prerender。SSR もサーバー関数も使わない。成果物は静的ファイルのみで S3 + CloudFront から配信。AWS SDK for JavaScript v3 でブラウザから直接 S3 を操作。slug 規則・上限・S3 キー組み立ては `packages/cli/src/page` を `@cli/page` として web から参照する
+- 技術: TanStack Start（React 19）の SPA モード + prerender。SSR もサーバー関数も使わない。成果物は静的ファイルのみで S3 + CloudFront から配信。AWS SDK for JavaScript v3 でブラウザから直接 S3 を操作。slug 規則・上限・S3 キー組み立て・S3 に対するページ操作は、CLI と共有する `packages/core`（`@okibasho/core`）を web から参照する
 - ブラウザ操作には pages バケットの CORS が必要（Phase 4）
 
 ## Brand Commitments
@@ -81,7 +81,7 @@ MVP でやらないこと（UI に匂わせない）: 管理者ロール・RBAC�
 ## Evidence on Hand
 
 - 要件と設計のドキュメント: `docs/concept.md`（目的・MVP スコープ・完成イメージ）、`docs/architecture.md`（決定済み設計）、`docs/roadmap.md`（フェーズと受け入れ条件）、`docs/open-questions.md`（未確定論点）
-- 既存の管理 UI 実装: `packages/web/src/routes/`（index, callback。一覧の取得と route の state）、`packages/web/src/components/`（表示）、`packages/web/src/hooks/`（アップロードの状態機械・API 呼び出し・コピー状態などのロジック）、`packages/web/src/api/pages.ts`（S3 を叩く純粋関数）、`packages/web/src/lib/messages.ts`（画面文言の集約）、`packages/web/src/styles/app.css`。単一 CSS ファイルにクラスベースのスタイル。トークン・コンポーネントライブラリは未導入
+- 既存の管理 UI 実装: `packages/web/src/routes/`（index, callback。一覧の取得と route の state）、`packages/web/src/components/`（表示）、`packages/web/src/hooks/`（アップロードの状態機械・API 呼び出し・コピー状態などのロジック）、`packages/web/src/lib/listed-page.ts`（metadata を一覧の行にする変換。S3 の操作そのものは `packages/core` にある）、`packages/web/src/lib/messages.ts`（画面文言の集約）、`packages/web/src/styles/app.css`。単一 CSS ファイルにクラスベースのスタイル。トークン・コンポーネントライブラリは未導入
 - CLI の完成イメージ（コンソール出力例）は `docs/concept.md` にある
 - 存在しないもの: 実ユーザーの利用データ、テスティモニアル、スクリーンショット、ロゴ。これらを作らない・語らない
 

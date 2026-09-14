@@ -4,16 +4,16 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ListedPage } from '~/api/pages';
 import { Composer } from '~/components/Composer';
 import { TooltipProvider } from '~/components/Tooltip';
 import { PagesApiError } from '~/hooks/usePagesApi';
+import type { ListedPage } from '~/lib/listed-page';
 
 const generateRandomSlug = vi.fn();
 const upload = vi.fn();
 
-vi.mock('@cli/page', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@cli/page')>();
+vi.mock('@okibasho/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@okibasho/core')>();
   return {
     ...actual,
     generateRandomSlug: () => generateRandomSlug(),

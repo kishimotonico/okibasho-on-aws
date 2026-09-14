@@ -47,17 +47,8 @@ function uploadBoxIconHarness(): Plugin {
 export default defineConfig({
   server: {
     port: 3000,
-    fs: {
-      // ../cli の @cli/page を読むためワークスペースルートまで許可する。
-      // packages/cli だけを指すと、dev サーバーで web 自身のルートファイル
-      // (tsr-split 由来の動的 import) が allow list の外扱いになって動かない
-      allow: [path.resolve(rootDir, '..', '..')],
-    },
   },
   resolve: {
-    alias: {
-      '@cli/page': path.resolve(rootDir, '../cli/src/page/index.ts'),
-    },
     tsconfigPaths: true,
   },
   plugins: [

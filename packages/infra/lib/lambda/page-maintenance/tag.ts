@@ -1,8 +1,8 @@
 /**
- * 外部共有 URL の tag 計算。packages/cli/src/page/tag.ts と同じ仕様の複製。
+ * 外部共有 URL の tag 計算。packages/core/src/page/tag.ts と同じ仕様の複製。
  *
- * このLambda(page-maintenance)は @cli/page パッケージに依存しない構成にしているため、
- * ここに複製している(web は path alias で @cli/page を直接読めるが、こちらは
+ * このLambda(page-maintenance)は @okibasho/core パッケージに依存しない構成にしているため、
+ * ここに複製している(web と CLI は @okibasho/core を直接読めるが、こちらは
  * NodejsFunction がこのディレクトリ単体を esbuild で束ねる構成のため、依存を増やさない)。
  * 仕様を変えるときは両方直し、同じ固定テストベクターで一致することを確認すること。
  *

@@ -1,7 +1,6 @@
-import { generateRandomSlug, isValidSlug, type PageShare } from '@cli/page';
+import { generateRandomSlug, isValidSlug, type PageShare, type Retention } from '@okibasho/core';
 import { useReducer } from 'react';
 
-import { pageMetadataFromListed, type ListedPage, type Retention } from '~/api/pages';
 import { usePagesApi, userMessage } from '~/hooks/usePagesApi';
 import {
   collectUploadFilesFromFileList,
@@ -9,6 +8,7 @@ import {
   type CollectUploadFilesResult,
   type UploadFileEntry,
 } from '~/lib/collect-upload-files';
+import { pageMetadataFromListed, type ListedPage } from '~/lib/listed-page';
 import { messages } from '~/lib/messages';
 import { collectFilesFromDataTransfer } from '~/lib/read-data-transfer';
 import { validateUploadFiles } from '~/lib/validate-upload';

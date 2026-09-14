@@ -103,7 +103,7 @@
 
 - [ ] CloudFront KeyValueStore + PageMaintenance Lambda（S3 イベントでページ単位の即時投影 + 1 時間ごとの定期処理で全件 reconcile）
 - [ ] pages Distribution に `/s/*` ビヘイビア（share-router.js）と `/errors/*` ビヘイビア（カスタムエラーレスポンス、BucketDeployment）を追加
-- [ ] `packages/cli/src/page/share.ts`（share の組み立て・ハッシュ・id 生成・CIDR 検証）
+- [ ] `packages/core/src/page/share.ts`（share の組み立て・ハッシュ・id 生成・CIDR 検証）
 - [ ] 管理 UI の ShareDialog（共有 URL の発行・パスワード・IP 制限・再発行・停止）
 
 受け入れ: 管理 UI で外部共有 URL を発行し、ログインなしで開ける。共有を停止すると URL が使えなくなる。

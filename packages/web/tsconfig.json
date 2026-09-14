@@ -10,8 +10,7 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./src/*"],
-      "@cli/page": ["../cli/src/page/index.ts"]
+      "~/*": ["./src/*"]
     }
   },
   "include": ["src", "test", "dev", "vitest.config.ts", "vite.config.ts", "src/vite-env.d.ts"]

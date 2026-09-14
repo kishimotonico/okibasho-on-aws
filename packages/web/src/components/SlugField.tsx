@@ -1,4 +1,4 @@
-import { isValidSlug } from '@cli/page';
+import { isValidSlug } from '@okibasho/core';
 import {
   useRef,
   useState,

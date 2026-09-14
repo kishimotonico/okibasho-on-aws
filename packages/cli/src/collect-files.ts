@@ -1,6 +1,6 @@
 import { readdir, stat } from 'node:fs/promises';
 import { extname, relative, resolve, sep } from 'node:path';
-import { validateUploadPath } from './page/upload-path.js';
+import { validateUploadPath } from '@okibasho/core';
 
 export interface CollectedFile {
   /** ページ内の相対パス（常に `/` 区切り） */

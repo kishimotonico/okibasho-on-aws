@@ -242,7 +242,7 @@ components:
 - **未発行:** 保護方法のチェックボックス「パスワード（Basic認証）」「IPアドレス制限」。どちらも外すと「URLを知っている人なら誰でも見られます」を field-hint で明示。主ボタンは「共有URLを発行」
 - **発行済み:** タイトル直下に `UrlField`（URL とコピーを一体にした表示部品。詳細は後述）。保存期間があればその下に「保存期限（日付）を過ぎると共有も終わります」を field-hint で出す。「現在の保護方法」の要約はチェックボックスと重複するため出さない。同じ設定フォームを下に表示する
 - **発行済み Basic の読み取り表示:** Basic が設定済みのまま「変更」を押していない間は、ユーザー名と伏せ字パスワード（`••••••••`。実際の文字数を反映しない固定表示）を横に並べて読み取り表示し、その横に控えめな text-link「変更」を置く。自然文の説明は付けない。「変更」を押すと編集用の入力欄（後述のパスワード自動生成と同じ見た目）に切り替わり、ユーザー名は現在値、パスワードは新しく生成した値から編集を始める。入力欄の下に text-link「取り消す」を出し、押すと編集を破棄して読み取り表示に戻る（保存されるのは「変更」を押して編集した場合だけ）
-- **パスワードの自動生成:** 新しく Basic をオンにしたとき（未共有で発行する、または共有中で Basic が無かったところにオンにする）、または発行済みの Basic を「変更」したときは、`generateSharePassword`（`@cli/page`）で生成した約80bitのパスワードを欄に最初から入れ、伏せ字にせず平文（等幅フォント）で表示する。欄の右に「再生成」（`RefreshCw` の icon button + Tooltip）を置く（コピーは完了画面で行えるため、編集中の欄にはコピーボタンを置かない）。ユーザーは自由に書き換えられる（書き換えても既存の検証をかける）。このユーザー名・パスワード入力欄は `components/ShareBasicFields.tsx` に切り出し、Composer の公開範囲パネルとも共有する（`idPrefix` で input の id 衝突を避ける）
+- **パスワードの自動生成:** 新しく Basic をオンにしたとき（未共有で発行する、または共有中で Basic が無かったところにオンにする）、または発行済みの Basic を「変更」したときは、`generateSharePassword`（`@okibasho/core`）で生成した約80bitのパスワードを欄に最初から入れ、伏せ字にせず平文（等幅フォント）で表示する。欄の右に「再生成」（`RefreshCw` の icon button + Tooltip）を置く（コピーは完了画面で行えるため、編集中の欄にはコピーボタンを置かない）。ユーザーは自由に書き換えられる（書き換えても既存の検証をかける）。このユーザー名・パスワード入力欄は `components/ShareBasicFields.tsx` に切り出し、Composer の公開範囲パネルとも共有する（`idPrefix` で input の id 衝突を避ける）
 - **完了画面:** 未発行から発行した場合、または発行済みの設定を保存して今回パスワードを新しく設定した場合は、発行・保存の成功後にダイアログの中身を完了画面へ丸ごと差し替える。× での閉じ方はそのまま。タイトルは未発行からの発行なら「共有URLを発行しました」、発行済みの保存なら「設定を保存しました」。パスワードを変えなかった保存（保護なしの変更、CIDR だけの変更）は完了画面へ切り替えず、これまでどおりフォームにとどまり field-hint で反映遅延を案内する
   - **中身:** `UrlField`、保存期限があれば field-hint、パスワードを新しく設定した場合だけユーザー名・パスワード（パスワードは等幅・読み取り専用表示、個別コピーの icon button 付き）と「パスワードはこの画面を閉じると再表示できません」、常に「反映まで少し時間がかかることがあります」
   - **Footer:** パスワードを新しく設定した場合だけ、右に「まとめてコピー」（`CopyButton` labeled variant。`URL: .. / ユーザー名: .. / パスワード: ..` の3行テキスト）を出す。IP制限だけ・保護なしで発行した場合はフッター自体を出さない（URL は `UrlField` でコピーできる）。どちらの場合も「完了」のような閉じるボタンは置かず、閉じるのは常にヘッダー右上の × だけにする
@@ -299,7 +299,7 @@ components:
 
 ## 依存と構成
 
-UI 部品は radix-ui（DropdownMenu / Tooltip / AlertDialog）を DESIGN のトークンで包んで使う。アイコンは lucide-react。slug 生成と検証、メタデータ型は `@cli/page` を web から参照する。箱アイコン（`UploadBoxIcon.tsx` / `upload-box-icon.ts`）はチューナーの幾何をそのまま移植したものなので、ライブラリで置き換えない。
+UI 部品は radix-ui（DropdownMenu / Tooltip / AlertDialog）を DESIGN のトークンで包んで使う。アイコンは lucide-react。slug 生成と検証、メタデータ型、S3 に対するページ操作（PageStore）は `@okibasho/core` を web から参照する。箱アイコン（`UploadBoxIcon.tsx` / `upload-box-icon.ts`）はチューナーの幾何をそのまま移植したものなので、ライブラリで置き換えない。
 
 ### ファイル構成
 
@@ -332,8 +332,9 @@ components/UtilityMenu.tsx  右上のログアウトメニュー
 hooks/useUploadFlow.ts     アップロードの状態機械（useReducer）
 hooks/useWindowFileDrag.ts ウィンドウ全体のドラッグ監視。isDragging だけ返す
 hooks/useCopyToClipboard.ts クリップボードへのコピーと一時表示状態（2秒で idle に戻る）
-hooks/usePagesApi.ts       認証・接続先・S3クライアント生成・エラー文言化を閉じた API
-api/pages.ts               S3 を叩く純粋な非同期関数（upload / remove / setRetention など）
+hooks/usePagesApi.ts       認証・接続先から PageStore（@okibasho/core）を作り、結果を一覧の行に、失敗を文言にする API
+lib/listed-page.ts         metadata を一覧の行（ListedPage。公開URL・保存期間・共有 URL の tag 付き）にする変換と一覧取得
+lib/s3-client.ts           idToken ごとの S3Client のキャッシュと PageStore の生成
 lib/messages.ts            画面に出す日本語の集約
 lib/to-user-message.ts     エラーを画面向けの日本語にする
 ```

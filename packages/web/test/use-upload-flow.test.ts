@@ -3,8 +3,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ListedPage } from '~/api/pages';
 import { useUploadFlow, type UploadFlowOptions } from '~/hooks/useUploadFlow';
+import type { ListedPage } from '~/lib/listed-page';
 
 const upload = vi.fn();
 

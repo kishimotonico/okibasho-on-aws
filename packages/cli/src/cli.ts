@@ -1,12 +1,12 @@
 import { parseArgs } from 'node:util';
 import { createRequire } from 'node:module';
+import { isValidSlug } from '@okibasho/core';
 import { runList } from './commands/list.js';
 import { runLogin } from './commands/login.js';
 import { runLogout } from './commands/logout.js';
 import { runRm } from './commands/rm.js';
 import { runUpload } from './commands/upload.js';
 import { ConfigError } from './config.js';
-import { isValidSlug } from './page/slug.js';
 import { PortsInUseError } from './port.js';
 
 const require = createRequire(import.meta.url);

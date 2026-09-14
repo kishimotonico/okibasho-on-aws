@@ -1,17 +1,22 @@
-import { isValidSlug, type PageShare } from '@cli/page';
+import {
+  isValidSlug,
+  retentionChangeExpiresAt,
+  type PageShare,
+  type Retention,
+} from '@okibasho/core';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
 
 import { loadAuthSession } from '~/auth/user-manager';
-import { computeExpiresAt, listPages, type ListedPage, type Retention } from '~/api/pages';
 import { Composer, type ComposerSignal } from '~/components/Composer';
 import { PagesList } from '~/components/PagesList';
 import { ShareDialog } from '~/components/ShareDialog';
 import { getWebConfig } from '~/config/env';
 import { usePagesApi, userMessage } from '~/hooks/usePagesApi';
+import { listPages, type ListedPage } from '~/lib/listed-page';
 import { messages } from '~/lib/messages';
 import { PAGE_HIGHLIGHT_MS, sortPagesByCreatedAt } from '~/lib/page-list-highlight';
-import { getPagesS3Client } from '~/lib/s3-client';
+import { getPageStore } from '~/lib/s3-client';
 
 export const Route = createFileRoute('/')({
   validateSearch: (search: Record<string, unknown>): { slug?: string } => ({
@@ -41,8 +46,7 @@ async function loadPages(): Promise<ListedPage[]> {
   }
 
   const config = getWebConfig();
-  const client = getPagesS3Client(config, session.idToken);
-  const pages = await listPages(client, config.pagesBucket, session.email, config.pagesBaseUrl);
+  const pages = await listPages(getPageStore(config, session), session.email, config.pagesBaseUrl);
   return sortPagesByCreatedAt(pages);
 }
 
@@ -94,7 +98,7 @@ function applyPagesAction(pages: readonly ListedPage[], action: PagesAction): Li
           ? {
               ...page,
               retention: action.retention,
-              expiresAt: computeExpiresAt(action.retention, page.createdAt),
+              expiresAt: retentionChangeExpiresAt(action.retention, page.createdAt),
             }
           : page,
       );

@@ -344,7 +344,7 @@ Distribution 単位の設定は `/s/*` にも及ぶ副作用がある。
 
 - tag は `base64url(SHA-256(UTF-8(prefix)))` の先頭 11 文字（66bit）。`prefix` はページ成果物の prefix（`pages/<email>/<slug>/`、末尾 `/` あり）そのもので、tag を計算するときだけの小文字化・正規化はしない。ページの prefix から一意に決まるため、KVS のキーとして使える
 - share-id はクライアント（web / CLI）が CSPRNG で生成する 128bit の値を base64url（パディングなし）にした 22 文字（`/^[A-Za-z0-9_-]{22}$/`）。tag だけでは推測できないため、share-id 自体が推測困難な credential であり、Basic 認証や IP 制限はその上に足す二要素目という位置付けである。試行回数制限は無い
-- 固定テストベクター（`packages/cli/src/page/tag.ts`・web・infra の同名テストで一致を確認する）:
+- 固定テストベクター（`packages/core/src/page/tag.ts`・infra の同名テストで一致を確認する）:
 
   | prefix | tag |
   | --- | --- |
@@ -564,7 +564,7 @@ CloudFront の Geo restriction を日本に絞る。無料である。WAF は月
 - ディレクトリアップロードでは path traversal を防ぐ。`../`、絶対パス、ドライブレターを拒否し、S3 key は必ず `pages/<email>/<slug>/` 配下に限定する
 - symlink は無視する
 - slug は `[a-z0-9][a-z0-9_-]{0,63}`。ページ直下に `index.html` が無いアップロードは拒否する
-- Web での slug 指定は任意。省略時は乱数（小文字英数字 10 文字）を自動生成する。生成関数 `generateRandomSlug`（`packages/cli/src/page/slug.ts`）を web と CLI で共有する。CLI は従来どおり `--name` 省略時にパス名から slug を作り、この挙動は変えない
+- Web での slug 指定は任意。省略時は乱数（小文字英数字 10 文字）を自動生成する。生成関数 `generateRandomSlug`（`packages/core/src/page/slug.ts`）を web と CLI で共有する。CLI は従来どおり `--name` 省略時にパス名から slug を作り、この挙動は変えない
 
 サイズ・ファイル数は IAM で強制できない。`PutObject` には `s3:content-length-range` に相当する条件キーがなく、それは presigned POST policy 限定のためである。クライアント側で次の目安を置き、超えたら送る前に弾く。サーバー側の強制は持たない。逸脱は請求アラートで見つける。
 
@@ -586,6 +586,8 @@ share-id・tag は credential として扱い、ログに全体を出さない�
 
 テストランナーは Vitest に統一する。設定はパッケージごとの `vitest.config.ts` に置き、ルートの `pnpm test` が `pnpm -r test` で各パッケージへ委譲する。
 
+`packages/core` の S3 操作は、メモリ上の fake S3 に対してアップロード・保存期間・共有設定・一覧・削除の結果を確認する。CLI のコマンドのテストも同じ fake S3 を使う。
+
 CloudFront Function は `node:vm` で handler を直接実行する。rewrite、`@` を含む user の 404、末尾スラッシュの 301、index.html 補完を確認する。share-router.js は KVS の get をモックし、id 形式、IP 制限、Basic 認証、rewrite の各分岐を確認する。
 
 PageMaintenance（`packages/infra/lib/lambda/page-maintenance/`）は S3 / KVS の SDK 呼び出しをモックせず、`validate.ts`（検証・期限切れ・KVS 値の直列化・孤児回収の猶予判定）と `plan.ts`（あるべき状態と実際の KVS の差分計算）、`dispatch.ts`（S3イベントかスケジュールかの判定）を純粋関数として単体テストする。
@@ -603,9 +605,19 @@ packages/
   infra/   AWS CDK（単一スタック、機能境界は Construct）
   web/     管理UI（静的 SPA。S3 + CloudFront で配信）
   cli/     okiba（Node.js のみ。AWS CLI に依存しない）
+  core/    @okibasho/core。web と CLI が共有するページの規則と S3 操作
 ```
 
-`packages/api` と `packages/shared` は置かない。API が存在しないため、共有すべき API 型もない。slug 規則、S3 キー組み立て、拡張子→ Content-Type、path traversal 検査は `packages/cli` 側に置き、`web` から相対 import する。必要になった時点で小さな共有モジュールを切り直す。
+`packages/api` は置かない。API が存在しないため、共有すべき API 型もない。
+
+web と CLI はどちらも S3 を直接操作するので、ページに対する操作そのものを `packages/core` で共有する。中は 2 層に分ける。
+
+- `src/page/`: 純粋なドメインロジック。slug 規則、S3 キーと公開 URL の組み立て、拡張子 → Content-Type、path traversal 検査、上限、metadata の型と検証、保存期間と期限の計算、「既存 metadata + 入力 → 新しい metadata」の組み立て、外部共有の検証と tag
+- `src/page-store.ts`: `createPageStore({ s3, bucket, email })` が返す、1 ユーザーのページに対する S3 操作（一覧、metadata の取得、アップロード（並列 Put・差分削除・metadata の書き込み）、保存期間の変更、共有設定の変更、削除）。S3Client は呼び出し側が渡す。ファイル本体は web の File / Blob と CLI の Buffer のどちらも受ける
+
+web と CLI には、それぞれの利用者に向けたアダプタだけが残る。web は `hooks/usePagesApi.ts`（認証情報と接続先から PageStore を作る、失敗を画面向けの文言にする）と `lib/listed-page.ts`（metadata を公開 URL・tag 付きの一覧の行にする）、CLI は `commands/*`（ローカルファイルの収集、`--permanent` から保存期間への変換、端末への表示）を持つ。
+
+`@okibasho/core` はビルドせず、`package.json` の `exports` で TypeScript のソースをそのまま公開する。web は Vite、CLI は esbuild がワークスペースのリンク越しにソースを束ねる。PageMaintenance Lambda は依存を増やさないため、tag 計算だけを複製している。
 
 ## やらないこと
 

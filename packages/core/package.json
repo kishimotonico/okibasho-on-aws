@@ -1,29 +1,23 @@
 {
-  "name": "@okibasho/cli",
+  "name": "@okibasho/core",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
   "type": "module",
-  "bin": {
-    "okiba": "./dist/okiba.js"
+  "exports": {
+    ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "dev": "tsx src/index.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.888.0",
-    "@aws-sdk/credential-providers": "^3.888.0",
-    "@okibasho/core": "workspace:*",
-    "openid-client": "^6.8.1"
+    "mime": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "esbuild": "^0.28.2",
-    "tsx": "^4.23.12",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   },

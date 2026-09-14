@@ -1,6 +1,6 @@
 import { basename, extname, resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
-import { isValidSlug } from './page/slug.js';
+import { isValidSlug } from '@okibasho/core';
 
 export class InvalidSlugError extends Error {
   constructor(message: string) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeShareTag } from '../lib/lambda/page-maintenance/tag.js';
 
 /**
- * 固定テストベクター。cli(packages/cli/test/tag.test.ts) / web と同じ値であることを確認する。
+ * 固定テストベクター。core(packages/core/test/tag.test.ts) と同じ値であることを確認する。
  * tag = base64url(SHA-256(UTF-8("pages/<email>/<slug>/")))の先頭11文字
  */
 const VECTORS: Array<{ prefix: string; tag: string }> = [

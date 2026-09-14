@@ -2,14 +2,12 @@ import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { isPageMetadata, metadataObjectKey, pageObjectKey } from '@okibasho/core';
 import { ConfigError } from '../src/config.js';
 import { runUpload } from '../src/commands/upload.js';
 import { collectFiles } from '../src/collect-files.js';
-import { metadataObjectKey, pageObjectKey } from '../src/page/s3-keys.js';
-import { isPageMetadata } from '../src/page/metadata.js';
 import { resolveSlug } from '../src/resolve-slug.js';
 import { TokenRefreshError } from '../src/token-refresh.js';
-import { uploadPage } from '../src/upload-client.js';
 import { FakeS3Store, makeIdToken, TEST_CONFIG, TEST_EMAIL } from './fake-s3.js';
 
 async function createHtmlDir(name = 'my-page'): Promise<string> {
@@ -28,7 +26,6 @@ function defaultUploadDeps(store: FakeS3Store) {
     readFile,
     resolveSlug,
     createS3Client: () => store.asClient(),
-    uploadPage,
   };
 }
 

@@ -1,4 +1,4 @@
-import { validateUploadPath } from '@cli/page';
+import { validateUploadPath } from '@okibasho/core';
 
 export interface UploadFileEntry {
   path: string;

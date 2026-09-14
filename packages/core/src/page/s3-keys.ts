@@ -42,3 +42,9 @@ export function emailLocalPart(email: string): string {
   const at = email.indexOf('@');
   return at === -1 ? email : email.slice(0, at);
 }
+
+/** 内部向け公開 URL。pagesBaseUrl の末尾 `/` の有無は問わない */
+export function buildViewUrl(pagesBaseUrl: string, email: string, slug: string): string {
+  const base = pagesBaseUrl.replace(/\/$/, '');
+  return `${base}${pageViewPath(emailLocalPart(email), slug)}`;
+}
