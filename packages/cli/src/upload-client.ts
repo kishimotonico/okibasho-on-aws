@@ -133,11 +133,13 @@ export async function uploadPage(
 
   let createdAt = new Date().toISOString();
   let existingPermanent = false;
+  let existingMetadata: PageMetadata | null = null;
   const existingMetadataBody = await readObjectBody(s3, bucket, metadataKey);
   if (existingMetadataBody) {
     try {
       const parsed: unknown = JSON.parse(existingMetadataBody.toString('utf8'));
       if (isPageMetadata(parsed)) {
+        existingMetadata = parsed;
         createdAt = parsed.createdAt;
         existingPermanent = parsed.expiresAt === null;
       }
@@ -162,6 +164,7 @@ export async function uploadPage(
   await deleteKeys(s3, bucket, staleKeys);
 
   const metadata: PageMetadata = {
+    ...existingMetadata,
     slug: input.slug,
     owner: input.email,
     createdAt,

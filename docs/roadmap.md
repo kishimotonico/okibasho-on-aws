@@ -2,7 +2,7 @@
 
 実装の進め方。設計の正本は [architecture.md](architecture.md)、要件は [concept.md](concept.md)。変更の経緯は [decision-adpot-iam-direct.md](decision-adpot-iam-direct.md)。
 
-方針は「縦に薄く」。統合リスクの高いところを最小構成で早く一周させる。API Gateway・presigned PUT・KVS は使わない。最初の一周は「IAM で自分の prefix だけに書ける → CloudFront で見える」である。
+方針は「縦に薄く」。統合リスクの高いところを最小構成で早く一周させる。API Gateway・presigned PUT は使わない。最初の一周は「IAM で自分の prefix だけに書ける → CloudFront で見える」である。CloudFront KeyValueStore は当初は使わない方針だったが、社外共有（Phase 6）で採用した。
 
 チェックボックスは「実装が終わった」印である。受け入れ条件はデプロイして初めて確認できるものが多いため、AWS アカウントが決まるまでは各フェーズに検証状況を注記し、未検証のまま先へ進む。
 
@@ -28,18 +28,18 @@
 - [ ] `packages/api` と `packages/shared` を削除し、workspace / tsconfig の参照を整理する
 - [ ] pages バケット（private / Public Access Block / CORS）
 - [ ] pages Distribution + OAC + Response Headers Policy + Geo restriction
-- [ ] CloudFront Function（`/<user>/` の展開 + index.html 補完、runtime `cloudfront-js-2.0`）
+- [ ] CloudFront Function（`/p/<user>/` の展開 + index.html 補完、runtime `cloudfront-js-2.0`）
 - [ ] CDK snapshot テスト（env / domains 未設定でも synth が通ること）
-- [ ] 存在しないページの 404 で S3 のエラー XML を返さない（本文の `<Key>` に `pages/<email>/...` がそのまま出て、メールアドレスとキー構成が見える。デプロイ後の確認で発覚）
+- [ ] 存在しないページの 404 で S3 のエラー XML を返さない（本文の `<Key>` に `pages/<email>/...` がそのまま出て、メールアドレスとキー構成が見える。デプロイ後の確認で発覚）。社外共有（Phase 6）で追加したカスタムエラーレスポンス（404 → `errors/404.html`）で対応した。デプロイ後の確認は未了
 
-受け入れ: 手で置いた `pages/test@example.jp/demo/index.html` が `/test/demo/` で表示される。
+受け入れ: 手で置いた `pages/test@example.jp/demo/index.html` が `/p/test/demo/` で表示される。
 
 ここで確認したい AWS 側の挙動:
 
 - OAC で S3 から実際にオブジェクトが取れるか
 - 存在しない key が 403 ではなく 404 で返るか
 - CloudFront Function が runtime 2.0 で構文エラーなく動くか
-- `/test/demo/` が `pages/test@example.jp/demo/index.html` に展開されるか
+- `/p/test/demo/` が `pages/test@example.jp/demo/index.html` に展開されるか
 - `@` を含む user が 404 になるか
 
 ## Phase 2: 認証と最初の E2E
@@ -98,6 +98,29 @@
 - [ ] 入力検証の詰め（slug 規則の確定を含む）
 
 受け入れ: 期限切れページが最大 1 時間以内に消え、Workspace ドメイン外のアカウントはサインアップできない。
+
+## Phase 6: 社外共有
+
+- [ ] CloudFront KeyValueStore + share projector Lambda（5 分ごとの全件 reconcile）
+- [ ] pages Distribution に `/s/*` ビヘイビア（share-router.js）と `/errors/*` ビヘイビア（カスタムエラーレスポンス、BucketDeployment）を追加
+- [ ] `packages/cli/src/page/share.ts`（share の組み立て・ハッシュ・id 生成・CIDR 検証）
+- [ ] 管理 UI の ShareDialog（共有 URL の発行・パスワード・IP 制限・再発行・停止）
+
+受け入れ: 管理 UI で社外共有 URL を発行し、社内ログインなしで開ける。共有を停止すると URL が使えなくなる。
+
+デプロイ後に確認したい点:
+
+- 存在しないパスで `errors/404.html` が返り、S3 のキーが見えないこと
+- `/s/<id>/%2Emetadata.json` と `/p/<user>/<slug>/%2Emetadata.json` が読めないこと
+- viewer-request の CloudFront Function が `Authorization` ヘッダを読めること（cache policy に含めていなくても）
+- `Authorization` ヘッダを削除して転送しても OAC の署名が壊れないこと
+- 401 でブラウザの認証ダイアログが出ること
+- `Buffer` / `crypto.createHash` / `Number.isInteger` が CloudFront Functions runtime 2.0 で動き、コードサイズとコンピュート使用率が上限内に収まること
+- `.metadata.json` の作成・削除・書き換えが 5 分以内に KVS へ反映されること
+- 墓標化した旧 id が 404 のままであること
+- share projector の Errors アラームと `ALERT_EMAIL` の通知が届くこと
+- SigV4A 署名（`@aws-sdk/signature-v4a` の副作用 import）が Lambda 実行環境で通るか
+- `NodejsFunction` の bundling（pnpm workspace 特有の PATH 調整を含む）が CI で動くか
 
 ## ビルド成果物のデプロイ
 

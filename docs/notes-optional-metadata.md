@@ -10,7 +10,7 @@ GitHub Actions からのアップロードは MVP 外で、第一級機能にも
 
 ## 現行の事実
 
-配信に API は無い。公開 URL `https://pages…/<user>/<slug>/` は CloudFront Function が `pages/<email>/<slug>/…` へ書き換え、OAC 経由で S3 を読む。Phase 1 の受け入れも「手で置いた HTML が見える」。
+配信に API は無い。公開 URL `https://pages…/p/<user>/<slug>/` は CloudFront Function が `pages/<email>/<slug>/…` へ書き換え、OAC 経由で S3 を読む（現在は `/p/` の下。本書の議論当時は `/<user>/<slug>/` だった）。Phase 1 の受け入れも「手で置いた HTML が見える」。
 
 通常ユーザーが書ける範囲は Cognito Identity Pool の authenticated role だけ。Resource は `pages/${aws:PrincipalTag/email}/*`。GHA は Cognito ユーザーではないので、今のままではそのパスに届かない。置けるのは広い IAM を使うか、専用ロールを足した場合だけ。現行 CLI は PKCE + ブラウザ前提で、GHA には向かない。refresh token は 30 日で切れる。
 
@@ -71,9 +71,9 @@ My Pages と `okiba list` は CommonPrefixes で slug を拾ったあと、各 `
 
 **ページ**は `pages/<email>/<slug>/` という prefix。オブジェクトが 1 つでもあれば prefix は存在する。存在の正本は `.metadata.json` ではない。
 
-**正規の共有 URL** は常に `/<user>/<slug>/`。これが中身を返す条件は、prefix 直下に `index.html` があること。CloudFront Function は末尾 `/` を `index.html` に足す以外、エントリを推測しない。
+**正規の共有 URL** は常に `/p/<user>/<slug>/`（現在の URL 形式。以下も同様）。これが中身を返す条件は、prefix 直下に `index.html` があること。CloudFront Function は末尾 `/` を `index.html` に足す以外、エントリを推測しない。
 
-**名前付き HTML だけ**（例: `…/q3-report/report.html`）は欠落でも orphan でもない。同じページのファイルで、`/<user>/<slug>/report.html` なら届く。正規 URL `…/q3-report/` は 404。CLI / Web は正規 URL を出すクライアントなので、今どおり `index.html` を要求する（単一ファイルはリネーム）。直置きする人は、正規 URL が欲しければ自分で `index.html` にする。名前のまま置くならフルパスを共有する。
+**名前付き HTML だけ**（例: `…/q3-report/report.html`）は欠落でも orphan でもない。同じページのファイルで、`/p/<user>/<slug>/report.html` なら届く。正規 URL `…/q3-report/` は 404。CLI / Web は正規 URL を出すクライアントなので、今どおり `index.html` を要求する（単一ファイルはリネーム）。直置きする人は、正規 URL が欲しければ自分で `index.html` にする。名前のまま置くならフルパスを共有する。
 
 **`.metadata.json`** は寿命の任意の注釈。無ければ無期限。`expiresAt` が過去なら cleanup が prefix ごと消す。CLI / Web は今どおり最後に書く（デフォルト 30 日、`--permanent` / 無期限トグルで `null`）。直置きは JSON なしで残る。あとから期限を付けたければ JSON を足す。Web から 30 日に変える操作は、そのとき metadata を作れば足りる。
 
@@ -85,7 +85,7 @@ orphan ではないもの:
 - 名前付き HTML だけの直置き
 - metadata を意図して置かない直置き
 
-**My Pages / `okiba list`** は CommonPrefixes をそのまま出す。metadata も `index.html` も無くてよい。正規 URL は常に `/<user>/<slug>/`（`index.html` が無ければ開くと 404）。作成日は metadata の `createdAt`、無ければ空。オブジェクトの LastModified をページの誕生日にしない（再アップロードで動き、ファイルごとに違う）。
+**My Pages / `okiba list`** は CommonPrefixes をそのまま出す。metadata も `index.html` も無くてよい。正規 URL は常に `/p/<user>/<slug>/`（`index.html` が無ければ開くと 404）。作成日は metadata の `createdAt`、無ければ空。オブジェクトの LastModified をページの誕生日にしない（再アップロードで動き、ファイルごとに違う）。
 
 **不完全アップロード**は自動では正しく判定できないので推測しない。metadata を最後に書く今の順を変えない。中断すると無期限の欠けた prefix が残りうる。それを許容する。
 

@@ -12,6 +12,8 @@ export interface Config {
   emailDomain: string;
   /** 独自ドメイン設定。未設定ならデフォルトドメインで構築する */
   domains?: DomainsConfig;
+  /** share projectorのErrorsアラームの通知先。未設定ならアラームは作るが通知はしない */
+  alertEmail?: string;
 }
 
 export interface DomainsConfig {
@@ -29,6 +31,7 @@ export function loadConfig(): Config {
     ROOT_DOMAIN: root,
     APP_DOMAIN: app,
     PAGES_DOMAIN: pages,
+    ALERT_EMAIL: alertEmail,
   } = process.env;
 
   if (!emailDomain) {
@@ -40,5 +43,6 @@ export function loadConfig(): Config {
   return {
     emailDomain,
     domains: root && app && pages ? { root, app, pages } : undefined,
+    alertEmail: alertEmail || undefined,
   };
 }

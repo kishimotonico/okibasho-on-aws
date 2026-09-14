@@ -22,7 +22,7 @@ function handler(event) {
     }
   }
 
-  var match = uri.match(/^\/([^/]+)\/([^/]+)(\/.*)?$/);
+  var match = uri.match(/^\/p\/([^/]+)\/([^/]+)(\/.*)?$/);
   if (!match) {
     return notFound();
   }
@@ -36,7 +36,7 @@ function handler(event) {
   var rest = match[3];
 
   if (rest === undefined) {
-    var location = '/' + user + '/' + slug + '/';
+    var location = '/p/' + user + '/' + slug + '/';
     var qs = buildQueryString(request.querystring);
     if (qs.length > 0) {
       location = location + qs;

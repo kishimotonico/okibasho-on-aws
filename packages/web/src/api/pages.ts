@@ -14,7 +14,9 @@ import {
   ownerPrefix,
   pageObjectKey,
   pagePrefix,
+  pageViewPath,
   type PageMetadata,
+  type PageShare,
 } from '@cli/page';
 
 export type Retention = 'temporary' | 'permanent';
@@ -26,6 +28,7 @@ export interface ListedPage {
   expiresAt: string | null;
   retention: Retention;
   viewUrl: string;
+  share?: PageShare;
 }
 
 export interface UploadFileInput {
@@ -158,14 +161,16 @@ export async function listPages(
       if (!metadata) {
         return null;
       }
-      return {
+      const listed: ListedPage = {
         slug: metadata.slug,
         owner: metadata.owner,
         createdAt: metadata.createdAt,
         expiresAt: metadata.expiresAt,
         retention: retentionFromExpiresAt(metadata.expiresAt),
         viewUrl: buildViewUrl(pagesBaseUrl, email, slug),
+        ...(metadata.share ? { share: metadata.share } : {}),
       };
+      return listed;
     }),
   );
 
@@ -333,6 +338,38 @@ export async function updatePageRetention(
   return metadata;
 }
 
+/** 社外共有設定を更新する。既存 metadata を読み、share だけ差し替えて書き戻す。null で共有解除 */
+export async function updatePageShare(
+  client: S3Client,
+  bucket: string,
+  email: string,
+  slug: string,
+  share: PageShare | null,
+): Promise<PageMetadata> {
+  const existing = await getPageMetadata(client, bucket, email, slug);
+  if (!existing) {
+    throw new Error(`ページが見つかりません: ${slug}`);
+  }
+
+  const metadata: PageMetadata = { ...existing };
+  if (share) {
+    metadata.share = share;
+  } else {
+    delete metadata.share;
+  }
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: metadataObjectKey(email, slug),
+      Body: JSON.stringify(metadata),
+      ContentType: 'application/json',
+    }),
+  );
+
+  return metadata;
+}
+
 export async function deletePage(
   client: S3Client,
   bucket: string,
@@ -378,11 +415,12 @@ export async function deletePage(
 /** 公開URLの固定部分。末尾は `/`（slug 入力の直前） */
 export function buildViewUrlPrefix(pagesBaseUrl: string, email: string): string {
   const base = pagesBaseUrl.replace(/\/$/, '');
-  return `${base}/${emailLocalPart(email)}/`;
+  return `${base}/p/${emailLocalPart(email)}/`;
 }
 
 export function buildViewUrl(pagesBaseUrl: string, email: string, slug: string): string {
-  return `${buildViewUrlPrefix(pagesBaseUrl, email)}${slug}/`;
+  const base = pagesBaseUrl.replace(/\/$/, '');
+  return `${base}${pageViewPath(emailLocalPart(email), slug)}`;
 }
 
 function isNoSuchKeyError(error: unknown): boolean {

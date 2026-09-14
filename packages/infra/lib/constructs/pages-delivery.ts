@@ -11,6 +11,8 @@ import {
   FunctionEventType,
   FunctionRuntime,
   GeoRestriction,
+  HeadersReferrerPolicy,
+  type IKeyValueStore,
   PriceClass,
   ResponseHeadersPolicy,
   ViewerProtocolPolicy,
@@ -23,6 +25,8 @@ export interface PagesDeliveryProps {
   readonly bucket: IBucket;
   /** メールドメイン。CloudFront Function が user ローカル部を補完する */
   readonly emailDomain: string;
+  /** 社外共有(/s/*)のエッジ投影先KVS。share-router.jsがここを参照する */
+  readonly shareKeyValueStore: IKeyValueStore;
 }
 
 /**
@@ -42,7 +46,16 @@ export class PagesDelivery extends Construct {
     const routerFunction = new Function(this, 'RouterFunction', {
       code: FunctionCode.fromInline(routerSource),
       runtime: FunctionRuntime.JS_2_0,
-      comment: 'pages: /<user>/<slug>/... を S3 キーへ rewrite',
+      comment: 'pages: /p/<user>/<slug>/... を S3 キーへ rewrite',
+    });
+
+    const shareRouterFunction = new Function(this, 'ShareRouterFunction', {
+      code: FunctionCode.fromFile({
+        filePath: join(dirname(fileURLToPath(import.meta.url)), '../functions/share-router.js'),
+      }),
+      runtime: FunctionRuntime.JS_2_0,
+      comment: 'share: /s/<share-id>/... をKVSで検証しS3キーへrewrite',
+      keyValueStore: props.shareKeyValueStore,
     });
 
     const cachePolicy = new CachePolicy(this, 'CachePolicy', {
@@ -59,6 +72,10 @@ export class PagesDelivery extends Construct {
           contentSecurityPolicy: "frame-ancestors 'none'",
           override: true,
         },
+        referrerPolicy: {
+          referrerPolicy: HeadersReferrerPolicy.NO_REFERRER,
+          override: true,
+        },
       },
       customHeadersBehavior: {
         customHeaders: [
@@ -66,6 +83,11 @@ export class PagesDelivery extends Construct {
             header: 'Cross-Origin-Opener-Policy',
             override: true,
             value: 'same-origin',
+          },
+          {
+            header: 'X-Robots-Tag',
+            override: true,
+            value: 'noindex, nofollow',
           },
         ],
       },
@@ -80,6 +102,8 @@ export class PagesDelivery extends Construct {
       comment: 'pages配信',
       priceClass: PriceClass.PRICE_CLASS_200,
       geoRestriction: GeoRestriction.allowlist('JP'),
+      // IPv4 CIDRでのIP制限(share-router.js)を確実に効かせるためIPv6は無効化する
+      enableIpv6: false,
       defaultBehavior: {
         origin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -92,6 +116,41 @@ export class PagesDelivery extends Construct {
           },
         ],
       },
+      additionalBehaviors: {
+        '/s/*': {
+          origin,
+          // Signed Cookieによる社内限定閲覧はデフォルトビヘイビアだけの機能にする。
+          // ここにTrusted Key Groupは今後も付けない
+          viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy,
+          responseHeadersPolicy: responseHeaders,
+          functionAssociations: [
+            {
+              function: shareRouterFunction,
+              eventType: FunctionEventType.VIEWER_REQUEST,
+            },
+          ],
+        },
+        // カスタムエラーレスポンス(404 -> errors/404.html)がオリジンとして参照するprefix。
+        // 関数は付けない(オリジンから直接返す固定ページ)
+        '/errors/*': {
+          origin,
+          viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy,
+          responseHeadersPolicy: responseHeaders,
+        },
+      },
+      // CloudFront Functionが返したレスポンス(share-router/pages-routerの401/403/404)には
+      // 適用されない(オリジン由来の400以上にしか効かない)。S3のNoSuchKeyなどにS3キーが
+      // 漏れるのを防ぐのが目的で、errors/404.htmlはowner/URLの情報を含まない固定文言にしてある
+      errorResponses: [
+        {
+          httpStatus: 404,
+          responseHttpStatus: 404,
+          responsePagePath: '/errors/404.html',
+          ttl: Duration.seconds(60),
+        },
+      ],
     });
   }
 }

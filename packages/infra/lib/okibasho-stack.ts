@@ -2,6 +2,7 @@ import { CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
 import { AppDelivery } from './constructs/app-delivery.js';
 import { Auth } from './constructs/auth.js';
+import { ExternalShare } from './constructs/external-share.js';
 import { PagesDelivery } from './constructs/pages-delivery.js';
 import { PagesStorage } from './constructs/pages-storage.js';
 import type { DomainsConfig } from './config.js';
@@ -11,6 +12,8 @@ export interface OkibashoStackProps extends StackProps {
   readonly emailDomain: string;
   /** 独自ドメイン設定。未設定ならデフォルトドメインで構築する */
   readonly domains?: DomainsConfig;
+  /** share projectorのErrorsアラームの通知先。未設定ならアラームは作るが通知はしない */
+  readonly alertEmail?: string;
 }
 
 /**
@@ -27,9 +30,14 @@ export class OkibashoStack extends Stack {
     super(scope, id, props);
 
     const pagesStorage = new PagesStorage(this, 'PagesStorage');
+    const externalShare = new ExternalShare(this, 'ExternalShare', {
+      pagesBucket: pagesStorage.bucket,
+      alertEmail: props.alertEmail,
+    });
     const pagesDelivery = new PagesDelivery(this, 'PagesDelivery', {
       bucket: pagesStorage.bucket,
       emailDomain: props.emailDomain,
+      shareKeyValueStore: externalShare.keyValueStore,
     });
     const appDelivery = new AppDelivery(this, 'AppDelivery');
 

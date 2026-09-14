@@ -1,10 +1,16 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { RemovalPolicy } from 'aws-cdk-lib';
 import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket, BucketEncryption, HttpMethods } from 'aws-cdk-lib/aws-s3';
+import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { Construct } from 'constructs';
 
 /** ページオブジェクトの S3 prefix。owner 単位のキー空間のルート */
 export const PAGES_PREFIX = 'pages/';
+
+/** カスタムエラーページ(404.htmlなど)を置く S3 prefix */
+export const ERRORS_PREFIX = 'errors/';
 
 /**
  * pages/ 配下にページ成果物を格納する S3 bucket。
@@ -26,16 +32,31 @@ export class PagesStorage extends Construct {
     });
 
     this.restrictCloudFrontToPagesPrefix();
+    this.denyCloudFrontGetMetadata();
+    this.deployErrorPages();
+  }
+
+  /** カスタムエラーレスポンス(404)用の固定ページを errors/ prefix にだけ配置する */
+  private deployErrorPages(): void {
+    new BucketDeployment(this, 'ErrorPagesDeployment', {
+      sources: [Source.asset(join(dirname(fileURLToPath(import.meta.url)), '../static/errors'))],
+      destinationBucket: this.bucket,
+      destinationKeyPrefix: ERRORS_PREFIX,
+    });
   }
 
   /**
-   * CloudFront から読めるのを pages/ だけに制限する。
+   * CloudFront から読めるのを pages/ と errors/ だけに制限する。
    *
+   * errors/ はカスタムエラーページ(404.html)専用。それ以外は pages/ 配下と同じく
    * CloudFront Function の URL 書き換えと同じ境界を bucket policy にも書いて二重化する。
    */
   private restrictCloudFrontToPagesPrefix(): void {
     const cloudFront = new ServicePrincipal('cloudfront.amazonaws.com');
-    const allowedObjectArns = [this.bucket.arnForObjects(`${PAGES_PREFIX}*`)];
+    const allowedObjectArns = [
+      this.bucket.arnForObjects(`${PAGES_PREFIX}*`),
+      this.bucket.arnForObjects(`${ERRORS_PREFIX}*`),
+    ];
 
     this.bucket.addToResourcePolicy(
       new PolicyStatement({
@@ -56,7 +77,7 @@ export class PagesStorage extends Construct {
         resources: [this.bucket.bucketArn],
         conditions: {
           StringNotLike: {
-            's3:prefix': [`${PAGES_PREFIX}*`],
+            's3:prefix': [`${PAGES_PREFIX}*`, `${ERRORS_PREFIX}*`],
           },
           // s3:prefix が付いているリクエストにだけ効かせる。
           // 存在しないkeyへのGETで S3 が 403 ではなく 404 を返すかの判定にも
@@ -65,6 +86,22 @@ export class PagesStorage extends Construct {
           // 「存在しないslugが404」という狙いが静かに壊れる
           Null: { 's3:prefix': 'false' },
         },
+      }),
+    );
+  }
+
+  /**
+   * .metadata.json はCloudFront Functionの文字列検査で弾いているが、
+   * bucket policyでも二重に遮断する(所有者・スラッグを含み得るS3キーが漏れないようにするため)。
+   */
+  private denyCloudFrontGetMetadata(): void {
+    this.bucket.addToResourcePolicy(
+      new PolicyStatement({
+        sid: 'DenyCloudFrontGetMetadata',
+        effect: Effect.DENY,
+        principals: [new ServicePrincipal('cloudfront.amazonaws.com')],
+        actions: ['s3:GetObject'],
+        resources: [this.bucket.arnForObjects(`${PAGES_PREFIX}*/.metadata.json`)],
       }),
     );
   }

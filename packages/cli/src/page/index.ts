@@ -12,4 +12,26 @@ export {
   pageViewPath,
 } from './s3-keys.js';
 export { SLUG_PATTERN, generateRandomSlug, isValidSlug } from './slug.js';
+export {
+  SHARE_CIDR_MAX_COUNT,
+  SHARE_CIDR_MIN_COUNT,
+  SHARE_ID_PATTERN,
+  SHARE_PASSWORD_MAX_LENGTH,
+  SHARE_PASSWORD_MIN_LENGTH,
+  SHARE_USERNAME_MAX_LENGTH,
+  SHARE_USERNAME_MIN_LENGTH,
+  buildShareBasic,
+  buildShareViewPath,
+  generateShareId,
+  generateShareSalt,
+  hashSharePassword,
+  isValidShareId,
+  validateAndNormalizeCidrs,
+  validateSharePassword,
+  validateShareUsername,
+  type PageShare,
+  type PageShareBasic,
+  type ShareValidationError,
+  type ShareValidationResult,
+} from './share.js';
 export { type UploadPathValidationResult, validateUploadPath } from './upload-path.js';

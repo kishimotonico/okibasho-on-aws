@@ -1,5 +1,7 @@
 # 引き継ぎ: okibasho を「案3（IAM 活用案）」で実装する
 
+URL 形式（`/<user>/<slug>/`）と CloudFront KeyValueStore 不採用の方針は、その後 [architecture.md](architecture.md) で更新されている（社外共有の追加により `/p/<user>/<slug>/` へ変更、KVS は採用）。本書は当時の判断記録として書き換えない。
+
 ## 0. この文書の位置づけ
 
 リポジトリ `page-share-on-aws` の設計を、レビューの結果として大きく変更する。

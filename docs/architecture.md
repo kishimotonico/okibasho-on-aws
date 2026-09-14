@@ -4,7 +4,7 @@
 
 ## 全体構成
 
-構成図: [architecture.drawio](architecture.drawio)（draw.io 形式。VS Code の Draw.io Integration 拡張か [app.diagrams.net](https://app.diagrams.net) で開く）
+構成図: [architecture.drawio](architecture.drawio)（draw.io 形式。VS Code の Draw.io Integration 拡張か [app.diagrams.net](https://app.diagrams.net) で開く）。社外共有（`/s/*`、KVS、share projector）を追加する前の図のままで、更新していない。
 
 ```text
    ブラウザ（管理UI）                        CLI（okiba）
@@ -23,11 +23,24 @@
         ▼
    S3（pages バケット・完全 private・Public Access Block）
         ▲
-        │ OAC
-   CloudFront（pages.share.example.jp / UNTRUSTED）
-        └ CloudFront Function: /<user>/... → /pages/<user>@<domain>/... + index.html 補完
-        └ Trusted Key Group: Signed Cookie 必須（独自ドメイン導入後）
-        └ Response Headers Policy / Geo restriction
+        │ 5分ごとに全件読み取り
+   Lambda（share projector、同時実行1）── Errors に CloudWatch Alarm（ALERT_EMAIL があれば SNS 通知）
+        │ UpdateKeys（IfMatch）
+        ▼
+   CloudFront KeyValueStore（share-id → S3 prefix / Basic / CIDR の投影。
+                             停止・再発行・削除・期限切れは墓標として残す）
+        ▲
+        │ OAC                              │ 参照
+   CloudFront（pages.share.example.jp / UNTRUSTED、単一 Distribution）
+        └ デフォルトビヘイビア＝/p/*（社内。/p/ 以外は 404。Signed Cookie 必須、独自ドメイン導入後）
+             CloudFront Function: /p/<user>/... → /pages/<user>@<domain>/... + index.html 補完
+        └ /s/* ビヘイビア（社外共有。KVS 参照、Basic / IP 制限、Signed Cookie は付けない）
+             CloudFront Function: /s/<share-id>/... → KVS の投影先へ rewrite
+        └ /errors/* ビヘイビア（カスタムエラーレスポンス専用。関数なし。
+             BucketDeployment が pages バケットの errors/ に配置した固定ページを配信）
+        └ 共通設定: errorResponses（404 → /errors/404.html。403 は将来の Signed Cookie
+          ログイン誘導のために空けてある）/ Response Headers Policy（Referrer-Policy: no-referrer 等）/
+          Geo restriction / IPv6 無効化
 
    CloudFront（app.share.example.jp / TRUSTED）
         ├ /auth/*  → Lambda（Signed Cookie 発行）
@@ -36,17 +49,20 @@
    EventBridge Scheduler（1時間ごと）→ Lambda（期限切れ cleanup）
 ```
 
-使う AWS サービス: S3 / CloudFront / Cognito User Pool / Cognito Identity Pool / Lambda（3つ） / EventBridge Scheduler / Route 53 / ACM。IaC は AWS CDK（TypeScript）。
+使う AWS サービス: S3 / CloudFront / CloudFront KeyValueStore / Cognito User Pool / Cognito Identity Pool / Lambda（4つ） / EventBridge Scheduler / Route 53 / ACM。IaC は AWS CDK（TypeScript）。
 
-Lambda は次の 3 つ。どれも小さく独立している。API Gateway は無い。認可は IAM ポリシーに委譲する。
+Lambda は次の 4 つ。どれも小さく独立している。API Gateway は無い。認可は IAM ポリシーに委譲する。
 
 - Signed Cookie 発行（独自ドメイン導入後）
 - cleanup（期限切れと孤児の削除）
 - PreSignUp（メールドメイン制限。Google IdP 追加時）
+- share projector（`.metadata.json` の `share` を CloudFront KeyValueStore へ投影。詳細は「社外共有」節）
+
+このほかに、CDK の `BucketDeployment`（pages バケットの `errors/` に固定ページを配置するためだけのカスタムリソース Lambda）が存在する。これは IAM の境界の外にある処理として次節で扱う。
 
 CDK のスタックは 1 つとし、機能的・概念的な境界は Construct で表現する（auth / storage / delivery / app-site / cleanup / domains）。Stack 本体は各 Construct の組み立てだけを行う。スタック分割による cross-stack reference の複雑さは持ち込まない。
 
-DynamoDB、WAF、Lambda@Edge、API Gateway、CloudFront KeyValueStore、S3 Lifecycle、presigned URL は使わない。
+DynamoDB、WAF、Lambda@Edge、API Gateway、S3 Lifecycle、presigned URL は使わない。CloudFront KeyValueStore は社外共有の投影先として採用したため、この対象からは外れる。
 
 ## origin と URL 空間
 
@@ -61,13 +77,16 @@ trusted な管理アプリと untrusted な共有ページを別 origin に分�
 
 | URL | 公開範囲 | 認証 | Distribution | S3 key |
 | --- | --- | --- | --- | --- |
-| `https://pages.share.example.jp/<user>/<slug>/` | 社内（ログイン必須） | Signed Cookie 必須（独自ドメイン導入後） | pages | `pages/<email>/<slug>/` |
+| `https://pages.share.example.jp/p/<user>/<slug>/` | 社内（ログイン必須） | Signed Cookie 必須（独自ドメイン導入後） | pages（`/p/*`） | `pages/<email>/<slug>/` |
+| `https://pages.share.example.jp/s/<share-id>/` | 社外（ページ作成者が発行した URL を知っている人） | 任意で Basic 認証・IP 制限 | pages（`/s/*`） | KVS の投影から解決（実体は `pages/<email>/<slug>/`） |
 
 `<user>` はメールのローカル部だけを見せる。全員が同じ Workspace ドメインなので、ドメイン部は CloudFront Function で静的に補完する。
 
-ホスト名は `app` / `pages` の 2 つだけとする。閲覧は社内メンバーに限定し、社外への URL 共有はスコープ外とする。
+社内 URL のパスに `/p/` を置くのは、社外共有用の `/s/` と名前空間を分けるためである。旧 `/<user>/<slug>/` は未公開だったため互換リダイレクトを持たない。
 
-CloudFront の Distribution は app 用と pages 用の 2 つ。Signed Cookie、Response Headers Policy、403 時の認証導線を別々の設定として持つ。
+ホスト名は `app` / `pages` の 2 つのままとする。社外への URL 共有はページ単位のオプトインとして実装した（詳細は「社外共有」節）。共有していないページは従来どおり社内ログイン必須である。
+
+CloudFront の Distribution は app 用と pages 用の 2 つ。pages 用の 1 つに `/p/*`（社内）と `/s/*`（社外共有）の 2 ビヘイビアを持たせる。別 Distribution や第 3 ホストにはしない。理由は「社外共有」節にまとめる。
 
 ## 認可は IAM ポリシーに委譲する
 
@@ -103,7 +122,11 @@ authenticated role の権限ポリシーが唯一のセキュリティ境界で�
 - `s3:prefix` 条件があるため、`ListObjectsV2` には必ず prefix を渡す。渡さないと `AccessDenied`
 - CDK のレビュー時はこのポリシーと、ロールの信頼ポリシー（次節）を重点的に見る
 
-cleanup Lambda のロールだけは prefix 制限のない権限を持つ。IAM の境界の外にある唯一の処理であり、レビュー対象である。
+IAM の境界の外にある処理が 3 つある。いずれもレビュー対象である。
+
+- cleanup Lambda: prefix 制限のない削除権限を持つ
+- share projector: `pages/` 配下の `.metadata.json` を全件読める（Basic 認証のハッシュも含む）。書き込みは CloudFront KeyValueStore の `UpdateKeys` だけで、pages バケットへの書き込み権限は持たない
+- `BucketDeployment` のカスタムリソース Lambda（`packages/infra/lib/constructs/pages-storage.ts` の `ErrorPagesDeployment`）: pages バケットへの書き込み権限を持つ。実際に管理する範囲は `errors/` prefix（カスタムエラーページ）だけである
 
 ## 認証
 
@@ -168,7 +191,7 @@ Signed Cookie は閲覧専用で、漏れても社内ページの閲覧以外の
 未ログインで閲覧 URL を開いたときのフロー:
 
 ```text
-pages.share.example.jp/<user>/<slug>/ → 403
+pages.share.example.jp/p/<user>/<slug>/ → 403
  → CloudFront カスタムエラーページ（元URLを持って app へ飛ばす小さなHTML）
  → app: Cognito ログイン（済んでいればスキップ）
  → POST /auth/pages-cookie で Signed Cookie 発行
@@ -199,11 +222,22 @@ pages/
   "slug": "q3-report",
   "owner": "tanaka@example.jp",
   "createdAt": "2026-08-26T04:00:00Z",
-  "expiresAt": "2026-09-25T04:00:00Z"
+  "expiresAt": "2026-09-25T04:00:00Z",
+  "share": {
+    "id": "V1StGXR8_Z5jdHi6B-myT",
+    "basic": {
+      "username": "guest",
+      "salt": "dGhpcyBpcyBhIHNhbHQ",
+      "hash": "…sha256の16進64桁…"
+    },
+    "allowedCidrs": ["203.0.113.0/24"]
+  }
 }
 ```
 
 `expiresAt` が `null` なら無期限。クライアントが書くので自己申告だが、影響は自分の prefix とストレージコストだけで他人には及ばない。
+
+`share` は社外共有の設定で、無ければ社外共有していない。フィールドの詳細は「社外共有」節にある。
 
 `.metadata.json` は配信対象 prefix の中にある。pages origin は untrusted であり、所有者メールがページ配下から読めても、管理アプリのセッションや他人のページには届かない。ユーザーが同名ファイルをアップロードすると正本と衝突するので、クライアントは `.metadata.json` をアップロード対象から除外する。
 
@@ -242,7 +276,7 @@ slug の指定は任意。web は省略時に乱数（小文字英数字 10 文�
 4. 同じ prefix を List し、今回のアップロードに含まれないキーを DeleteObjects
    （.metadata.json はここでは消さない）
 5. .metadata.json を最後に書く
-6. https://pages.share.example.jp/<user>/<slug>/ を表示
+6. https://pages.share.example.jp/p/<user>/<slug>/ を表示
 ```
 
 再アップロードは同じ prefix を上書きする。バージョンディレクトリは持たない。ファイルが減ったり名前が変わったりしたときに古いオブジェクトが残ると、公開 URL からいつまでも読めてしまう。4 の差分削除がこれを防ぐ。`.metadata.json` がある限り cleanup は孤児とみなさない。
@@ -253,38 +287,112 @@ slug の指定は任意。web は省略時に乱数（小文字英数字 10 文�
 
 ## URL解決
 
-公開 URL は `/<user>/<slug>/`。pages origin は配信専用なので、パス上に `/p/` のような接頭辞は置かない。pages Distribution の viewer-request に CloudFront Function を付ける。ランタイムは `cloudfront-js-2.0` を指定する（1.0 だと `String.prototype.endsWith` などが使えない）。
+社内向けの公開 URL は `/p/<user>/<slug>/`。実装は `packages/infra/lib/functions/pages-router.js`（pages Distribution のデフォルトビヘイビアに viewer-request として付ける CloudFront Function。`/p/` 以外は 404 にする）。ランタイムは `cloudfront-js-2.0` を指定する（1.0 だと `String.prototype.endsWith` などが使えない）。
 
-```js
-function handler(event) {
-  var req = event.request;
-  var m = req.uri.match(/^\/([^/]+)\/([^/]+)(\/.*)?$/);
-  if (!m) return { statusCode: 404, statusDescription: 'Not Found' };
-  var user = m[1];
-  if (user.indexOf('@') !== -1) {
-    return { statusCode: 404, statusDescription: 'Not Found' };
-  }
-  var slug = m[2];
-  var rest = m[3];
-  if (rest === undefined) {
-    return {
-      statusCode: 301,
-      statusDescription: 'Moved Permanently',
-      headers: { location: { value: '/' + user + '/' + slug + '/' } },
-    };
-  }
-  if (rest.endsWith('/')) rest += 'index.html';
-  req.uri = '/pages/' + user + '@example.jp/' + slug + rest;
-  return req;
-}
+- `%2f` / `.` / `..` / 空セグメント / `.metadata.json` を含む URI は 404 にする
+- `@` を含む user を弾く。`/a@b.jp@example.jp/` のような入力で別ユーザーの prefix を指させないため
+- `/p/<user>/<slug>` に完全一致するなら末尾 `/` 付きへ 301 する（クエリ文字列は保持）。スラッシュ無しのまま HTML を返すと、ページ内の相対パスが壊れる
+- 末尾 `/` なら `index.html` を補い、`/pages/<user>@<domain>/<slug>/...` へ書き換える。ドメイン名は CDK からビルド時に埋め込む
+- Lambda@Edge も S3 Website Hosting も使わない
+
+社外向けの URL 解決（`/s/*`）は別の CloudFront Function（`share-router.js`）が担う。詳細は次の「社外共有」節にまとめる。
+
+## 社外共有
+
+ページ単位で、社内ログインなしでも見られる URL を発行できる。正本は `.metadata.json` の `share` フィールドで、無ければそのページは社外共有していない。
+
+### 同一 Distribution に `/s/*` を足した理由
+
+別 Distribution や第 3 ホストにはしていない。Trusted Key Group・CloudFront Function・Response Headers Policy・Cache Policy はいずれもビヘイビア単位で設定できるため、1 つの Distribution に `/p/*`（社内）と `/s/*`（社外共有）を共存させられる。
+
+- Signed Cookie は今後も `/p/*` だけに付ける。`/s/*` には付けない
+- カスタムエラーレスポンス（404 → `errors/404.html`。403 は将来の Signed Cookie ログイン誘導のために設定しない）は Distribution 単位の設定だが、CloudFront Function が返したレスポンスには適用されない。そのため `/s/*` が返す 401 / 403 / 404 はこの導線に巻き込まれない
+
+Distribution 単位の設定は `/s/*` にも及ぶ副作用がある。
+
+- Geo restriction（JP のみ）は `/s/*` にも効くため、社外共有も日本国外からは見られない。現状は受容し、海外の相手に共有する要件が出たら別 Distribution を再検討する
+- `enableIpv6: false` は pages Distribution 全体に効く。`/s/*` の CIDR 判定を IPv4 に絞るための設定である
+
+### `/p/` と `/s/` が同一 origin であることのリスク評価
+
+社内ページには現状ページ単位のアクセス制御が無く、社内ユーザーなら誰でも読める。`/s/` の HTML がログイン済み社内ユーザーのブラウザで `/p/` を same-origin で読めても、その社内ユーザーが元々読めるもの以上には届かない。社外の閲覧者は Signed Cookie を持たないため `/p/` は読めない。Service Worker の scope はスクリプトのディレクトリ配下に限られ、S3 からは `Service-Worker-Allowed` ヘッダを返せないので、あるページの Service Worker が他のページの経路を奪うこともできない。
+
+もう一つ考えるべき経路がある。同じブラウザに残った別の共有ページの資格情報を使う手口である。社員が自分の共有ページ B（`/s/B/`）に JS を仕込むと、同じブラウザにキャッシュされた別ページ A（`/s/A/`）向けの Basic 資格情報（realm はどの共有 URL でも `okibasho` で共通なので、A 用に入力した認証情報がブラウザから B にも送られうる）や、A が許可している IP からのアクセスを使って `/s/A/` を same-origin で読める可能性がある。それでも結論は変わらない。B の作者は社員であり `/p/` から A の元ページをそのまま読めるうえ、この経路には A の share-id を事前に知っている必要がある。知らなければ `/s/A/` を開けない。B にアップロードされた HTML が第三者の CDN スクリプトを読み込んでいる場合は、その JS が A を読めればスクリプト提供元にも A の内容が渡りうる点だけは明記しておく。
+
+したがって origin 分離の境界は「app と pages の間」のままで足りており、`/s/` を第 3 origin にする動機は無い。次のいずれかが起きたら再検討する。
+
+- ページ単位の社内アクセス制御を入れる
+- 社外ユーザーがアップロードできるようにする
+
+### share-id とアクセス制御
+
+share-id はクライアント（web / CLI）が CSPRNG で生成する 128bit の値を base64url（パディングなし）にした 22 文字（`/^[A-Za-z0-9_-]{22}$/`）。share-id 自体が推測困難な credential であり、Basic 認証や IP 制限はその上に足す二要素目という位置付けである。試行回数制限は無い。
+
+- Basic 認証のユーザー名・パスワードは印字可能な ASCII に限る。ブラウザと CloudFront Function で非 ASCII の文字コード解釈がずれ、ハッシュが一致しなくなるため
+- パスワードは平文で保存しない（salt 付き SHA-256）。UI にも再表示しない
+- IP 制限は IPv4 CIDR を 1〜20 件
+
+### KVS エントリと投影の規則
+
+CloudFront KeyValueStore には、正本（`.metadata.json` の `share`）から導出した投影だけを置く。エントリには生きている共有と墓標の 2 種類がある。
+
+```json
+{ "p": "pages/<email>/<slug>/", "b": "<salt>:<hash>", "c": ["203.0.113.0/24"] }   // 生きている共有
+{ "t": "pages/<email>/<slug>/" }                                                 // 墓標。t は元の所有 prefix
 ```
 
-実装では次を満たす。
+- key は share-id、value はこの JSON 文字列（1KB 以内。超えたらそのエントリは投影しない）
+- `b` は Basic 設定があるときだけ、`c` は CIDR があるときだけ
+- 各エントリの「所有 prefix」は `p` または `t`。`p` / `t` は projector が S3 キー（`pages/<email>/<slug>/.metadata.json`）から導出する。`.metadata.json` の中身（owner / slug）は信用しない
+- どちらも無い・JSON 不正のエントリは、projector しか書かないため解釈できないものとして削除してよい
 
-- `@` を含む user を弾く。`/a@b.jp@example.jp/` のような入力で別ユーザーの prefix を指させないため
-- `/<user>/<slug>` に完全一致するなら末尾 `/` 付きへ 301 する。スラッシュ無しのまま HTML を返すと、ページ内の相対パスが壊れる
-- ドメイン名は CDK からビルド時に埋め込む。KeyValueStore もマッピングテーブルも不要
-- Lambda@Edge も S3 Website Hosting も使わない
+墓標は、停止・再発行・削除・期限切れで消えた share-id を空きにせず、他のページがその id を使って旧 URL を横取りするのを防ぐ。以前は KVS から消えた直後の id を、別の社員がたまたま同じ id を書いた metadata で再利用できてしまう余地があった。墓標は消さない（KVS 5MB の上限に対して 30 人規模なら十分収まる）。
+
+投影は S3 イベントに頼らず、5 分ごとの全件 reconcile だけで行う。実装は `packages/infra/lib/lambda/share-projector/`。反映経路を 1 本にすることで、イベントの順序・重複・取りこぼしを考えなくて済むようにしている。反映は最大 5 分遅れるが、社内ツールとして許容する。
+
+- 対象 prefix は「metadata がある prefix」∪「KVS に生きているエントリまたは墓標がある prefix」の和集合。対象ごとに、その prefix の現在の `.metadata.json` を S3 から読み直して「あるべき状態」を決める。イベントの順序や重複には依存しない
+- あるべき状態が無いのは、metadata が無い / JSON 不正 / `share` 無し / `share` の検証に失敗 / `expiresAt` を過ぎている / KVS 値が 1KB を超える、のいずれか。この場合はその prefix の生きているエントリを全部墓標に置き換える
+- 同じ prefix に生きたエントリが複数残ることがある（reconcile は全部見る。先頭 1 件だけ見ない）
+- あるべき id が既に別 prefix の所有物（生き/墓標問わず）であれば書かない（hijack 警告としてログに出す）。このとき、同じ prefix の生きているエントリで id が異なるものは墓標にする
+- それ以外は、同じ prefix の生きているエントリで id が異なるものを墓標にしたうえで、あるべき id を put する。同じ prefix の墓標であれば復活してよい（例: 期限切れ後に保存期間を延ばした場合）。値が変わらないときは書かない
+- 同じ id を複数の prefix が同時に desire し、どちらにも既存エントリが無い場合は、prefix の辞書順で先の 1 つだけを採用し、残りは hijack 警告にする
+- `UpdateKeys`（IfMatch = `DescribeKeyValueStore` の ETag）は 50 キーごとにチャンク分割する。同じ Key を 1 回の呼び出しに 2 度含めない。`ConflictException` は ETag を取り直してリトライする
+- 監査用に、put・墓標化・delete それぞれで prefix（email/slug を含む）と share-id を出す。share-id はログに全体を出さない（先頭 4 文字 + `…`）
+
+cleanup Lambda は KVS を直接知らない。期限切れ（`expiresAt` 超過）や削除は `.metadata.json` の書き換え・消失を通じて次の reconcile で検出され、墓標に置き換わる。
+
+共有を OFF にする操作は `share` フィールドを削除すること。URL の再発行は `share.id` の差し替えで行う。どちらも旧 id は墓標として KVS に残り続け、再利用されない。
+
+projector の `Errors` メトリクスに CloudWatch Alarm を付けている（5 分で 1 件以上、欠損データは notBreaching）。projector は共有停止・期限切れの反映経路そのものであり、壊れても気づけないと停止した共有が見え続けるおそれがあるため。環境変数 `ALERT_EMAIL`（`packages/infra/.env.example` 参照）を設定すると SNS Topic 経由でメール通知する。未設定ならアラームは作るが通知はしない。
+
+### エッジでの判定順（`/s/*` viewer-request）
+
+実装は `packages/infra/lib/functions/share-router.js`。
+
+1. `/s/<id>` のみ（末尾スラッシュ無し）→ 301 `/s/<id>/`（クエリ保持）
+2. `%2f` / `.` / `..` / 空セグメント / `.metadata.json` → 404（`/p/*` と同じパス検査）
+3. id が `/^[A-Za-z0-9_-]{22}$/` に合わない、または KVS に無い → 404
+4. `allowedCidrs`（`c`）があり viewer の IP がどれにも入らない → 403
+5. `basic`（`b`）があり `Authorization` が一致しない → 401 + `WWW-Authenticate: Basic realm="okibasho", charset="UTF-8"`
+6. URI を投影先の prefix + rest に書き換える（末尾 `/` なら `index.html` を補完）。`Authorization` ヘッダは削除して転送しない
+
+エラーレスポンスの body は短い固定文言にする。
+
+### 社外向けに新たに塞いだもの
+
+- S3 の `NoSuchKey` エラー XML に `pages/<email>/<slug>/...` が出て、メールアドレスとキー構成が見えてしまう問題。CloudFront はオリジンが 400 以上を返すと viewer-response の CloudFront Function を実行しないため、当初検討していた viewer-response（error-scrubber）による差し替えは一度も動かない。代わりに Distribution のカスタムエラーレスポンス（404 → `/errors/404.html`）で差し替える。エラーページは owner や URL の情報を含まない固定文言の HTML で、`BucketDeployment` で pages バケットの `errors/` に配置し、関数を付けない `/errors/*` ビヘイビアから配信する。403 は将来の Signed Cookie ログイン誘導に使うため設定しない。roadmap の当初の課題（Phase 1「404 で S3 のエラー XML を返さない」）もこれで対応した。デプロイ後の確認はまだ済んでいない
+- `.metadata.json` の配信。share-router 側の文字列検査に加え、bucket policy でも CloudFront サービスプリンシパルからの `pages/*/.metadata.json` への `s3:GetObject` を Deny する（`packages/infra/lib/constructs/pages-storage.ts`）。Function の文字列比較だけだと、percent-encode されたパスの解釈に依存してしまうための二重化である
+- Referer 経由の share-id 漏れ。Response Headers Policy に `Referrer-Policy: no-referrer` を追加した
+- 検索エンジンによる索引化。同じポリシーに `X-Robots-Tag: noindex, nofollow` を追加した
+
+### 受容している share-id の漏れ経路
+
+次の経路からの share-id 漏れは対策せず受容する。
+
+- ブラウザの閲覧履歴
+- チャットやメールの本文（URL をそのまま貼って共有するため）
+- CloudFront の標準アクセスログ。現在は無効化しており出力されない。将来有効化する場合は、share-id を含む URL をログに残すことになるため share-id を credential として扱い、ログ用バケットを private にする
+- CloudTrail の KVS データイベント。データイベントを有効化しなければ出力されない
 
 ## 保存期間
 
@@ -379,11 +487,17 @@ lib/
   constructs/
     auth.ts                  UserPool / Managed Login / App Client x2 /
                              IdentityPool / authenticated role / principal tag
-    pages-storage.ts         pages バケット（private, PAB, CORS）
-    pages-delivery.ts        pages Distribution / OAC / CloudFront Function /
+    pages-storage.ts         pages バケット（private, PAB, CORS）/ errors/ への BucketDeployment /
+                             .metadata.json への bucket policy Deny
+    pages-delivery.ts        pages Distribution / OAC / CloudFront Function（/p/* /s/*）/
+                             /errors/* ビヘイビアとカスタムエラーレスポンス /
                              Response Headers Policy / Geo restriction
+    external-share.ts        CloudFront KeyValueStore + share projector Lambda
+                             （5 分ごとの全件 reconcile。Errors アラーム）
     app-delivery.ts          app バケット + Distribution + SPA 用 CloudFront Function
 ```
+
+share projector 本体（`packages/infra/lib/lambda/share-projector/`）は SigV4A が必要な `@aws-sdk/client-cloudfront-keyvaluestore` を呼ぶため、副作用 import で純 JS の `@aws-sdk/signature-v4a` を読み込んでいる（ネイティブの `@aws-sdk/signature-v4-crt` は使わない）。`NodejsFunction` の bundling では `@aws-sdk/*` を external にしない。
 
 Signed Cookie 発行 Lambda・cleanup・PreSignUp・ドメイン関連（Route 53 / ACM）の Construct は、それぞれの機能の導入と同時に追加する。導入順は [roadmap.md](roadmap.md) にある。
 
@@ -413,8 +527,10 @@ Response Headers Policy は CDK で付ける。アプリのコードは 1 行も
 
 | Distribution | ヘッダ |
 | --- | --- |
-| pages | `X-Content-Type-Options: nosniff`、`Cross-Origin-Opener-Policy: same-origin`、`Content-Security-Policy: frame-ancestors 'none'` |
+| pages（`/p/*` `/s/*` 共通） | `X-Content-Type-Options: nosniff`、`Cross-Origin-Opener-Policy: same-origin`、`Content-Security-Policy: frame-ancestors 'none'`、`Referrer-Policy: no-referrer`、`X-Robots-Tag: noindex, nofollow` |
 | app | HSTS、`Content-Security-Policy: frame-ancestors 'none'` |
+
+`Referrer-Policy` と `X-Robots-Tag` は社外共有の追加に合わせて足した。share-id を含む URL が Referer 経由で外部に漏れるのと、検索エンジンに索引化されるのを防ぐ。
 
 CloudFront の Geo restriction を日本に絞る。無料である。WAF は月額コストが乗るので入れない。
 
@@ -443,11 +559,15 @@ CloudWatch Logs に最低限、Signed Cookie 発行の成功/失敗、cleanup �
 
 cleanup は削除した prefix を残し、誤削除の調査に使えるようにする。
 
+share-id は credential として扱い、ログに全体を出さない。share projector は監査用に put・墓標化・delete ごとに prefix と share-id の先頭 4 文字 + `…` を出す。
+
 ## テスト
 
 テストランナーは Vitest に統一する。設定はパッケージごとの `vitest.config.ts` に置き、ルートの `pnpm test` が `pnpm -r test` で各パッケージへ委譲する。
 
-CloudFront Function は `node:vm` で handler を直接実行する。rewrite、`@` を含む user の 404、末尾スラッシュの 301、index.html 補完を確認する。
+CloudFront Function は `node:vm` で handler を直接実行する。rewrite、`@` を含む user の 404、末尾スラッシュの 301、index.html 補完を確認する。share-router.js は KVS の get をモックし、id 形式、IP 制限、Basic 認証、rewrite の各分岐を確認する。
+
+share projector（`packages/infra/lib/lambda/share-projector/`）は S3 / KVS の SDK 呼び出しをモックせず、`validate.ts`（検証・期限切れ・KVS 値の直列化）と `plan.ts`（あるべき状態と実際の KVS の差分計算）を純粋関数として単体テストする。
 
 CDK は `Template.fromStack()` の snapshot テストを正とする。個別リソースのアサーションは、意図を明示したい箇所（bucket が private であること、CORS があること、pages Distribution に OAC と Function が付いていること、authenticated role のポリシーと信頼ポリシー、unauthenticated access が無効であること）にだけ足す。
 
@@ -468,7 +588,11 @@ packages/
 
 ## やらないこと
 
-API Gateway / REST API / JWT Authorizer / DynamoDB / Lambda@Edge / WAF / S3 Lifecycle + オブジェクトタグ / presigned URL / CloudFront KeyValueStore / `packages/api` / `packages/shared` / 既存 ALB との統合 / 社外向け URL 共有 origin。
+API Gateway / REST API / JWT Authorizer / DynamoDB / Lambda@Edge / WAF / S3 Lifecycle + オブジェクトタグ / presigned URL / `packages/api` / `packages/shared` / 既存 ALB との統合 / 社外共有専用の第 3 origin。
+
+CloudFront KeyValueStore は社外共有の投影先として採用した。「使わない」の対象からは外れる。
+
+社外共有専用の第 3 origin は作らない。`/s/*` は既存の pages Distribution にビヘイビアとして追加しており、origin は増えていない（理由は「社外共有」節）。
 
 ALB は S3 をターゲットにできず、Lambda ターゲット経由だとレスポンス 1MB 上限で配信に使えないため、この構成には組み込みどころがない。
 

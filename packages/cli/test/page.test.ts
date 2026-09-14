@@ -48,7 +48,7 @@ describe('s3 keys', () => {
     expect(metadataObjectKey('tanaka@example.jp', 'q3-report')).toBe(
       'pages/tanaka@example.jp/q3-report/.metadata.json',
     );
-    expect(pageViewPath('tanaka', 'q3-report')).toBe('/tanaka/q3-report/');
+    expect(pageViewPath('tanaka', 'q3-report')).toBe('/p/tanaka/q3-report/');
     expect(emailLocalPart('tanaka@example.jp')).toBe('tanaka');
   });
 });

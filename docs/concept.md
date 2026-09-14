@@ -4,7 +4,7 @@
 
 Claude Code、Codex などの AI エージェントや開発者が生成した HTML を、URL ひとつで簡単に共有するための小さな Web サービスを作る。
 
-共有相手は社内メンバーに限定する。アップロードできるのも閲覧できるのも、認証済みの社内メンバーだけである。
+アップロードできるのは認証済みの社内メンバーだけである。閲覧は社内メンバーに限定するが、ページ単位で URL を発行すれば社外にも共有できる。
 
 主な用途:
 
@@ -45,11 +45,12 @@ Claude Code、Codex などの AI エージェントや開発者が生成した H
 - ディレクトリアップロード
 - Web の drag & drop アップロード
 - CLI からのアップロード（ブラウザ連携のログイン付き）
-- 共有 URL の発行。URL は `/<user>/<slug>/`。slug は省略可で、省略時は自動生成する。指定する場合も**ユーザー単位で一意**
+- 共有 URL の発行。社内向け URL は `/p/<user>/<slug>/`。slug は省略可で、省略時は自動生成する。指定する場合も**ユーザー単位で一意**
 - 同じ URL への再アップロード（内容の差し替え）。参照できるのは常に最新版
 - 保存期間はデフォルト 30 日、操作で無期限に変更可能
 - My Pages（自分のページ一覧）
 - ページ削除
+- 社外向けの URL 共有。ページ単位で `/s/<share-id>/` を発行でき、社内ログインなしで見られる。任意でパスワード（Basic 認証）と IP アドレス制限を付けられる
 
 ## MVPでやらないこと
 
@@ -57,9 +58,8 @@ Claude Code、Codex などの AI エージェントや開発者が生成した H
 - 他人のページ編集、owner 変更
 - 組織・チーム、コメント、履歴の閲覧
 - 過去バージョンの参照・切り戻し
-- 社外向けの URL 共有（認証なしで誰でも見られる公開）
 - analytics、全文検索、アクセスログ閲覧
-- パスワードによる共有、共有相手の限定
+- 共有相手を個人単位で限定する仕組み（招待、アカウント紐付けなど）
 - MCP server
 - CI/CD からのアップロード統合
 - URL の後からの変更（slug のリネーム）
@@ -71,7 +71,6 @@ Claude Code、Codex などの AI エージェントや開発者が生成した H
 - MCP（CLI の wrapper として追加できる想定）
 - GitHub Actions からのアップロード
 - ページの description、検索
-- 共有先の限定、パスワード共有
 - 期限延長、カスタム保存期間
 - owner 移譲、管理者ビュー
 
@@ -94,12 +93,14 @@ Authenticated.
 $ okiba ./report/ --name q3-report
 Uploading 4 files...
 
-https://pages.share.example.jp/tanaka/q3-report/
+https://pages.share.example.jp/p/tanaka/q3-report/
 
 $ okiba ./report/ --name q3-report --permanent
 Uploading 4 files...
 
-https://pages.share.example.jp/tanaka/q3-report/
+https://pages.share.example.jp/p/tanaka/q3-report/
 ```
 
 閲覧者が URL を開くと、未認証なら Google ログインを挟んで HTML が表示される。独自ドメイン導入前は閲覧認証なしで検証する。
+
+社外の相手に見せたいときは、管理 UI から社外共有 URL（`/s/<share-id>/`）を発行する。こちらはログイン不要で開ける。

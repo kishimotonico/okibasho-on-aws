@@ -14,6 +14,7 @@ import {
   getPageMetadata,
   listPages,
   updatePageRetention,
+  updatePageShare,
   uploadPage,
 } from '../src/api/pages';
 
@@ -156,7 +157,7 @@ describe('pages API', () => {
 
     const pages = await listPages(client, bucket, email, pagesBaseUrl);
     expect(pages).toHaveLength(1);
-    expect(pages[0]?.viewUrl).toBe('https://pages.example.com/tanaka/q3-report/');
+    expect(pages[0]?.viewUrl).toBe('https://pages.example.com/p/tanaka/q3-report/');
   });
 
   it('再アップロードで含まれない古いオブジェクトを削除する', async () => {
@@ -317,5 +318,98 @@ describe('pages API', () => {
 
     const pages = await listPages(client, bucket, email, pagesBaseUrl);
     expect(pages).toEqual([]);
+  });
+
+  it('再アップロードで既存 metadata の share を引き継ぐ', async () => {
+    const slug = 'q3-report';
+    const share = {
+      id: 'a'.repeat(22),
+      basic: { username: 'guest', salt: 'b'.repeat(22), hash: 'c'.repeat(64) },
+    };
+    const existingMetadata = {
+      slug,
+      owner: email,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      expiresAt: '2026-09-01T00:00:00.000Z',
+      share,
+    };
+    const client = createFakeS3Client({
+      [metadataObjectKey(email, slug)]: {
+        body: new TextEncoder().encode(JSON.stringify(existingMetadata)),
+        contentType: 'application/json',
+      },
+    });
+
+    const metadata = await uploadPage(
+      client,
+      bucket,
+      email,
+      slug,
+      [{ path: 'index.html', file: new Blob(['<html></html>'], { type: 'text/html' }) }],
+      { retention: 'temporary', existingMetadata },
+    );
+
+    expect(metadata.share).toEqual(share);
+  });
+
+  it('保存期間変更で share を引き継ぐ', async () => {
+    const slug = 'q3-report';
+    const share = { id: 'a'.repeat(22), allowedCidrs: ['203.0.113.0/24'] };
+    const client = createFakeS3Client({
+      [metadataObjectKey(email, slug)]: {
+        body: new TextEncoder().encode(
+          JSON.stringify({
+            slug,
+            owner: email,
+            createdAt: '2026-08-01T00:00:00.000Z',
+            expiresAt: null,
+            share,
+          }),
+        ),
+        contentType: 'application/json',
+      },
+    });
+
+    const metadata = await updatePageRetention(client, bucket, email, slug, 'temporary');
+
+    expect(metadata.share).toEqual(share);
+  });
+
+  it('updatePageShare は share だけを差し替える', async () => {
+    const slug = 'q3-report';
+    const client = createFakeS3Client({
+      [metadataObjectKey(email, slug)]: {
+        body: new TextEncoder().encode(
+          JSON.stringify({
+            slug,
+            owner: email,
+            createdAt: '2026-08-01T00:00:00.000Z',
+            expiresAt: null,
+          }),
+        ),
+        contentType: 'application/json',
+      },
+    });
+
+    const share = { id: 'a'.repeat(22), allowedCidrs: ['203.0.113.0/24'] };
+    const metadata = await updatePageShare(client, bucket, email, slug, share);
+    expect(metadata.share).toEqual(share);
+    expect(metadata.expiresAt).toBeNull();
+
+    const stored = await getPageMetadata(client, bucket, email, slug);
+    expect(stored?.share).toEqual(share);
+
+    const cleared = await updatePageShare(client, bucket, email, slug, null);
+    expect(cleared.share).toBeUndefined();
+
+    const storedAfterClear = await getPageMetadata(client, bucket, email, slug);
+    expect(storedAfterClear?.share).toBeUndefined();
+  });
+
+  it('updatePageShare は存在しないページでエラーになる', async () => {
+    const client = createFakeS3Client();
+    await expect(updatePageShare(client, bucket, email, 'missing', null)).rejects.toThrow(
+      'ページが見つかりません',
+    );
   });
 });

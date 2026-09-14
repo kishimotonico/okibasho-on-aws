@@ -110,7 +110,7 @@ describe('runUpload', () => {
 
     expect(
       log.mock.calls.some((c) =>
-        String(c[0]).includes('https://pages.example.test/tanaka/q3-report/'),
+        String(c[0]).includes('https://pages.example.test/p/tanaka/q3-report/'),
       ),
     ).toBe(true);
     log.mockRestore();
@@ -138,6 +138,37 @@ describe('runUpload', () => {
     expect(result.exitCode).toBe(0);
     const metadata = JSON.parse(store.objects.get(metadataKey)!.body.toString('utf8'));
     expect(metadata.expiresAt).toBeNull();
+    log.mockRestore();
+  });
+
+  it('既存 metadata の share を再アップロードでも引き継ぐ', async () => {
+    const dir = await createHtmlDir('shared-page');
+    const store = new FakeS3Store();
+    const metadataKey = metadataObjectKey(TEST_EMAIL, 'shared-page');
+    const share = {
+      id: 'abcdefghijklmnopqrstuv',
+      basic: { username: 'guest', salt: 'saltsaltsaltsaltsaltsa', hash: 'a'.repeat(64) },
+      allowedCidrs: ['203.0.113.0/24'],
+    };
+    store.objects.set(metadataKey, {
+      body: Buffer.from(
+        JSON.stringify({
+          slug: 'shared-page',
+          owner: TEST_EMAIL,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          expiresAt: '2026-01-31T00:00:00.000Z',
+          share,
+        }),
+      ),
+      contentType: 'application/json',
+    });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const result = await runUpload(dir, {}, defaultUploadDeps(store));
+
+    expect(result.exitCode).toBe(0);
+    const metadata = JSON.parse(store.objects.get(metadataKey)!.body.toString('utf8'));
+    expect(metadata.share).toEqual(share);
     log.mockRestore();
   });
 
