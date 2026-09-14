@@ -13,6 +13,7 @@ import {
   deletePage,
   getPageMetadata,
   listPages,
+  pageMetadataFromListed,
   updatePageRetention,
   updatePageShare,
   uploadPage,
@@ -411,5 +412,29 @@ describe('pages API', () => {
     await expect(updatePageShare(client, bucket, email, 'missing', null)).rejects.toThrow(
       'ページが見つかりません',
     );
+  });
+
+  it('pageMetadataFromListed は一覧行が持つ share を引き継ぐ（再アップロードで消えないように）', () => {
+    const share = { id: 'a'.repeat(22), allowedCidrs: ['203.0.113.0/24'] };
+    const withShare = pageMetadataFromListed({
+      slug: 'q3-report',
+      owner: email,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      expiresAt: null,
+      retention: 'permanent',
+      viewUrl: `${pagesBaseUrl}/p/tanaka/q3-report/`,
+      share,
+    });
+    expect(withShare.share).toEqual(share);
+
+    const withoutShare = pageMetadataFromListed({
+      slug: 'q3-report',
+      owner: email,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      expiresAt: null,
+      retention: 'permanent',
+      viewUrl: `${pagesBaseUrl}/p/tanaka/q3-report/`,
+    });
+    expect(withoutShare.share).toBeUndefined();
   });
 });

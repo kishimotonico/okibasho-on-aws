@@ -28,9 +28,9 @@ vi.mock('~/hooks/usePagesApi', async (importOriginal) => {
       upload: (input: unknown) => upload(input),
       remove: vi.fn(),
       setRetention: vi.fn(),
-      viewUrl: (slug: string) => `https://pages.example.com/tanaka/${slug}/`,
+      viewUrl: (slug: string) => `https://pages.example.com/p/tanaka/${slug}/`,
       urlOrigin: 'https://pages.example.com',
-      userPath: '/tanaka/',
+      userPath: '/p/tanaka/',
     }),
   };
 });
@@ -42,12 +42,12 @@ function listedPage(slug: string): ListedPage {
     createdAt: '2026-08-01T00:00:00.000Z',
     expiresAt: null,
     retention: 'permanent',
-    viewUrl: `https://pages.example.com/tanaka/${slug}/`,
+    viewUrl: `https://pages.example.com/p/tanaka/${slug}/`,
   };
 }
 
 function uploaded(slug: string) {
-  return { slug, viewUrl: `https://pages.example.com/tanaka/${slug}/` };
+  return { slug, viewUrl: `https://pages.example.com/p/tanaka/${slug}/` };
 }
 
 function htmlFile() {
@@ -71,6 +71,7 @@ function slugInput() {
 function renderComposer(props: Partial<Parameters<typeof Composer>[0]> = {}) {
   const onUploaded = vi.fn();
   const onDelete = vi.fn();
+  const onShare = vi.fn();
   const view = render(
     <TooltipProvider>
       <Composer
@@ -80,11 +81,12 @@ function renderComposer(props: Partial<Parameters<typeof Composer>[0]> = {}) {
         deleting={false}
         onUploaded={onUploaded}
         onDelete={onDelete}
+        onShare={onShare}
         {...props}
       />
     </TooltipProvider>,
   );
-  return { ...view, onUploaded, onDelete };
+  return { ...view, onUploaded, onDelete, onShare };
 }
 
 describe('Composer', () => {
@@ -92,6 +94,10 @@ describe('Composer', () => {
     generateRandomSlug.mockReset();
     generateRandomSlug.mockReturnValueOnce('1111111111').mockReturnValue('2222222222');
     upload.mockReset();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
   });
 
   it('初期表示から slug が 10 文字入っている', () => {
@@ -264,7 +270,7 @@ describe('Composer', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole('link', { name: 'https://pages.example.com/tanaka/1111111111/' }),
+        screen.getByRole('link', { name: 'https://pages.example.com/p/tanaka/1111111111/' }),
       ).toBeInTheDocument(),
     );
     expect(screen.queryByRole('textbox', { name: /公開URL/ })).toBeNull();
@@ -273,6 +279,24 @@ describe('Composer', () => {
 
     expect(slugInput()).toHaveValue('2222222222');
     expect(screen.getByRole('button', { name: 'ファイルを選ぶ' })).toBeInTheDocument();
+  });
+
+  it('成功結果は UrlField（リンク+コピー）と「社外共有…」を持つ', async () => {
+    const user = userEvent.setup();
+    upload.mockResolvedValue(uploaded('1111111111'));
+    const { onShare } = renderComposer();
+
+    await user.upload(fileInput(), htmlFile());
+    const link = await screen.findByRole('link', {
+      name: 'https://pages.example.com/p/tanaka/1111111111/',
+    });
+    expect(link).toHaveAttribute('target', '_blank');
+
+    await user.click(screen.getByRole('button', { name: 'URLをコピー' }));
+    expect(await screen.findByRole('button', { name: 'コピーしました' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '社外共有…' }));
+    expect(onShare).toHaveBeenCalledWith('1111111111');
   });
 
   it('成功結果の削除は確認してから onDelete を呼ぶ', async () => {
@@ -293,7 +317,7 @@ describe('Composer', () => {
   it('一覧の再アップロードは slug を入れてフォーカスし、結果表示を閉じる', async () => {
     const user = userEvent.setup();
     upload.mockResolvedValue(uploaded('1111111111'));
-    const { rerender, onUploaded, onDelete } = renderComposer();
+    const { rerender, onUploaded, onDelete, onShare } = renderComposer();
 
     await user.upload(fileInput(), htmlFile());
     await screen.findByRole('button', { name: '次のファイルを置く' });
@@ -307,6 +331,7 @@ describe('Composer', () => {
           deleting={false}
           onUploaded={onUploaded}
           onDelete={onDelete}
+          onShare={onShare}
         />
       </TooltipProvider>,
     );
@@ -317,7 +342,7 @@ describe('Composer', () => {
   });
 
   it('一覧から消えた slug がフォームに残っていれば乱数に戻す', () => {
-    const { rerender, onUploaded, onDelete } = renderComposer({ initialSlug: 'gone' });
+    const { rerender, onUploaded, onDelete, onShare } = renderComposer({ initialSlug: 'gone' });
     expect(slugInput()).toHaveValue('gone');
 
     rerender(
@@ -330,6 +355,7 @@ describe('Composer', () => {
           deleting={false}
           onUploaded={onUploaded}
           onDelete={onDelete}
+          onShare={onShare}
         />
       </TooltipProvider>,
     );

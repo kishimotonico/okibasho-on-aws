@@ -3,6 +3,7 @@ import {
   buildShareBasic,
   buildShareViewPath,
   generateShareId,
+  generateSharePassword,
   generateShareSalt,
   hashSharePassword,
   isValidShareId,
@@ -11,6 +12,9 @@ import {
   validateSharePassword,
   validateShareUsername,
 } from '../src/page/share.js';
+
+const SHARE_PASSWORD_PATTERN =
+  /^[abcdefghjkmnpqrstuvwxyz23456789]{4}(-[abcdefghjkmnpqrstuvwxyz23456789]{4}){3}$/;
 
 describe('generateShareId / generateShareSalt', () => {
   it('22文字の base64url を生成する', () => {
@@ -26,6 +30,27 @@ describe('generateShareId / generateShareSalt', () => {
   it('複数回呼んでも重複しない', () => {
     const ids = new Set(Array.from({ length: 50 }, () => generateShareId()));
     expect(ids.size).toBe(50);
+  });
+});
+
+describe('generateSharePassword', () => {
+  it('4文字×4組をハイフンでつないだ形式で、既存の検証を満たす', () => {
+    const password = generateSharePassword();
+    expect(password).toMatch(SHARE_PASSWORD_PATTERN);
+    expect(password).toHaveLength(19);
+    expect(validateSharePassword(password)).toEqual([]);
+  });
+
+  it('紛らわしい文字（0 O o 1 l I）を含まない', () => {
+    for (let i = 0; i < 20; i++) {
+      const password = generateSharePassword();
+      expect(password).not.toMatch(/[0oO1lI]/);
+    }
+  });
+
+  it('毎回違う値を生成する', () => {
+    const passwords = new Set(Array.from({ length: 50 }, () => generateSharePassword()));
+    expect(passwords.size).toBe(50);
   });
 });
 

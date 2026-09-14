@@ -1,4 +1,4 @@
-import { emailLocalPart, type PageMetadata } from '@cli/page';
+import { emailLocalPart, type PageMetadata, type PageShare } from '@cli/page';
 import { useMemo } from 'react';
 
 import { useAuth } from '~/auth/auth-context';
@@ -6,6 +6,7 @@ import {
   buildViewUrl,
   deletePage,
   updatePageRetention,
+  updatePageShare,
   uploadPage,
   type Retention,
   type UploadFileInput,
@@ -41,6 +42,7 @@ export interface PagesApi {
   upload: (input: UploadInput) => Promise<{ slug: string; viewUrl: string }>;
   remove: (slug: string) => Promise<void>;
   setRetention: (slug: string, retention: Retention) => Promise<void>;
+  updateShare: (slug: string, share: PageShare | null) => Promise<void>;
   viewUrl: (slug: string) => string;
   /** 公開URLの固定部分。表示のためだけに分けて返す */
   urlOrigin: string;
@@ -78,7 +80,7 @@ export function usePagesApi(): PagesApi {
 
     return {
       urlOrigin,
-      userPath: session ? `/${emailLocalPart(session.email)}/` : '',
+      userPath: session ? `/p/${emailLocalPart(session.email)}/` : '',
 
       viewUrl: (slug) => (session ? buildViewUrl(config.pagesBaseUrl, session.email, slug) : ''),
 
@@ -110,6 +112,12 @@ export function usePagesApi(): PagesApi {
         run(messages.retentionChangeFailed, async () => {
           const { s3, email } = client();
           await updatePageRetention(s3, config.pagesBucket, email, slug, retention);
+        }),
+
+      updateShare: (slug, share) =>
+        run(messages.shareUpdateFailed, async () => {
+          const { s3, email } = client();
+          await updatePageShare(s3, config.pagesBucket, email, slug, share);
         }),
     };
   }, [config, session]);

@@ -19,6 +19,8 @@ interface PagesListProps {
   onReupload: (slug: string) => void;
   onRetentionChange: (page: ListedPage, retention: Retention) => void;
   onDelete: (page: ListedPage) => void;
+  /** 「社外共有…」。ShareDialog の開閉は route 側で一元管理する */
+  onShare: (slug: string) => void;
 }
 
 /**
@@ -32,6 +34,7 @@ export function PagesList({
   onReupload,
   onRetentionChange,
   onDelete,
+  onShare,
 }: PagesListProps) {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -108,6 +111,7 @@ export function PagesList({
               onReupload={(target) => onReupload(target.slug)}
               onRetentionChange={handleRetentionChange}
               onDelete={(target) => setConfirm({ kind: 'delete', page: target })}
+              onShare={(target) => onShare(target.slug)}
               onCopyError={() => setCopyError(messages.copyUrlFailed)}
               onCopySuccess={() => setCopyError(null)}
             />

@@ -23,6 +23,7 @@ export {
   buildShareBasic,
   buildShareViewPath,
   generateShareId,
+  generateSharePassword,
   generateShareSalt,
   hashSharePassword,
   isValidShareId,

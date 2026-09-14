@@ -65,6 +65,7 @@ export function pageMetadataFromListed(page: ListedPage): PageMetadata {
     owner: page.owner,
     createdAt: page.createdAt,
     expiresAt: page.expiresAt,
+    ...(page.share ? { share: page.share } : {}),
   };
 }
 

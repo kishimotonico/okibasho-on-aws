@@ -1,4 +1,4 @@
-import { EllipsisVertical, SquareArrowOutUpRight } from 'lucide-react';
+import { EllipsisVertical, Globe, GlobeLock, SquareArrowOutUpRight } from 'lucide-react';
 import { useRef } from 'react';
 
 import type { ListedPage, Retention } from '~/api/pages';
@@ -14,6 +14,7 @@ interface PageRowProps {
   onReupload: (page: ListedPage) => void;
   onRetentionChange: (page: ListedPage, retention: Retention) => void;
   onDelete: (page: ListedPage) => void;
+  onShare: (page: ListedPage) => void;
   /** コピーの失敗/成功を一覧の共通エラー表示へ伝える */
   onCopyError?: () => void;
   onCopySuccess?: () => void;
@@ -26,6 +27,7 @@ export function PageRow({
   onReupload,
   onRetentionChange,
   onDelete,
+  onShare,
   onCopyError,
   onCopySuccess,
 }: PageRowProps) {
@@ -33,6 +35,9 @@ export function PageRow({
   const reuploadSelectedRef = useRef(false);
 
   const expiration = getExpirationStatus(page.expiresAt);
+  const isProtected = Boolean(page.share?.basic) || Boolean(page.share?.allowedCidrs?.length);
+  const shareTooltip = isProtected ? messages.shareActiveProtected : messages.shareActiveOpen;
+  const ShareIcon = isProtected ? GlobeLock : Globe;
   const rowClass = [
     'page-row',
     expiration.kind === 'expired' ? 'page-row--expired' : '',
@@ -44,7 +49,21 @@ export function PageRow({
   return (
     <li className={rowClass} data-highlighted={highlighted ? 'true' : undefined}>
       <div className="page-row__info">
-        <h3>{page.slug}</h3>
+        <div className="page-row__title">
+          <h3>{page.slug}</h3>
+          {page.share ? (
+            <Tooltip label={shareTooltip}>
+              <button
+                type="button"
+                className="page-row__share-button"
+                aria-label={shareTooltip}
+                onClick={() => onShare(page)}
+              >
+                <ShareIcon size={13} strokeWidth={1.75} aria-hidden />
+              </button>
+            </Tooltip>
+          ) : null}
+        </div>
         <p className="page-row__url">{page.viewUrl}</p>
         <p
           className={
@@ -106,6 +125,7 @@ export function PageRow({
               {messages.toTemporary}
             </MenuItem>
           )}
+          <MenuItem onSelect={() => onShare(page)}>{messages.share}</MenuItem>
           <MenuItem danger onSelect={() => onDelete(page)}>
             {messages.remove}
           </MenuItem>

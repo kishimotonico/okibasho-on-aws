@@ -13,10 +13,24 @@ interface CopyButtonProps {
   onError?: () => void;
   /** コピー成功を上位へ伝える。一覧側で残っていた失敗表示を引っ込めるのに使う */
   onCopied?: () => void;
+  /** 通常時の文言。省略時は「URLをコピー」（URL 以外をコピーする場合に指定する） */
+  label?: string;
+  /** コピー成功時の文言。省略時は「コピーしました」 */
+  copiedLabel?: string;
+  /** コピー失敗時の文言（labeled のみ）。省略時は「コピーに失敗しました」 */
+  failedLabel?: string;
 }
 
 /** URLコピーの共通部品。成功/失敗の一時表示は useCopyToClipboard に任せる */
-export function CopyButton({ value, variant, onError, onCopied }: CopyButtonProps) {
+export function CopyButton({
+  value,
+  variant,
+  onError,
+  onCopied,
+  label = messages.copyUrl,
+  copiedLabel = messages.copied,
+  failedLabel = messages.copyFailed,
+}: CopyButtonProps) {
   const { status, copy } = useCopyToClipboard();
 
   const handleClick = () => {
@@ -32,13 +46,13 @@ export function CopyButton({ value, variant, onError, onCopied }: CopyButtonProp
   const copied = status === 'copied';
 
   if (variant === 'icon') {
-    const label = copied ? messages.copied : messages.copyUrl;
+    const currentLabel = copied ? copiedLabel : label;
     return (
-      <Tooltip label={label}>
+      <Tooltip label={currentLabel}>
         <button
           type="button"
           className={copied ? 'icon-button icon-button--copied' : 'icon-button'}
-          aria-label={label}
+          aria-label={currentLabel}
           onClick={handleClick}
         >
           {copied ? (
@@ -63,7 +77,7 @@ export function CopyButton({ value, variant, onError, onCopied }: CopyButtonProp
       ) : (
         <Copy size={16} strokeWidth={1.75} aria-hidden />
       )}
-      <span>{copied ? messages.copied : failed ? messages.copyFailed : messages.copyUrl}</span>
+      <span>{copied ? copiedLabel : failed ? failedLabel : label}</span>
     </button>
   );
 }

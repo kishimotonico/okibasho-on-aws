@@ -16,9 +16,9 @@ vi.mock('~/hooks/usePagesApi', async (importOriginal) => {
       upload: (input: unknown) => upload(input),
       remove: vi.fn(),
       setRetention: vi.fn(),
-      viewUrl: (slug: string) => `https://pages.example.com/tanaka/${slug}/`,
+      viewUrl: (slug: string) => `https://pages.example.com/p/tanaka/${slug}/`,
       urlOrigin: 'https://pages.example.com',
-      userPath: '/tanaka/',
+      userPath: '/p/tanaka/',
     }),
   };
 });
@@ -30,7 +30,7 @@ function listedPage(slug: string): ListedPage {
     createdAt: '2026-08-01T00:00:00.000Z',
     expiresAt: null,
     retention: 'permanent',
-    viewUrl: `https://pages.example.com/tanaka/${slug}/`,
+    viewUrl: `https://pages.example.com/p/tanaka/${slug}/`,
   };
 }
 
@@ -66,7 +66,7 @@ describe('useUploadFlow', () => {
     upload.mockReset();
     upload.mockResolvedValue({
       slug: 'my-page',
-      viewUrl: 'https://pages.example.com/tanaka/my-page/',
+      viewUrl: 'https://pages.example.com/p/tanaka/my-page/',
     });
   });
 

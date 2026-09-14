@@ -1,10 +1,9 @@
-import { Trash2 } from 'lucide-react';
+import { Globe, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { ConfirmAlertDialog } from '~/components/AlertDialog';
-import { CopyButton } from '~/components/CopyButton';
 import { Tooltip } from '~/components/Tooltip';
-import { formatUrlForWrap } from '~/lib/format-url-for-wrap';
+import { UrlField } from '~/components/UrlField';
 import { messages } from '~/lib/messages';
 
 interface UploadResultProps {
@@ -14,11 +13,21 @@ interface UploadResultProps {
   deleting: boolean;
   onDelete: () => void;
   onAnother: () => void;
+  /** 「社外共有…」。今アップロードしたページの ShareDialog を開く（route 側で一元管理） */
+  onShare: () => void;
 }
 
-/** 公開できたあとに箱の下へ残るブロック。URL とコピー、削除、次のファイルを置く */
-export function UploadResult({ slug, viewUrl, deleting, onDelete, onAnother }: UploadResultProps) {
+/** 公開できたあとに箱の下へ残るブロック。URL とコピー、社外共有、削除、次のファイルを置く */
+export function UploadResult({
+  slug,
+  viewUrl,
+  deleting,
+  onDelete,
+  onAnother,
+  onShare,
+}: UploadResultProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   return (
     <div className="upload-result" role="status">
@@ -32,16 +41,22 @@ export function UploadResult({ slug, viewUrl, deleting, onDelete, onAnother }: U
         onConfirm={onDelete}
       />
 
-      <a
-        className="upload-result__url upload-result__url--primary"
-        href={viewUrl}
-        target="_blank"
-        rel="noreferrer"
-      >
-        {formatUrlForWrap(viewUrl)}
-      </a>
+      <UrlField
+        url={viewUrl}
+        onCopyError={() => setCopyError(messages.copyUrlFailed)}
+        onCopySuccess={() => setCopyError(null)}
+      />
+      {copyError ? <p className="message message--error">{copyError}</p> : null}
+
       <div className="upload-result__actions">
-        <CopyButton value={viewUrl} variant="labeled" />
+        <button
+          type="button"
+          className="button button--ghost upload-result__share"
+          onClick={onShare}
+        >
+          <Globe size={16} strokeWidth={1.75} aria-hidden />
+          <span>{messages.share}</span>
+        </button>
         <Tooltip label={messages.remove}>
           <button
             type="button"

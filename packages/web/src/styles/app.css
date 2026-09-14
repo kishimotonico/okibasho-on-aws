@@ -6,8 +6,10 @@
  *   20  .utility-menu         ユーティリティメニューのトリガー（固定位置）
  *   30  .ui-menu              メニュー（Menu、Radix DropdownMenu）
  *   40  .ui-tooltip           ツールチップ（Tooltip）
- *   50  .ui-alert__overlay    ダイアログの背景（AlertDialog）
- *   51  .ui-alert             ダイアログ本体（AlertDialog）
+ *   45  .ui-dialog__overlay   社外共有ダイアログの背景（ShareDialog、Radix Dialog）
+ *   46  .ui-dialog            社外共有ダイアログ本体（ShareDialog）
+ *   50  .ui-alert__overlay    確認ダイアログの背景（AlertDialog）。ShareDialog の上に重ねられる
+ *   51  .ui-alert             確認ダイアログ本体（AlertDialog）
  */
 
 /* ---------- トークン ---------- */
@@ -70,6 +72,7 @@ a:hover {
 }
 
 input[type='text'],
+input[type='password'],
 select {
   width: 100%;
   padding: 0.5rem 0.65rem;
@@ -81,13 +84,50 @@ select {
   caret-color: var(--text);
 }
 
-input[type='text']::placeholder {
+input[type='text']::placeholder,
+input[type='password']::placeholder {
   color: var(--muted);
 }
 
 input[type='text']:read-only {
   background: var(--bg);
   color: var(--text);
+}
+
+textarea {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--raised);
+  resize: vertical;
+}
+
+textarea::placeholder {
+  color: var(--muted);
+}
+
+.field-error {
+  margin: 0.3rem 0 0;
+  color: var(--danger);
+  font-size: 0.8125rem;
+}
+
+.field-hint {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.checkbox-field label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
 }
 
 .visually-hidden {
@@ -292,6 +332,14 @@ button.text-link,
   cursor: not-allowed;
 }
 
+.text-link.text-link--danger {
+  color: var(--danger);
+}
+
+.text-link.text-link--danger:hover:not(:disabled) {
+  color: color-mix(in srgb, var(--danger) 80%, var(--text));
+}
+
 /* ---------- アイコンボタン（PageRow のコピー・開く、UploadResult の削除、UtilityMenu のトリガー） ---------- */
 
 .icon-button {
@@ -422,23 +470,18 @@ button.text-link,
 /* UploadResult（成功後に箱の下へ残るブロック） */
 
 .upload-result {
+  width: 100%;
   padding-top: 0.15rem;
 }
 
-.upload-result__url {
-  display: block;
-  color: var(--muted);
-  font-size: 0.75rem;
-  word-break: break-all;
-}
-
-.upload-result__url--primary {
-  color: var(--text);
-  font-size: 0.95rem;
+/* 削除アイコンボタン（2.25rem 角）と高さを揃える。同じ ghost だが「次のファイルを置く」より
+   小さく控えめに見えるよう、padding とフォントサイズを絞る */
+.upload-result__share {
+  gap: 0.4rem;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 600;
-  text-align: center;
-  overflow-wrap: break-word;
-  word-break: keep-all;
 }
 
 .upload-result__delete {
@@ -467,6 +510,7 @@ button.text-link,
   flex-direction: column;
   align-items: flex-start;
   gap: 0.35rem;
+  width: 100%;
 }
 
 .url-field .field-label,
@@ -546,6 +590,53 @@ button.text-link,
 .url-input input[type='text']:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+/* ---------- UrlField（URL とコピーを一体にした表示。ShareDialog の共有URLで使う） ---------- */
+
+.url-display {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+}
+
+.url-display__link {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  padding: 0.5rem 0.65rem;
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* 長い URL は先頭側を省略し、slug / share-id 側（末尾）を見せる */
+  direction: rtl;
+  text-align: left;
+}
+
+.url-display__text {
+  /* 中身は独立した LTR ランとして扱い、文字順と末尾の記号のずれを防ぐ */
+  unicode-bidi: isolate;
+}
+
+.url-display__link:hover {
+  text-decoration: underline;
+}
+
+.url-display__link:focus-visible {
+  outline-offset: -2px;
+}
+
+.url-display .icon-button {
+  flex: 0 0 auto;
+  border-radius: 0 5px 5px 0;
 }
 
 /* ---------- RetentionToggle（30日 / 無期限のセグメント） ---------- */
@@ -844,8 +935,16 @@ button.text-link,
   min-width: 0;
 }
 
+.page-row__title {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
 .page-row h3 {
   margin: 0;
+  min-width: 0;
   font-size: 0.875rem;
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -868,6 +967,26 @@ button.text-link,
 .page-row__meta--expired {
   color: var(--danger);
   font-weight: 600;
+}
+
+.page-row__share-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.page-row__share-button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .page-row__actions {
@@ -920,6 +1039,219 @@ button.text-link,
   flex-wrap: wrap;
   gap: 0.45rem;
   margin-top: 0.9rem;
+}
+
+/* ---------- ShareDialog（社外共有。Radix Dialog をトークンで装飾。確認は ConfirmAlertDialog） ---------- */
+
+.ui-dialog__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: color-mix(in srgb, var(--text) 28%, transparent);
+}
+
+.ui-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 46;
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  padding: 1.1rem 1.25rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: var(--shadow-overlay);
+  transform: translate(-50%, -50%);
+  animation: ui-overlay-in 120ms ease-out;
+}
+
+.ui-dialog__close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+}
+
+.ui-dialog__title {
+  margin: 0 2rem 0.45rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.ui-dialog__description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.ui-dialog__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+
+.ui-dialog__actions-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-right: auto;
+}
+
+.share-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+
+.share-form__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  /* チェックボックスの文字の開始位置（入力 + gap 分）に合わせて段下げる */
+  margin-left: 1.5rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--line);
+}
+
+.share-form__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.share-form__field {
+  flex: 1 1 10rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* 生成済みパスワードは19文字＋アイコン2つ分、ユーザー名より広めにとる */
+.share-form__field--password {
+  flex: 1.6 1 14rem;
+}
+
+.share-form__field-label {
+  display: block;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+/* ---------- 発行済み Basic の読み取り表示・変更モード（.share-form__group の中） ----------
+ * 「変更」「取り消す」は常に同じ位置（グループ右上）に置き、切り替えても場所が動かない。
+ * 読み取り表示と入力欄はどちらも share-form__group の左端・幅をそのまま使う。
+ */
+
+.share-form__basic-toggle {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.share-form__basic-display {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.share-form__basic-value {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.share-form__basic-value--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.05em;
+}
+
+/* ---------- 生成済みパスワード欄（.url-display と同系統。再生成・コピーの icon button を内側に置く） ---------- */
+
+.share-form__password-input {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+}
+
+.share-form__password-input:focus-within {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.share-form__password-input input[type='text'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  /* .url-display__link と同じ font-size にして、内側の icon-button（固定高さ）と枠の高さを揃える */
+  font-size: 0.875rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.share-form__password-input input[type='text']:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.share-form__password-input .icon-button {
+  flex: 0 0 auto;
+  border-radius: 0;
+}
+
+.share-form__password-input .icon-button:last-child {
+  border-radius: 0 5px 5px 0;
+}
+
+/* ---------- ShareDialog の完了画面（発行・保存が成功すると入れ替わる） ---------- */
+
+.share-complete {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+  /* フッター（.ui-dialog__actions）との間を、通常の設定フォーム（.share-form の gap）と揃える */
+  margin-bottom: 0.9rem;
+}
+
+.share-complete__credentials {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.4rem;
+}
+
+.share-complete__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.share-complete__value {
+  margin: 0;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.share-complete__value--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.share-complete__password {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
 }
 
 /* ---------- Menu（一覧行の kebab、UtilityMenu の中身。Radix DropdownMenu） ---------- */
@@ -1030,7 +1362,8 @@ button.text-link,
 @media (prefers-reduced-motion: reduce) {
   .ui-menu[data-state='open'],
   .ui-tooltip,
-  .ui-alert {
+  .ui-alert,
+  .ui-dialog {
     animation: none;
   }
 
@@ -1089,14 +1422,5 @@ button.text-link,
 
   .retention-field .seg button {
     flex: 1;
-  }
-
-  .page-row {
-    grid-template-columns: 1fr;
-    gap: 0.45rem;
-  }
-
-  .page-row__actions {
-    justify-content: flex-start;
   }
 }

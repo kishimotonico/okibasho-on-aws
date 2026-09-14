@@ -15,7 +15,7 @@ function page(slug: string, overrides: Partial<ListedPage> = {}): ListedPage {
     createdAt: '2026-08-01T00:00:00.000Z',
     expiresAt: '2027-01-01T00:00:00.000Z',
     retention: 'temporary',
-    viewUrl: `https://pages.example.com/tanaka/${slug}/`,
+    viewUrl: `https://pages.example.com/p/tanaka/${slug}/`,
     ...overrides,
   };
 }
@@ -25,6 +25,7 @@ function renderList(props: Partial<Parameters<typeof PagesList>[0]> = {}) {
     onReupload: vi.fn(),
     onRetentionChange: vi.fn(),
     onDelete: vi.fn(),
+    onShare: vi.fn(),
   };
   render(
     <TooltipProvider>
@@ -56,7 +57,7 @@ describe('PagesList', () => {
     renderList();
 
     const row = rowOf('beta');
-    expect(within(row).getByText('https://pages.example.com/tanaka/beta/')).toBeInTheDocument();
+    expect(within(row).getByText('https://pages.example.com/p/tanaka/beta/')).toBeInTheDocument();
     expect(within(row).getByText(/まで（あと\d+日）|無期限|期限切れ（/)).toBeInTheDocument();
   });
 
@@ -76,7 +77,7 @@ describe('PagesList', () => {
 
     expect(within(row).getByRole('link', { name: 'ページを開く' })).toHaveAttribute(
       'href',
-      'https://pages.example.com/tanaka/beta/',
+      'https://pages.example.com/p/tanaka/beta/',
     );
     expect(within(row).queryByRole('button', { name: '再アップロード' })).toBeNull();
     expect(within(row).queryByRole('button', { name: '削除' })).toBeNull();
@@ -200,5 +201,56 @@ describe('PagesList', () => {
     expect(
       screen.getByText('まだページがありません。上のフォームからアップロードしてください。'),
     ).toBeInTheDocument();
+  });
+
+  it('社外共有中のページだけ、slug の横に地球儀のボタンを表示する（保護なしは Globe）', () => {
+    renderList({
+      pages: [page('alpha'), page('beta', { share: { id: 'a'.repeat(22) } })],
+    });
+
+    expect(
+      within(rowOf('beta')).getByRole('button', { name: /^社外共有中・誰でも閲覧可/ }),
+    ).toBeInTheDocument();
+    expect(within(rowOf('alpha')).queryByRole('button', { name: /^社外共有中/ })).toBeNull();
+  });
+
+  it('パスワードや IP 制限がある共有は、区別できるよう別のアイコン（GlobeLock）のボタンにする', () => {
+    renderList({
+      pages: [
+        page('gamma', {
+          share: {
+            id: 'a'.repeat(22),
+            basic: { username: 'guest', salt: 'b'.repeat(22), hash: 'c'.repeat(64) },
+          },
+        }),
+      ],
+    });
+
+    expect(
+      within(rowOf('gamma')).getByRole('button', {
+        name: /^社外共有中・パスワード \/ IP 制限あり/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('slug 横の地球儀ボタンを押すと、その行の onShare が呼ばれる（ShareDialog を開く）', async () => {
+    const user = userEvent.setup();
+    const { onShare } = renderList({
+      pages: [page('alpha'), page('beta', { share: { id: 'a'.repeat(22) } })],
+    });
+
+    await user.click(within(rowOf('beta')).getByRole('button', { name: /^社外共有中/ }));
+
+    expect(onShare).toHaveBeenCalledWith('beta');
+  });
+
+  it('kebab の「社外共有…」は onShare を slug 付きで呼ぶ（ShareDialog の開閉は route 側の仕事）', async () => {
+    const user = userEvent.setup();
+    const { onShare } = renderList();
+
+    await user.click(within(rowOf('beta')).getByRole('button', { name: 'betaの操作' }));
+    await user.click(screen.getByRole('menuitem', { name: '社外共有…' }));
+
+    expect(onShare).toHaveBeenCalledWith('beta');
   });
 });

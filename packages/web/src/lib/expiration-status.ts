@@ -9,7 +9,8 @@ export type ExpirationStatus =
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const JST = 'Asia/Tokyo';
 
-function formatJstDate(iso: string): string {
+/** 日本時間の絶対日付（例: `2026/8/20`）。ShareDialog の保存期限案内でも使う */
+export function formatJstDate(iso: string): string {
   const parts = new Intl.DateTimeFormat('ja-JP', {
     timeZone: JST,
     year: 'numeric',

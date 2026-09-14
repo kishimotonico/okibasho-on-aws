@@ -1,4 +1,4 @@
-import { isValidSlug } from '@cli/page';
+import { isValidSlug, type PageShare } from '@cli/page';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { startTransition, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
 
@@ -6,6 +6,7 @@ import { loadAuthSession } from '~/auth/user-manager';
 import { computeExpiresAt, listPages, type ListedPage, type Retention } from '~/api/pages';
 import { Composer, type ComposerSignal } from '~/components/Composer';
 import { PagesList } from '~/components/PagesList';
+import { ShareDialog } from '~/components/ShareDialog';
 import { getWebConfig } from '~/config/env';
 import { usePagesApi, userMessage } from '~/hooks/usePagesApi';
 import { messages } from '~/lib/messages';
@@ -111,6 +112,10 @@ function HomePage() {
   const [composerSeed, setComposerSeed] = useState<ComposerSignal>(null);
   const [retiredSlug, setRetiredSlug] = useState<ComposerSignal>(null);
   const [highlight, setHighlight] = useState<ComposerSignal>(null);
+  // ShareDialog の開閉は一覧・成功結果ブロックのどちらから開いても同じ経路になるよう、ここで一元管理する
+  const [shareSlug, setShareSlug] = useState<string | null>(null);
+  // pages から都度探すことで、保存後に一覧が更新されるとダイアログの表示（共有URLなど）も追随する
+  const sharePage = shareSlug ? (pages.find((page) => page.slug === shareSlug) ?? null) : null;
 
   // ハイライトは行が一覧に現れてから数秒。再取得が遅れても見えないまま終わらせない
   const highlightVisible = highlight != null && pages.some((page) => page.slug === highlight.slug);
@@ -157,6 +162,16 @@ function HomePage() {
     );
   };
 
+  /**
+   * 社外共有の保存/再発行/停止。ShareDialog がエラーを自前で表示するので、
+   * 一覧の楽観更新（useOptimistic）は使わず、保存が終わった本物の一覧に入れ替えてからダイアログへ返す。
+   * これで発行直後もダイアログの共有URL表示がすぐに一覧の内容と一致する。
+   */
+  const handleShareChange = async (page: ListedPage, share: PageShare | null) => {
+    await api.updateShare(page.slug, share);
+    await router.invalidate();
+  };
+
   const handleUploaded = (slug: string) => {
     setHighlight((current) => nextSignal(current, slug));
     startTransition(async () => {
@@ -169,6 +184,8 @@ function HomePage() {
     uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const handleShare = (slug: string) => setShareSlug(slug);
+
   return (
     <div className="page">
       <div ref={uploadSectionRef} className="upload-section">
@@ -180,6 +197,7 @@ function HomePage() {
           deleting={isMutating}
           onUploaded={handleUploaded}
           onDelete={handleDelete}
+          onShare={handleShare}
         />
       </div>
 
@@ -192,8 +210,23 @@ function HomePage() {
           onReupload={handleReupload}
           onRetentionChange={handleRetentionChange}
           onDelete={(page) => handleDelete(page.slug)}
+          onShare={handleShare}
         />
       </section>
+
+      {sharePage ? (
+        <ShareDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setShareSlug(null);
+            }
+          }}
+          page={sharePage}
+          pagesBaseUrl={api.urlOrigin}
+          onSave={(share) => handleShareChange(sharePage, share)}
+        />
+      ) : null}
     </div>
   );
 }

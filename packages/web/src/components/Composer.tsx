@@ -29,6 +29,8 @@ interface ComposerProps {
   deleting: boolean;
   onUploaded: (slug: string) => void;
   onDelete: (slug: string) => void;
+  /** 「社外共有…」。今アップロードしたページの ShareDialog を開く（route 側で一元管理） */
+  onShare: (slug: string) => void;
 }
 
 const DEFAULT_RETENTION: Retention = 'temporary';
@@ -42,6 +44,7 @@ export function Composer({
   deleting,
   onUploaded,
   onDelete,
+  onShare,
 }: ComposerProps) {
   const api = usePagesApi();
   const composerRef = useRef<HTMLDivElement>(null);
@@ -137,6 +140,7 @@ export function Composer({
               viewUrl={success.viewUrl}
               deleting={deleting}
               onDelete={() => onDelete(success.slug)}
+              onShare={() => onShare(success.slug)}
               onAnother={() => {
                 setSlug(generateRandomSlug());
                 setRetention(DEFAULT_RETENTION);
