@@ -77,7 +77,7 @@ trusted な管理アプリと untrusted な共有ページを別 origin に分�
 | URL | 公開範囲 | 認証 | Distribution | S3 key |
 | --- | --- | --- | --- | --- |
 | `https://pages.share.example.jp/p/<user>/<slug>/` | 内部（ログイン必須） | Signed Cookie 必須（独自ドメイン導入後） | pages（`/p/*`） | `pages/<email>/<slug>/` |
-| `https://pages.share.example.jp/s/<tag><share-id>/` | 外部（ページ作成者が発行した URL を知っている人） | 自動生成パスワードによる Basic 認証（常時）＋任意でIP制限 | pages（`/s/*`） | KVS の投影から解決（実体は `pages/<email>/<slug>/`） |
+| `https://pages.share.example.jp/s/<tag><share-id>/` | 外部（ページ作成者が発行した URL を知っている人） | share-id自体が推測困難な秘匿情報（基本の保護）＋任意で自動生成パスワードによるBasic認証＋任意でIP制限 | pages（`/s/*`） | KVS の投影から解決（実体は `pages/<email>/<slug>/`） |
 
 `<user>` はメールのローカル部だけを見せる。全員が同じ Workspace ドメインなので、ドメイン部は CloudFront Function で静的に補完する。
 
@@ -246,7 +246,7 @@ meta/
 
 `expiresAt` が `null` なら無期限。クライアントが書くので自己申告だが、影響は自分の prefix とストレージコストだけで他人には及ばない。
 
-`share` は外部共有の設定で、無ければ外部共有していない。フィールドの詳細は「外部共有」節にある。
+`share` は外部共有の設定で、無ければ外部共有していない。`password` は任意（付けていなければ Basic 認証をしない）。フィールドの詳細は「外部共有」節にある。
 
 metadata はページ成果物の prefix（配信対象）の外にあるため、CloudFront から読める心配がない。ユーザーが同名ファイルをアップロードしても正本と衝突しない。
 
@@ -347,7 +347,7 @@ Distribution 単位の設定は `/s/*` にも及ぶ副作用がある。
   | `pages/alice@example.com/hello/` | `prgdKq0F-Hu` |
   | `pages/tanaka@example.jp/q3-report/` | `XLCXXgKt3re` |
 
-- 保護はパスワード（Basic 認証）だけを標準とし、ユーザー名は `guest` 固定・自由入力にしない。パスワードはシステムが `generateSharePassword`（`@okibasho/core`）で自動生成する（手入力は受け付けない）。metadata は所有者本人しか読めない IAM 境界の内側にあるため、ハッシュ化・salt はやめて平文で持つ。管理 UI はいつでも再表示・コピーできる（「最初の1回だけ表示」の完了画面は持たない）
+- share-id 自体が推測困難な秘匿情報であり、これだけで基本の保護として十分という位置付け。パスワード（Basic 認証）は任意の上乗せで、付けるときだけシステムが `generateSharePassword`（`@okibasho/core`）で自動生成する（手入力は受け付けない）。ユーザー名は `guest` 固定・自由入力にしない。metadata は所有者本人しか読めない IAM 境界の内側にあるため、ハッシュ化・salt はやめて平文で持つ。管理 UI はいつでも再表示・コピー・付け外しができる（「最初の1回だけ表示」の完了画面は持たない）
 - IP 制限は「IPv4アドレスの完全一致リスト」（1〜20件）として仕組みだけ残す。CIDR のような範囲指定・正規化はしない。管理 UI には出さず、metadata の直接編集で設定する運用にする。既存の IP リストは、web で共有を作り直しても消さず引き継ぐ
 
 tag の衝突（66bit）は考慮しない。1 万ページ規模でも偶然の衝突は 10⁻¹³ 程度である。
@@ -361,9 +361,9 @@ CloudFront KeyValueStore には、正本（metadataの `share`）から導出し
 ```
 
 - `p` はそのページの prefix、`id` は share-id。router 側は URL 後半 22 文字とこの `id` を照合する
-- `b` は `base64("guest:" + パスワード)`。パスワードは常に設定されているため `b` は必須で、router 側は `Authorization` ヘッダと `"Basic " + b` を文字列比較するだけで Basic 認証を判定できる（ハッシュ比較も `crypto` も使わない）
+- `b` は `base64("guest:" + パスワード)`。パスワードを付けているときだけ設定し、router 側は `Authorization` ヘッダと `"Basic " + b` を文字列比較するだけで Basic 認証を判定できる（ハッシュ比較も `crypto` も使わない）。`b` が無ければ router 側は Basic 認証をせず通す
 - `ips` は IP 制限（完全一致リスト）があるときだけ。router 側は `ips.indexOf(clientIp) !== -1` だけで判定する
-- キーが prefix から一意に決まるため、旧仕様（キーがクライアントの選ぶ share-id だった頃）にあった墓標・hijack 判定・prefix の辞書順による先勝ちは無くなった。あるページの tag は常にそのページだけが使う。URL の再発行とパスワードの作り直しは「作り直す」という1つの操作にまとめてあり、同じキーの値を上書きする。共有の停止・削除・期限切れはキーの削除で表す
+- キーが prefix から一意に決まるため、旧仕様（キーがクライアントの選ぶ share-id だった頃）にあった墓標・hijack 判定・prefix の辞書順による先勝ちは無くなった。あるページの tag は常にそのページだけが使う。URL の再発行は「作り直す」という操作で行い、パスワードを付けている場合はそのタイミングでパスワードも作り直す。同じキーの値を上書きする。パスワードの付け外し・共有の停止・削除・期限切れはキーの上書き・削除で表す
 
 投影は 2 つの経路から行う。実装は `packages/infra/lib/lambda/page-maintenance/`。
 
@@ -391,7 +391,7 @@ Lambda の失敗は CloudWatch Logs と Lambda の `Errors` メトリクスで�
 3. id が `/^[A-Za-z0-9_-]{33}$/` に合わなければ 404。合えば前半 11 文字を tag、後半 22 文字を share-id として分ける
 4. tag で KVS を get し、値が無い・パース失敗・`id` が share-id と一致しなければ 404
 5. `ips` があり viewer の IP がどれとも完全一致しない → 403
-6. `Authorization` が `"Basic " + b` と一致しない → 401 + `WWW-Authenticate: Basic realm="okibasho", charset="UTF-8"`（パスワードは常に設定されているため、この判定は常に行う）
+6. `b`（パスワード）が設定されていて、`Authorization` が `"Basic " + b` と一致しない → 401 + `WWW-Authenticate: Basic realm="okibasho", charset="UTF-8"`。`b` が無ければこの判定はせず素通しする
 7. URI を投影先の prefix（`p`）+ rest に書き換える（末尾 `/` なら `index.html` を補完）。`Authorization` ヘッダは削除して転送しない
 
 エラーレスポンスの body は短い固定文言にする。

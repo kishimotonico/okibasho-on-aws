@@ -1,5 +1,5 @@
 import type { Retention } from '@okibasho/core';
-import { EllipsisVertical, GlobeLock, SquareArrowOutUpRight } from 'lucide-react';
+import { EllipsisVertical, Globe, GlobeLock, SquareArrowOutUpRight } from 'lucide-react';
 import { useRef } from 'react';
 
 import { CopyButton } from '~/components/CopyButton';
@@ -50,14 +50,22 @@ export function PageRow({
         <div className="page-row__title">
           <h3>{page.slug}</h3>
           {page.share ? (
-            <Tooltip label={messages.shareActive}>
+            <Tooltip
+              label={page.share.password ? messages.shareActive : messages.shareActiveNoPassword}
+            >
               <button
                 type="button"
                 className="page-row__share-button"
-                aria-label={messages.shareActive}
+                aria-label={
+                  page.share.password ? messages.shareActive : messages.shareActiveNoPassword
+                }
                 onClick={() => onShare(page)}
               >
-                <GlobeLock size={13} strokeWidth={1.75} aria-hidden />
+                {page.share.password ? (
+                  <GlobeLock size={13} strokeWidth={1.75} aria-hidden />
+                ) : (
+                  <Globe size={13} strokeWidth={1.75} aria-hidden />
+                )}
               </button>
             </Tooltip>
           ) : null}

@@ -39,6 +39,7 @@ export const messages = {
   retentionChangeFailed: '保存期間の変更に失敗しました',
   share: '外部共有…',
   shareActive: '外部共有中',
+  shareActiveNoPassword: '外部共有中（パスワードなし）',
   shareUpdateFailed: '外部共有の設定に失敗しました',
 
   /** 確認ダイアログ */
@@ -54,22 +55,28 @@ export const messages = {
   shareDialogDescriptionNew: '外部の人に渡す別のURLを発行します。内部URLはそのまま使えます。',
   shareUrlLabel: '共有URL',
   shareExpiresHint: (dateLabel: string) => `保存期限（${dateLabel}）を過ぎると共有も終わります`,
+  sharePasswordToggle: 'パスワードを付ける',
+  sharePasswordToggleHint:
+    'URLを知っている人だけが開けます。他社への安心感を上乗せしたいときに付けてください。',
   shareUsernameLabel: 'ユーザー名',
   sharePasswordLabel: 'パスワード',
   sharePasswordCopy: 'パスワードをコピー',
   shareIssue: '共有URLを発行',
   shareIssueFailed: '発行に失敗しました',
+  sharePasswordOnFailed: 'パスワードの設定に失敗しました',
+  sharePasswordOffFailed: 'パスワードの解除に失敗しました',
   shareRecreate: '作り直す',
   shareRecreateConfirm: '作り直す',
   shareRecreateFailed: '作り直しに失敗しました',
   shareStop: '共有を停止',
   shareCopyFailed: 'URL のコピーに失敗しました',
-  shareRecreateDialogTitle: 'URLとパスワードを作り直す',
-  shareRecreateDialogDescription: '古いURLとパスワードは使えなくなります。続行しますか？',
+  shareRecreateDialogTitle: 'URLを作り直す',
+  shareRecreateDialogDescription:
+    '古いURLは使えなくなります（パスワードを付けている場合はそれも作り直します）。続行しますか？',
   shareStopDialogTitle: '外部共有を停止する',
   shareStopDialogDescription: '共有URLは使えなくなります。続行しますか？',
   shareStopFailed: '共有停止に失敗しました',
-  shareNoticeRecreate: '新しいURLとパスワードに切り替わるまで少し時間がかかることがあります。',
+  shareNoticeRecreate: '新しいURLに切り替わるまで少し時間がかかることがあります。',
   shareNoticeStop: '無効になるまで少し時間がかかることがあります。',
   shareClose: '閉じる',
   shareCopyAll: 'まとめてコピー',
@@ -109,8 +116,8 @@ export const messages = {
   shareVisibilityInternalOption: '内部のみ',
   shareVisibilityExternalOption: '外部にも公開',
   shareVisibilityLocked: '外部共有中（設定はそのまま）',
-  shareVisibilityAutoNotice:
-    'パスワード保護つきの外部共有URLを自動で発行します。パスワードはあとで一覧の共有から確認できます。',
+  shareVisibilityAutoNotice: '外部共有URLを自動で発行します。',
+  shareVisibilityPasswordToggle: 'パスワードを付ける',
 
   /** 一覧の期限表示 */
   expiredLabel: (dateLabel: string) => `期限切れ（${dateLabel}）`,

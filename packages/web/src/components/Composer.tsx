@@ -68,6 +68,8 @@ export function Composer({
   const [slug, setSlug] = useState(() => initialSlug ?? generateRandomSlug());
   const [retention, setRetention] = useState<Retention>(DEFAULT_RETENTION);
   const [visibility, setVisibility] = useState<PageVisibility>(DEFAULT_VISIBILITY);
+  // 「外部にも公開」を選んだときだけ意味を持つ、パスワードを付けるかどうか。既定はオフ
+  const [withPassword, setWithPassword] = useState(false);
   // アップロード成功のタイミングで「今回新しく外部公開したか」を判別するための一時置き場。
   // Composer の state は uploading 中も残るので、submit の直前に決めた内容をここへ控える
   const justSharedRef = useRef(false);
@@ -77,15 +79,18 @@ export function Composer({
   const lockedShare = existingPageForSlug?.share ?? null;
 
   /**
-   * 公開範囲の選択から share を組み立てる。パスワードは常に自動生成するので、ここで検証が
-   * 失敗することはない。外部共有中のページへの差し替え、または「内部のみ」なら undefined
-   * （既存を引き継ぐ/共有しない）
+   * 公開範囲の選択から share を組み立てる。外部共有中のページへの差し替え、または
+   * 「内部のみ」なら undefined（既存を引き継ぐ/共有しない）。パスワードは
+   * 「パスワードを付ける」がオンのときだけ自動生成する（既定はオフ）
    */
   const resolveShareForUpload = (): PageShare | undefined => {
     if (lockedShare || visibility === 'internal') {
       return undefined;
     }
-    return { id: generateShareId(), password: generateSharePassword() };
+    return {
+      id: generateShareId(),
+      ...(withPassword ? { password: generateSharePassword() } : {}),
+    };
   };
 
   /** share を確定してから run を呼ぶ */
@@ -201,6 +206,7 @@ export function Composer({
                 setSlug(generateRandomSlug());
                 setRetention(DEFAULT_RETENTION);
                 setVisibility(DEFAULT_VISIBILITY);
+                setWithPassword(false);
                 flow.reset();
               }}
             />
@@ -253,6 +259,15 @@ export function Composer({
             >
               <div className="share-visibility-panel__inner">
                 <p className="field-hint">{messages.shareVisibilityAutoNotice}</p>
+                <label className="share-password-toggle">
+                  <input
+                    type="checkbox"
+                    checked={withPassword}
+                    disabled={busy}
+                    onChange={(event) => setWithPassword(event.target.checked)}
+                  />
+                  {messages.shareVisibilityPasswordToggle}
+                </label>
               </div>
             </div>
           </>

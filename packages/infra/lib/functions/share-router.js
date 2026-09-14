@@ -78,10 +78,12 @@ async function handler(event) {
     }
   }
 
-  // Basic認証。パスワードは常に設定されているため、entry.bとの文字列比較だけで判定できる
-  var authHeader = request.headers.authorization && request.headers.authorization.value;
-  if (authHeader !== 'Basic ' + entry.b) {
-    return unauthorized();
+  // Basic認証。パスワードは付けたときだけentry.bがあり、その場合だけentry.bとの文字列比較で判定する
+  if (typeof entry.b === 'string') {
+    var authHeader = request.headers.authorization && request.headers.authorization.value;
+    if (authHeader !== 'Basic ' + entry.b) {
+      return unauthorized();
+    }
   }
 
   // URIをprefix + restへrewrite。Authorizationは転送しない

@@ -284,4 +284,25 @@ describe('share-router', () => {
       expect(result).toMatchObject({ statusCode: 401 });
     });
   });
+
+  describe('パスワード無し(bが無いエントリ)', () => {
+    it('Authorizationヘッダが無くてもrewriteされる(Basic認証をしない)', async () => {
+      store.set(TAG, JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: SHARE_ID }));
+      const result = await handler(makeEvent(`/s/${ID}/`));
+      expect(result).toMatchObject({ uri: '/pages/tanaka@example.jp/q3/index.html' });
+    });
+
+    it('IP制限があればそちらは引き続き判定する', async () => {
+      store.set(
+        TAG,
+        JSON.stringify({
+          p: 'pages/tanaka@example.jp/q3/',
+          id: SHARE_ID,
+          ips: ['203.0.113.5'],
+        }),
+      );
+      const result = await handler(makeEvent(`/s/${ID}/`, { ip: '198.51.100.9' }));
+      expect(result).toMatchObject({ statusCode: 403 });
+    });
+  });
 });

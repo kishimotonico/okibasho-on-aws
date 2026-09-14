@@ -6,9 +6,10 @@ export interface ShareKvsValue {
   id: string;
   /**
    * base64("guest:"+password)。router側は `"Basic " + b` とAuthorizationヘッダを
-   * そのまま文字列比較するだけでBasic認証を判定できる。パスワードは常に設定されているため必須
+   * そのまま文字列比較するだけでBasic認証を判定できる。パスワードを付けたときだけ設定する。
+   * 無ければrouter側はBasic認証を行わない
    */
-  b: string;
+  b?: string;
   /** 完全一致で許可するIPv4アドレス。設定されているときだけ */
   ips?: string[];
 }
@@ -16,8 +17,8 @@ export interface ShareKvsValue {
 /** metadata の share フィールド(検証済み) */
 export interface ValidatedShare {
   id: string;
-  /** 自動生成された平文パスワード。常に設定されている */
-  password: string;
+  /** 自動生成された平文パスワード。任意。付けたときだけ設定する */
+  password?: string;
   allowedIps?: string[];
 }
 

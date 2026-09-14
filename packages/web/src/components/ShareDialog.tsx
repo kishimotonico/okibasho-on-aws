@@ -54,11 +54,13 @@ function buildShareUrl(pagesBaseUrl: string, shareTag: string, id: string): stri
 
 /**
  * 外部共有の発行・作り直し・停止をひとつのダイアログでまとめる。
- * パスワードは常に自動生成された平文で、ユーザー名（guest固定）とあわせていつでも読み取り・コピーできる。
- * 「最初の1回だけ表示」の完了画面は持たない
+ * 秘匿URL（share-id）だけで基本の保護は成立し、パスワードは他社への安心感のための
+ * 任意の上乗せ。付けるときだけシステムが自動生成した平文パスワードを、ユーザー名
+ * （guest固定）とあわせていつでも読み取り・コピーできる
  */
 export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: ShareDialogProps) {
   const existingShare = page.share ?? null;
+  const hasPassword = Boolean(existingShare?.password);
 
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -84,9 +86,36 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
     setSaving(true);
     setError(null);
     try {
-      await onSave({ id: generateShareId(), password: generateSharePassword() });
+      await onSave({ id: generateShareId() });
     } catch (err) {
       setError(err instanceof Error ? err.message : messages.shareIssueFailed);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePasswordToggle = async (next: boolean) => {
+    if (!existingShare) {
+      return;
+    }
+    setSaving(true);
+    setNotice(null);
+    setError(null);
+    try {
+      if (next) {
+        await onSave({ ...existingShare, password: generateSharePassword() });
+      } else {
+        const { password: _password, ...rest } = existingShare;
+        await onSave(rest);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : next
+            ? messages.sharePasswordOnFailed
+            : messages.sharePasswordOffFailed,
+      );
     } finally {
       setSaving(false);
     }
@@ -101,7 +130,11 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
     setNotice(null);
     setError(null);
     try {
-      await onSave({ ...existingShare, id: generateShareId(), password: generateSharePassword() });
+      await onSave({
+        ...existingShare,
+        id: generateShareId(),
+        ...(hasPassword ? { password: generateSharePassword() } : {}),
+      });
       setNotice('recreate');
     } catch (err) {
       setError(err instanceof Error ? err.message : messages.shareRecreateFailed);
@@ -165,27 +198,42 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
                 </p>
               ) : null}
 
-              <div className="share-credentials">
-                <div className="share-credentials__field">
-                  <span className="share-form__field-label">{messages.shareUsernameLabel}</span>
-                  <p className="share-credentials__value share-credentials__value--mono">
-                    {SHARE_USERNAME}
-                  </p>
-                </div>
-                <div className="share-credentials__field">
-                  <span className="share-form__field-label">{messages.sharePasswordLabel}</span>
-                  <div className="share-credentials__password">
-                    <span className="share-credentials__value share-credentials__value--mono">
-                      {existingShare.password}
-                    </span>
-                    <CopyButton
-                      value={existingShare.password}
-                      variant="icon"
-                      label={messages.sharePasswordCopy}
-                    />
+              <label className="share-password-toggle">
+                <input
+                  type="checkbox"
+                  checked={hasPassword}
+                  disabled={saving}
+                  onChange={(event) => void handlePasswordToggle(event.target.checked)}
+                />
+                {messages.sharePasswordToggle}
+              </label>
+              {!hasPassword ? (
+                <p className="field-hint">{messages.sharePasswordToggleHint}</p>
+              ) : null}
+
+              {hasPassword ? (
+                <div className="share-credentials">
+                  <div className="share-credentials__field">
+                    <span className="share-form__field-label">{messages.shareUsernameLabel}</span>
+                    <p className="share-credentials__value share-credentials__value--mono">
+                      {SHARE_USERNAME}
+                    </p>
+                  </div>
+                  <div className="share-credentials__field">
+                    <span className="share-form__field-label">{messages.sharePasswordLabel}</span>
+                    <div className="share-credentials__password">
+                      <span className="share-credentials__value share-credentials__value--mono">
+                        {existingShare.password}
+                      </span>
+                      <CopyButton
+                        value={existingShare.password!}
+                        variant="icon"
+                        label={messages.sharePasswordCopy}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : null}
 
               {error ? <p className="message message--error">{error}</p> : null}
               {notice ? <p className="field-hint">{noticeMessage(notice)}</p> : null}
@@ -209,15 +257,17 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
                     {messages.shareStop}
                   </button>
                 </div>
-                <CopyButton
-                  value={messages.shareCopyAllText(
-                    shareUrl,
-                    SHARE_USERNAME,
-                    existingShare.password,
-                  )}
-                  variant="labeled"
-                  label={messages.shareCopyAll}
-                />
+                {hasPassword ? (
+                  <CopyButton
+                    value={messages.shareCopyAllText(
+                      shareUrl,
+                      SHARE_USERNAME,
+                      existingShare.password!,
+                    )}
+                    variant="labeled"
+                    label={messages.shareCopyAll}
+                  />
+                ) : null}
               </div>
             </>
           ) : (

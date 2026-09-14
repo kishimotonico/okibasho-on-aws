@@ -66,7 +66,11 @@ describe('isValidIp', () => {
 });
 
 describe('validateShare', () => {
-  it('id/password の最小構成を受け付ける', () => {
+  it('idだけの最小構成を受け付ける(パスワードは任意)', () => {
+    expect(validateShare({ id: VALID_ID })).toEqual({ id: VALID_ID });
+  });
+
+  it('password付きの構成を受け付ける', () => {
     expect(validateShare({ id: VALID_ID, password: VALID_PASSWORD })).toEqual({
       id: VALID_ID,
       password: VALID_PASSWORD,
@@ -82,10 +86,10 @@ describe('validateShare', () => {
     expect(validateShare({ id: 'short', password: VALID_PASSWORD })).toBeNull();
   });
 
-  it('passwordが無い/不正なら null', () => {
-    expect(validateShare({ id: VALID_ID })).toBeNull();
+  it('passwordが不正な形式なら null(未設定は許容する)', () => {
     expect(validateShare({ id: VALID_ID, password: '' })).toBeNull();
     expect(validateShare({ id: VALID_ID, password: 'a\nb' })).toBeNull();
+    expect(validateShare({ id: VALID_ID, password: 123 })).toBeNull();
   });
 
   it('allowedIpsが0件なら null', () => {
@@ -147,6 +151,11 @@ describe('buildShareKvsValue / serializeKvsValue', () => {
     });
   });
 
+  it('passwordが無ければbを持たない', () => {
+    const value = buildShareKvsValue('pages/tanaka@example.jp/q3/', { id: VALID_ID });
+    expect(value).toEqual({ p: 'pages/tanaka@example.jp/q3/', id: VALID_ID });
+  });
+
   it('allowedIpsがあればipsを含む', () => {
     const value = buildShareKvsValue('pages/tanaka@example.jp/q3/', {
       id: VALID_ID,
@@ -185,6 +194,18 @@ describe('buildDesiredEntry', () => {
     expect(buildDesiredEntry(metadata, prefix, now)).toEqual({
       id: VALID_ID,
       value: { p: prefix, id: VALID_ID, b: EXPECTED_B },
+    });
+  });
+
+  it('passwordが無くてもdesired entryを返す(bを持たない値になる)', () => {
+    const metadata = {
+      createdAt: '2025-01-01T00:00:00Z',
+      expiresAt: null,
+      share: { id: VALID_ID },
+    };
+    expect(buildDesiredEntry(metadata, prefix, now)).toEqual({
+      id: VALID_ID,
+      value: { p: prefix, id: VALID_ID },
     });
   });
 

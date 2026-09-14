@@ -196,6 +196,16 @@ describe('PagesList', () => {
     expect(within(rowOf('alpha')).queryByRole('button', { name: '外部共有中' })).toBeNull();
   });
 
+  it('パスワード無しの外部共有はGlobeアイコン・別文言のボタンになる', () => {
+    renderList({
+      pages: [page('gamma', { share: { id: 'a'.repeat(22) } })],
+    });
+
+    expect(
+      within(rowOf('gamma')).getByRole('button', { name: '外部共有中（パスワードなし）' }),
+    ).toBeInTheDocument();
+  });
+
   it('slug 横の地球儀ボタンを押すと、その行の onShare が呼ばれる（ShareDialog を開く）', async () => {
     const user = userEvent.setup();
     const { onShare } = renderList({

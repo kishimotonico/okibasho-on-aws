@@ -1130,6 +1130,24 @@ button.text-link,
   font-size: 0.8125rem;
 }
 
+/* ---------- ShareDialog / Composer のパスワード付け外しトグル ---------- */
+
+.share-password-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.share-password-toggle input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--text);
+  cursor: pointer;
+}
+
 /* ---------- ShareDialog のユーザー名・パスワード表示（常時表示。ハッシュ化も一時表示もしない） ---------- */
 
 .share-credentials {

@@ -11,8 +11,11 @@ export const SHARE_USERNAME = 'guest';
 export interface PageShare {
   /** 16 バイトの CSPRNG を base64url（パディングなし）にした 22 文字。/^[A-Za-z0-9_-]{22}$/ */
   id: string;
-  /** システムが自動生成した平文パスワード。metadata は所有者本人しか読めないため、ハッシュ化しない */
-  password: string;
+  /**
+   * システムが自動生成した平文パスワード。任意（秘匿URLだけでも共有は成立し、パスワードは
+   * 上乗せの保護）。付けるときだけ設定する。metadata は所有者本人しか読めないため、ハッシュ化しない
+   */
+  password?: string;
   /**
    * IPv4アドレスの完全一致リスト（CIDR ではなく単一アドレス）。1〜20件。無い・空ならIP制限なし。
    * 管理UIには出さず、metadata の直接編集で設定する運用にする

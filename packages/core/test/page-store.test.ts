@@ -130,6 +130,17 @@ describe('createPageStore', () => {
     await expect(store.setShare('missing', null)).rejects.toThrow('ページが見つかりません');
   });
 
+  it('share はパスワード無し（idだけ）でも差し替えられる', async () => {
+    const { fake, store } = setup();
+    fake.putJson(metadataObjectKey(email, 'q3-report'), {
+      createdAt: '2026-08-01T00:00:00.000Z',
+      expiresAt: null,
+    });
+
+    const noPasswordShare = { id: 'c'.repeat(22) };
+    expect((await store.setShare('q3-report', noPasswordShare)).share).toEqual(noPasswordShare);
+  });
+
   it('一覧は meta/ のキーから slug を取り、壊れた metadata を除く', async () => {
     const { fake, store } = setup();
     const alpha = { createdAt: '2026-08-01T00:00:00.000Z', expiresAt: null };

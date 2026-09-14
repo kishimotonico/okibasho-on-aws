@@ -51,14 +51,20 @@ export function validateShare(share: unknown): ValidatedShare | null {
   if (!isValidShareId(record.id)) {
     return null;
   }
-  if (typeof record.password !== 'string' || !PASSWORD_RE.test(record.password)) {
+  if (
+    record.password !== undefined &&
+    (typeof record.password !== 'string' || !PASSWORD_RE.test(record.password))
+  ) {
     return null;
   }
   if (!isValidAllowedIps(record.allowedIps)) {
     return null;
   }
 
-  const result: ValidatedShare = { id: record.id, password: record.password };
+  const result: ValidatedShare = { id: record.id };
+  if (typeof record.password === 'string') {
+    result.password = record.password;
+  }
   if (record.allowedIps !== undefined) {
     result.allowedIps = record.allowedIps as string[];
   }
@@ -98,11 +104,10 @@ export function prefixFromMetadataKey(s3Key: string): string | null {
 }
 
 export function buildShareKvsValue(prefix: string, share: ValidatedShare): ShareKvsValue {
-  const value: ShareKvsValue = {
-    p: prefix,
-    id: share.id,
-    b: Buffer.from(`${SHARE_USERNAME}:${share.password}`, 'utf-8').toString('base64'),
-  };
+  const value: ShareKvsValue = { p: prefix, id: share.id };
+  if (share.password !== undefined) {
+    value.b = Buffer.from(`${SHARE_USERNAME}:${share.password}`, 'utf-8').toString('base64');
+  }
   if (share.allowedIps && share.allowedIps.length > 0) {
     value.ips = share.allowedIps;
   }
