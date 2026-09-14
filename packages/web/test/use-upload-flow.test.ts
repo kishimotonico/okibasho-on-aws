@@ -102,7 +102,7 @@ describe('useUploadFlow', () => {
     // 差し替えでは作成日時と保存期限を一覧の行から引き継ぐ
     expect(upload).toHaveBeenCalledWith(
       expect.objectContaining({
-        existing: expect.objectContaining({ slug: 'my-page', expiresAt: null }),
+        existing: expect.objectContaining({ expiresAt: null }),
       }),
     );
   });

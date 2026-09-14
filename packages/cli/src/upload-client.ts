@@ -10,11 +10,12 @@ import type { ResolvedConfig } from './config.js';
 import { DEFAULT_RETENTION_DAYS, isPageMetadata, type PageMetadata } from './page/metadata.js';
 import {
   emailLocalPart,
+  metaOwnerPrefix,
   metadataObjectKey,
-  ownerPrefix,
   pageObjectKey,
   pagePrefix,
   pageViewPath,
+  slugFromMetadataKey,
 } from './page/s3-keys.js';
 
 export function createS3Client(config: ResolvedConfig, idToken: string): S3Client {
@@ -160,13 +161,11 @@ export async function uploadPage(
   }
 
   const existingKeys = await listAllKeys(s3, bucket, prefix);
-  const staleKeys = existingKeys.filter((key) => !uploadKeys.has(key) && key !== metadataKey);
+  const staleKeys = existingKeys.filter((key) => !uploadKeys.has(key));
   await deleteKeys(s3, bucket, staleKeys);
 
   const metadata: PageMetadata = {
     ...existingMetadata,
-    slug: input.slug,
-    owner: input.email,
     createdAt,
     // permanent 化済みページは再アップロードで temporary に戻さない
     expiresAt: computeExpiresAt(input.permanent || existingPermanent),
@@ -187,41 +186,23 @@ export async function uploadPage(
   };
 }
 
+/** 一覧表示用に、metadata へ S3 キー由来の slug を足したもの */
+export type ListedPageMetadata = PageMetadata & { slug: string };
+
 export async function listPages(
   s3: S3Client,
   bucket: string,
   email: string,
-): Promise<PageMetadata[]> {
-  const prefix = ownerPrefix(email);
-  const slugs: string[] = [];
-  let continuationToken: string | undefined;
+): Promise<ListedPageMetadata[]> {
+  const metaPrefix = metaOwnerPrefix(email);
+  const metadataKeys = await listAllKeys(s3, bucket, metaPrefix);
 
-  do {
-    const response = await s3.send(
-      new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: prefix,
-        Delimiter: '/',
-        ContinuationToken: continuationToken,
-      }),
-    );
-
-    for (const entry of response.CommonPrefixes ?? []) {
-      if (!entry.Prefix) {
-        continue;
-      }
-      const slug = entry.Prefix.slice(prefix.length).replace(/\/$/, '');
-      if (slug.length > 0) {
-        slugs.push(slug);
-      }
+  const pages: ListedPageMetadata[] = [];
+  for (const metadataKey of metadataKeys) {
+    const slug = slugFromMetadataKey(email, metadataKey);
+    if (!slug) {
+      continue;
     }
-
-    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
-  } while (continuationToken);
-
-  const pages: PageMetadata[] = [];
-  for (const slug of slugs) {
-    const metadataKey = metadataObjectKey(email, slug);
     const body = await readObjectBody(s3, bucket, metadataKey);
     if (!body) {
       continue;
@@ -229,7 +210,7 @@ export async function listPages(
     try {
       const parsed: unknown = JSON.parse(body.toString('utf8'));
       if (isPageMetadata(parsed)) {
-        pages.push(parsed);
+        pages.push({ ...parsed, slug });
       }
     } catch {
       // 壊れた metadata は一覧から除外
@@ -249,4 +230,6 @@ export async function removePage(
   const prefix = pagePrefix(email, slug);
   const keys = await listAllKeys(s3, bucket, prefix);
   await deleteKeys(s3, bucket, keys);
+  // ページ成果物を消してから metadata を消す。途中で失敗しても一覧に残るので再実行できる
+  await deleteKeys(s3, bucket, [metadataObjectKey(email, slug)]);
 }

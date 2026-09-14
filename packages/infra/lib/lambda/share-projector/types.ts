@@ -14,7 +14,7 @@ export interface ShareKvsTombstoneValue {
   t: string;
 }
 
-/** .metadata.json の share フィールド(検証済み) */
+/** metadata の share フィールド(検証済み) */
 export interface ValidatedShare {
   id: string;
   basic?: {

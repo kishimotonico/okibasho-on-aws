@@ -10,11 +10,12 @@ import {
   DEFAULT_RETENTION_DAYS,
   emailLocalPart,
   isPageMetadata,
+  metaOwnerPrefix,
   metadataObjectKey,
-  ownerPrefix,
   pageObjectKey,
   pagePrefix,
   pageViewPath,
+  slugFromMetadataKey,
   type PageMetadata,
   type PageShare,
 } from '@cli/page';
@@ -61,8 +62,6 @@ export function computeExpiresAt(retention: Retention, base: Date | string): str
  */
 export function pageMetadataFromListed(page: ListedPage): PageMetadata {
   return {
-    slug: page.slug,
-    owner: page.owner,
     createdAt: page.createdAt,
     expiresAt: page.expiresAt,
     ...(page.share ? { share: page.share } : {}),
@@ -129,27 +128,22 @@ export async function listPages(
   email: string,
   pagesBaseUrl: string,
 ): Promise<ListedPage[]> {
-  const prefix = ownerPrefix(email);
-  const slugs: string[] = [];
+  const metaPrefix = metaOwnerPrefix(email);
+  const metadataKeys: string[] = [];
   let continuationToken: string | undefined;
 
   do {
     const listResult = await client.send(
       new ListObjectsV2Command({
         Bucket: bucket,
-        Prefix: prefix,
-        Delimiter: '/',
+        Prefix: metaPrefix,
         ContinuationToken: continuationToken,
       }),
     );
 
-    for (const entry of listResult.CommonPrefixes ?? []) {
-      if (typeof entry.Prefix !== 'string') {
-        continue;
-      }
-      const slug = entry.Prefix.slice(prefix.length).replace(/\/$/, '');
-      if (slug.length > 0) {
-        slugs.push(slug);
+    for (const object of listResult.Contents ?? []) {
+      if (object.Key) {
+        metadataKeys.push(object.Key);
       }
     }
 
@@ -157,14 +151,18 @@ export async function listPages(
   } while (continuationToken);
 
   const pages = await Promise.all(
-    slugs.map(async (slug) => {
+    metadataKeys.map(async (metadataKey) => {
+      const slug = slugFromMetadataKey(email, metadataKey);
+      if (!slug) {
+        return null;
+      }
       const metadata = await getPageMetadata(client, bucket, email, slug);
       if (!metadata) {
         return null;
       }
       const listed: ListedPage = {
-        slug: metadata.slug,
-        owner: metadata.owner,
+        slug,
+        owner: email,
         createdAt: metadata.createdAt,
         expiresAt: metadata.expiresAt,
         retention: retentionFromExpiresAt(metadata.expiresAt),
@@ -223,7 +221,6 @@ async function deleteOrphanObjects(
   uploadedKeys: ReadonlySet<string>,
 ): Promise<void> {
   const pagePref = pagePrefix(email, slug);
-  const metadataKey = metadataObjectKey(email, slug);
   const keysToDelete: string[] = [];
   let continuationToken: string | undefined;
 
@@ -237,7 +234,7 @@ async function deleteOrphanObjects(
     );
 
     for (const object of listResult.Contents ?? []) {
-      if (!object.Key || object.Key === metadataKey) {
+      if (!object.Key) {
         continue;
       }
       if (!uploadedKeys.has(object.Key)) {
@@ -288,8 +285,6 @@ export async function uploadPage(
   const metadata: PageMetadata = options.existingMetadata
     ? {
         ...options.existingMetadata,
-        slug,
-        owner: email,
         // permanent 化済みページは再アップロードで temporary に戻さない
         expiresAt:
           options.existingMetadata.expiresAt === null
@@ -298,8 +293,6 @@ export async function uploadPage(
         ...(options.share ? { share: options.share } : {}),
       }
     : {
-        slug,
-        owner: email,
         createdAt: now.toISOString(),
         expiresAt: computeExpiresAt(options.retention, now),
         ...(options.share ? { share: options.share } : {}),
@@ -406,15 +399,23 @@ export async function deletePage(
     continuationToken = listResult.IsTruncated ? listResult.NextContinuationToken : undefined;
   } while (continuationToken);
 
-  if (keysToDelete.length === 0) {
-    return;
+  if (keysToDelete.length > 0) {
+    await client.send(
+      new DeleteObjectsCommand({
+        Bucket: bucket,
+        Delete: {
+          Objects: keysToDelete.map((Key) => ({ Key })),
+        },
+      }),
+    );
   }
 
+  // ページ成果物を消してから metadata を消す。途中で失敗しても一覧に残るので再実行できる
   await client.send(
     new DeleteObjectsCommand({
       Bucket: bucket,
       Delete: {
-        Objects: keysToDelete.map((Key) => ({ Key })),
+        Objects: [{ Key: metadataObjectKey(email, slug) }],
       },
     }),
   );

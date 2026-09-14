@@ -156,12 +156,6 @@ describe('share-router', () => {
     expect(result).toMatchObject({ statusCode: 404 });
   });
 
-  it('.metadata.json は404を返す', async () => {
-    store.set(ID, JSON.stringify({ p: 'pages/tanaka@example.jp/q3/' }));
-    const result = await handler(makeEvent(`/s/${ID}/.metadata.json`));
-    expect(result).toMatchObject({ statusCode: 404 });
-  });
-
   it('idの形式が不正なら404を返す', async () => {
     const result = await handler(makeEvent('/s/short-id/'));
     expect(result).toMatchObject({ statusCode: 404 });

@@ -16,8 +16,8 @@ function requireEnv(name: string): string {
 }
 
 /**
- * S3イベント(.metadata.jsonの作成・削除)と15分ごとの安全網スケジュールの両方から起動される。
- * イベントの中身は使わず、常にpages/配下の全.metadata.jsonとKVS全件を突き合わせる。
+ * S3イベント(metadataの作成・削除)と15分ごとの安全網スケジュールの両方から起動される。
+ * イベントの中身は使わず、常にmeta/配下の全metadataとKVS全件を突き合わせる。
  * トリガー種別だけはログに出す(アラームを持たないため、イベントが届いているかをLogsで追えるようにする)
  */
 export async function handler(event: unknown): Promise<void> {
@@ -47,15 +47,24 @@ async function handleReconcile(): Promise<void> {
   const now = new Date();
   const metadataKeys = await listAllMetadataKeys(PAGES_BUCKET);
 
-  const prefixes = [...new Set(metadataKeys.map(prefixFromMetadataKey).filter((p) => p !== null))];
+  // metadataKeyとprefixは1対1に決まるので、prefixから逆算せずペアのまま持ち回る
+  const metadataKeyByPrefix = new Map<string, string>();
+  for (const key of metadataKeys) {
+    const prefix = prefixFromMetadataKey(key);
+    if (prefix !== null) {
+      metadataKeyByPrefix.set(prefix, key);
+    }
+  }
+  const entries = [...metadataKeyByPrefix.entries()];
+
   // reconcile 1回の所要時間がそのまま反映の待ち時間になるので、独立な読み取りは並列にする
-  const desiredEntries = await mapWithConcurrency(prefixes, 8, (prefix) =>
-    resolveDesiredForPrefix(prefix, now),
+  const desiredEntries = await mapWithConcurrency(entries, 8, ([prefix, metadataKey]) =>
+    resolveDesiredForPrefix(prefix, metadataKey, now),
   );
 
   const desiredByPrefix = new Map<string, DesiredEntry | null>();
-  for (let i = 0; i < prefixes.length; i++) {
-    desiredByPrefix.set(prefixes[i]!, desiredEntries[i]!);
+  for (let i = 0; i < entries.length; i++) {
+    desiredByPrefix.set(entries[i]![0], desiredEntries[i]!);
   }
 
   const actual = await listAllActualEntries(KVS_ARN);
@@ -72,8 +81,11 @@ async function handleReconcile(): Promise<void> {
   logPlan(plan);
 }
 
-async function resolveDesiredForPrefix(prefix: string, now: Date): Promise<DesiredEntry | null> {
-  const metadataKey = `${prefix}.metadata.json`;
+async function resolveDesiredForPrefix(
+  prefix: string,
+  metadataKey: string,
+  now: Date,
+): Promise<DesiredEntry | null> {
   const metadata = await getMetadataJson(PAGES_BUCKET, metadataKey);
   return buildDesiredEntry(metadata, prefix, now);
 }

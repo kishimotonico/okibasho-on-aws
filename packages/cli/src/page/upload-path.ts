@@ -5,7 +5,7 @@ export type UploadPathValidationResult = { ok: true; path: string } | { ok: fals
 
 /**
  * ページ内相対パスを検証し、区切りを `/` に統一した形で返す。
- * `.metadata.json` と `.` で始まるセグメントは拒否する。
+ * `.` で始まるセグメントは拒否する。
  */
 export function validateUploadPath(raw: string): UploadPathValidationResult {
   if (raw === '') {

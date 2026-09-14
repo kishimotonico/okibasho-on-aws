@@ -511,6 +511,7 @@ function handler(event) {
                 "StringLike": {
                   "s3:prefix": [
                     "pages/\${aws:PrincipalTag/email}/*",
+                    "meta/\${aws:PrincipalTag/email}/*",
                   ],
                 },
               },
@@ -530,20 +531,36 @@ function handler(event) {
                 "s3:DeleteObject",
               ],
               "Effect": "Allow",
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "PagesStorageBucketDFEB6C7C",
-                        "Arn",
-                      ],
-                    },
-                    "/pages/\${aws:PrincipalTag/email}/*",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/pages/\${aws:PrincipalTag/email}/*",
+                    ],
                   ],
-                ],
-              },
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/meta/\${aws:PrincipalTag/email}/*",
+                    ],
+                  ],
+                },
+              ],
               "Sid": "ReadWriteOwnPages",
             },
           ],
@@ -1516,12 +1533,6 @@ function handler(event) {
     };
   }
 
-  var lastSlash = rest.lastIndexOf('/');
-  var lastSegment = rest.substring(lastSlash + 1);
-  if (lastSegment === '.metadata.json') {
-    return notFound();
-  }
-
   if (rest.endsWith('/')) {
     rest += 'index.html';
   }
@@ -1631,12 +1642,6 @@ async function handler(event) {
     if (parts[i] === '' && i < parts.length - 1) {
       return notFound();
     }
-  }
-
-  var lastSlash = uri.lastIndexOf('/');
-  var lastSegment = uri.substring(lastSlash + 1);
-  if (lastSegment === '.metadata.json') {
-    return notFound();
   }
 
   // id形式・KVS参照
@@ -1972,11 +1977,11 @@ function buildQueryString(querystring) {
                   "FilterRules": [
                     {
                       "Name": "suffix",
-                      "Value": ".metadata.json",
+                      "Value": ".json",
                     },
                     {
                       "Name": "prefix",
-                      "Value": "pages/",
+                      "Value": "meta/",
                     },
                   ],
                 },
@@ -1997,11 +2002,11 @@ function buildQueryString(querystring) {
                   "FilterRules": [
                     {
                       "Name": "suffix",
-                      "Value": ".metadata.json",
+                      "Value": ".json",
                     },
                     {
                       "Name": "prefix",
-                      "Value": "pages/",
+                      "Value": "meta/",
                     },
                   ],
                 },
@@ -2156,28 +2161,6 @@ function buildQueryString(querystring) {
               "Sid": "DenyCloudFrontListOutsidePagesPrefix",
             },
             {
-              "Action": "s3:GetObject",
-              "Effect": "Deny",
-              "Principal": {
-                "Service": "cloudfront.amazonaws.com",
-              },
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "PagesStorageBucketDFEB6C7C",
-                        "Arn",
-                      ],
-                    },
-                    "/pages/*/.metadata.json",
-                  ],
-                ],
-              },
-              "Sid": "DenyCloudFrontGetMetadata",
-            },
-            {
               "Action": [
                 "s3:PutObject*",
                 "s3:DeleteObject*",
@@ -2324,7 +2307,7 @@ function buildQueryString(querystring) {
           },
           "S3Key": "<asset-hash>.zip",
         },
-        "Description": "share projector: .metadata.jsonのshareフィールドをCloudFront KVSへ投影する",
+        "Description": "share projector: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影する",
         "Environment": {
           "Variables": {
             "KVS_ARN": {
@@ -2411,7 +2394,7 @@ function buildQueryString(querystring) {
                         "Arn",
                       ],
                     },
-                    "/pages/*/.metadata.json",
+                    "/meta/*",
                   ],
                 ],
               },
@@ -2421,7 +2404,7 @@ function buildQueryString(querystring) {
               "Condition": {
                 "StringLike": {
                   "s3:prefix": [
-                    "pages/*",
+                    "meta/*",
                   ],
                 },
               },
@@ -2499,7 +2482,7 @@ function buildQueryString(querystring) {
     },
     "ShareProjectionShareKeyValueStore1933799C": {
       "Properties": {
-        "Comment": "/s/<share-id>/ -> pages S3キーの投影(正本は.metadata.jsonのshareフィールド)",
+        "Comment": "/s/<share-id>/ -> pages S3キーの投影(正本はmeta/配下のmetadataのshareフィールド)",
         "Name": "OkibashoShareProjectionShareKeyValueStore19382CBF",
       },
       "Type": "AWS::CloudFront::KeyValueStore",

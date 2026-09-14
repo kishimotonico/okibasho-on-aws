@@ -51,12 +51,6 @@ async function handler(event) {
     }
   }
 
-  var lastSlash = uri.lastIndexOf('/');
-  var lastSegment = uri.substring(lastSlash + 1);
-  if (lastSegment === '.metadata.json') {
-    return notFound();
-  }
-
   // id形式・KVS参照
   if (!/^[A-Za-z0-9_-]{22}$/.test(id)) {
     return notFound();

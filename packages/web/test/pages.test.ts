@@ -149,12 +149,10 @@ describe('pages API', () => {
       { retention: 'temporary' },
     );
 
-    expect(metadata.slug).toBe('q3-report');
-    expect(metadata.owner).toBe(email);
     expect(metadata.expiresAt).toBe(computeExpiresAt('temporary', createdAt));
 
     const storedHtml = await getPageMetadata(client, bucket, email, 'q3-report');
-    expect(storedHtml?.slug).toBe('q3-report');
+    expect(storedHtml?.createdAt).toBe(createdAt.toISOString());
 
     const pages = await listPages(client, bucket, email, pagesBaseUrl);
     expect(pages).toHaveLength(1);
@@ -171,8 +169,6 @@ describe('pages API', () => {
       [metadataObjectKey(email, slug)]: {
         body: new TextEncoder().encode(
           JSON.stringify({
-            slug,
-            owner: email,
             createdAt: '2026-08-01T00:00:00.000Z',
             expiresAt: '2026-09-01T00:00:00.000Z',
           }),
@@ -190,8 +186,6 @@ describe('pages API', () => {
       {
         retention: 'temporary',
         existingMetadata: {
-          slug,
-          owner: email,
           createdAt: '2026-08-01T00:00:00.000Z',
           expiresAt: '2026-09-01T00:00:00.000Z',
         },
@@ -220,8 +214,6 @@ describe('pages API', () => {
   it('permanent 化済みページを temporary 指定で再アップロードしても expiresAt は null のまま', async () => {
     const slug = 'q3-report';
     const existingMetadata = {
-      slug,
-      owner: email,
       createdAt: '2026-08-01T00:00:00.000Z',
       expiresAt: null,
     };
@@ -247,8 +239,6 @@ describe('pages API', () => {
   it('temporary ページの再アップロードで expiresAt が現在時刻起点に再計算される', async () => {
     const slug = 'q3-report';
     const existingMetadata = {
-      slug,
-      owner: email,
       createdAt: '2026-08-01T00:00:00.000Z',
       expiresAt: '2026-08-10T00:00:00.000Z',
     };
@@ -280,8 +270,6 @@ describe('pages API', () => {
       [metadataObjectKey(email, slug)]: {
         body: new TextEncoder().encode(
           JSON.stringify({
-            slug,
-            owner: email,
             createdAt,
             expiresAt: null,
           }),
@@ -305,8 +293,6 @@ describe('pages API', () => {
       [metadataObjectKey(email, slug)]: {
         body: new TextEncoder().encode(
           JSON.stringify({
-            slug,
-            owner: email,
             createdAt: '2026-08-01T00:00:00.000Z',
             expiresAt: null,
           }),
@@ -328,8 +314,6 @@ describe('pages API', () => {
       basic: { username: 'guest', salt: 'b'.repeat(22), hash: 'c'.repeat(64) },
     };
     const existingMetadata = {
-      slug,
-      owner: email,
       createdAt: '2026-08-01T00:00:00.000Z',
       expiresAt: '2026-09-01T00:00:00.000Z',
       share,
@@ -360,8 +344,6 @@ describe('pages API', () => {
       [metadataObjectKey(email, slug)]: {
         body: new TextEncoder().encode(
           JSON.stringify({
-            slug,
-            owner: email,
             createdAt: '2026-08-01T00:00:00.000Z',
             expiresAt: null,
             share,
@@ -382,8 +364,6 @@ describe('pages API', () => {
       [metadataObjectKey(email, slug)]: {
         body: new TextEncoder().encode(
           JSON.stringify({
-            slug,
-            owner: email,
             createdAt: '2026-08-01T00:00:00.000Z',
             expiresAt: null,
           }),

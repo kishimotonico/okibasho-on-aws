@@ -84,8 +84,6 @@ describe('runUpload', () => {
     store.objects.set(metadataKey, {
       body: Buffer.from(
         JSON.stringify({
-          slug: 'q3-report',
-          owner: TEST_EMAIL,
           createdAt: '2026-01-01T00:00:00.000Z',
           expiresAt: '2026-01-31T00:00:00.000Z',
         }),
@@ -123,8 +121,6 @@ describe('runUpload', () => {
     store.objects.set(metadataKey, {
       body: Buffer.from(
         JSON.stringify({
-          slug: 'already-permanent',
-          owner: TEST_EMAIL,
           createdAt: '2026-01-01T00:00:00.000Z',
           expiresAt: null,
         }),
@@ -153,8 +149,6 @@ describe('runUpload', () => {
     store.objects.set(metadataKey, {
       body: Buffer.from(
         JSON.stringify({
-          slug: 'shared-page',
-          owner: TEST_EMAIL,
           createdAt: '2026-01-01T00:00:00.000Z',
           expiresAt: '2026-01-31T00:00:00.000Z',
           share,

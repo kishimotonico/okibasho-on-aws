@@ -2,14 +2,16 @@ export { contentTypeFromPath } from './content-type.js';
 export { MAX_FILE_COUNT, MAX_FILE_SIZE, MAX_PAGE_SIZE } from './limits.js';
 export { DEFAULT_RETENTION_DAYS, isPageMetadata, type PageMetadata } from './metadata.js';
 export {
-  METADATA_FILE_NAME,
+  META_PREFIX,
   PAGES_PREFIX,
   emailLocalPart,
+  metaOwnerPrefix,
   metadataObjectKey,
   ownerPrefix,
   pageObjectKey,
   pagePrefix,
   pageViewPath,
+  slugFromMetadataKey,
 } from './s3-keys.js';
 export { SLUG_PATTERN, generateRandomSlug, isValidSlug } from './slug.js';
 export {

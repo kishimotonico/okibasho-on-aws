@@ -10,8 +10,6 @@ describe('runList', () => {
     store.objects.set(metadataObjectKey(TEST_EMAIL, 'alpha'), {
       body: Buffer.from(
         JSON.stringify({
-          slug: 'alpha',
-          owner: TEST_EMAIL,
           createdAt: '2026-01-01T00:00:00.000Z',
           expiresAt: '2026-02-01T00:00:00.000Z',
         }),
@@ -21,8 +19,6 @@ describe('runList', () => {
     store.objects.set(metadataObjectKey(TEST_EMAIL, 'beta'), {
       body: Buffer.from(
         JSON.stringify({
-          slug: 'beta',
-          owner: TEST_EMAIL,
           createdAt: '2026-01-02T00:00:00.000Z',
           expiresAt: null,
         }),

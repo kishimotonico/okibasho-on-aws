@@ -32,7 +32,6 @@ export class PagesStorage extends Construct {
     });
 
     this.restrictCloudFrontToPagesPrefix();
-    this.denyCloudFrontGetMetadata();
     this.deployErrorPages();
   }
 
@@ -103,22 +102,6 @@ export class PagesStorage extends Construct {
           // 「存在しないslugが404」という狙いが静かに壊れる
           Null: { 's3:prefix': 'false' },
         },
-      }),
-    );
-  }
-
-  /**
-   * .metadata.json はCloudFront Functionの文字列検査で弾いているが、
-   * bucket policyでも二重に遮断する(所有者・スラッグを含み得るS3キーが漏れないようにするため)。
-   */
-  private denyCloudFrontGetMetadata(): void {
-    this.bucket.addToResourcePolicy(
-      new PolicyStatement({
-        sid: 'DenyCloudFrontGetMetadata',
-        effect: Effect.DENY,
-        principals: [new ServicePrincipal('cloudfront.amazonaws.com')],
-        actions: ['s3:GetObject'],
-        resources: [this.bucket.arnForObjects(`${PAGES_PREFIX}*/.metadata.json`)],
       }),
     );
   }

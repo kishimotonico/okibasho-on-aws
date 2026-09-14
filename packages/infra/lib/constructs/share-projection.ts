@@ -12,18 +12,18 @@ import { EventType, type Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export interface ShareProjectionProps {
-  /** pages bucket。projectorがここから.metadata.jsonを読む */
+  /** pages bucket。projectorがここからmeta/配下のmetadataを読む */
   readonly pagesBucket: Bucket;
 }
 
 /**
- * share-id → S3 prefix の投影(CloudFront KVS)と、それを正本(.metadata.json の
+ * share-id → S3 prefix の投影(CloudFront KVS)と、それを正本(meta/配下のmetadataの
  * share フィールド)から作り直す projector Lambda。
  *
  * 外部共有のエッジ側(share-router.js と /s/* ビヘイビア)は PagesDelivery が持つ。
  * このConstructはKVSへの書き込み経路(projectorとそのトリガー)だけを担う。
  *
- * projectorは冪等な全件reconcile 1本だけを持ち、.metadata.jsonの作成・削除のS3イベントと
+ * projectorは冪等な全件reconcile 1本だけを持ち、metadataの作成・削除のS3イベントと
  * 15分ごとの安全網スケジュールの両方から起動する。イベントの中身は入力に使わないので、
  * イベントの順序・重複・取りこぼしに依存しない。
  */
@@ -35,7 +35,7 @@ export class ShareProjection extends Construct {
     super(scope, id);
 
     this.keyValueStore = new KeyValueStore(this, 'ShareKeyValueStore', {
-      comment: '/s/<share-id>/ -> pages S3キーの投影(正本は.metadata.jsonのshareフィールド)',
+      comment: '/s/<share-id>/ -> pages S3キーの投影(正本はmeta/配下のmetadataのshareフィールド)',
     });
 
     this.projector = new NodejsFunction(this, 'ProjectorFunction', {
@@ -63,7 +63,8 @@ export class ShareProjection extends Construct {
           PATH: `${join(dirname(fileURLToPath(import.meta.url)), '../../node_modules/.bin')}:${process.env.PATH ?? ''}`,
         },
       },
-      description: 'share projector: .metadata.jsonのshareフィールドをCloudFront KVSへ投影する',
+      description:
+        'share projector: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影する',
     });
 
     // 同時実行1で詰まった古い非同期呼び出しを溜め込まない。5分より古い呼び出しは
@@ -82,8 +83,8 @@ export class ShareProjection extends Construct {
       new PolicyStatement({
         effect: Effect.ALLOW,
         actions: ['s3:GetObject'],
-        // projectorが読むのは .metadata.json だけ。ページ成果物本体は読ませない
-        resources: [pagesBucket.arnForObjects('pages/*/.metadata.json')],
+        // projectorが読むのは meta/ 配下のmetadataだけ。ページ成果物本体は読ませない
+        resources: [pagesBucket.arnForObjects('meta/*')],
       }),
     );
 
@@ -93,7 +94,7 @@ export class ShareProjection extends Construct {
         actions: ['s3:ListBucket'],
         resources: [pagesBucket.bucketArn],
         conditions: {
-          StringLike: { 's3:prefix': ['pages/*'] },
+          StringLike: { 's3:prefix': ['meta/*'] },
         },
       }),
     );
@@ -111,12 +112,12 @@ export class ShareProjection extends Construct {
     );
   }
 
-  /** .metadata.jsonの作成・削除で即時に起動し、15分ごとのスケジュールを安全網として重ねる */
+  /** metadataの作成・削除で即時に起動し、15分ごとのスケジュールを安全網として重ねる */
   private wireTriggers(pagesBucket: Bucket): void {
     this.projector.addEventSource(
       new S3EventSource(pagesBucket, {
         events: [EventType.OBJECT_CREATED, EventType.OBJECT_REMOVED],
-        filters: [{ prefix: 'pages/', suffix: '.metadata.json' }],
+        filters: [{ prefix: 'meta/', suffix: '.json' }],
       }),
     );
 

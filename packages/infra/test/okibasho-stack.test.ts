@@ -130,20 +130,6 @@ describe('OkibashoStack', () => {
       expect(listPrefixes).toEqual(expect.arrayContaining(['pages/*', 'errors/*']));
     });
 
-    it('.metadata.json はbucket policyでも二重に遮断されている', () => {
-      const template = synth();
-
-      const policies = Object.values(template.findResources('AWS::S3::BucketPolicy'));
-      const statements = policies.flatMap(
-        (p) => (p.Properties?.PolicyDocument?.Statement ?? []) as Array<Record<string, unknown>>,
-      );
-
-      const denyMetadata = statements.find((st) => st.Sid === 'DenyCloudFrontGetMetadata');
-      expect(denyMetadata?.Effect).toBe('Deny');
-      expect(denyMetadata?.Action).toBe('s3:GetObject');
-      expect(JSON.stringify(denyMetadata?.Resource)).toContain('.metadata.json');
-    });
-
     it('ErrorPagesDeploymentの配置ロールは errors/ 以外へ書き込めない', () => {
       const template = synth();
 
@@ -313,7 +299,7 @@ describe('OkibashoStack', () => {
   });
 
   describe('ShareProjection', () => {
-    it('projector LambdaはS3への権限が.metadata.jsonに絞られ、KVSへは必要な操作だけを許可する', () => {
+    it('projector LambdaはS3への権限がmeta/配下に絞られ、KVSへは必要な操作だけを許可する', () => {
       const template = synth();
 
       // projector / cleanup 等の本体Lambdaに加えて、S3通知配線用のCDK管理Lambda(BucketNotificationsHandler)が1つ増える
@@ -353,8 +339,8 @@ describe('OkibashoStack', () => {
       );
       const s3GetResource = s3GetStatement?.Resource as
         { 'Fn::Join'?: [string, unknown[]] } | undefined;
-      // ページ成果物本体は読ませず、.metadata.json だけに絞られている
-      expect(s3GetResource?.['Fn::Join']?.[1]).toContain('/pages/*/.metadata.json');
+      // ページ成果物本体は読ませず、meta/ 配下だけに絞られている
+      expect(s3GetResource?.['Fn::Join']?.[1]).toContain('/meta/*');
 
       const s3ListStatement = statements.find(
         (st) =>
@@ -362,11 +348,11 @@ describe('OkibashoStack', () => {
           (Array.isArray(st.Action) && st.Action.includes('s3:ListBucket')),
       );
       expect(s3ListStatement?.Condition).toMatchObject({
-        StringLike: { 's3:prefix': ['pages/*'] },
+        StringLike: { 's3:prefix': ['meta/*'] },
       });
     });
 
-    it('.metadata.jsonの作成・削除のS3通知と、EventBridgeの15分ごとの安全網Ruleの両方でreconcileを起動する', () => {
+    it('metadataの作成・削除のS3通知と、EventBridgeの15分ごとの安全網Ruleの両方でreconcileを起動する', () => {
       const template = synth();
 
       template.resourceCountIs('AWS::Events::Rule', 1);
@@ -374,7 +360,7 @@ describe('OkibashoStack', () => {
         ScheduleExpression: 'rate(15 minutes)',
       });
 
-      // pagesバケットのS3通知がprefix=pages/・suffix=.metadata.jsonのCreated/Removedをprojectorへ流す
+      // pagesバケットのS3通知がprefix=meta/・suffix=.jsonのCreated/Removedをprojectorへ流す
       const notifications = Object.values(template.findResources('Custom::S3BucketNotifications'));
       expect(notifications).toHaveLength(1);
       const notificationConfig = notifications[0]?.Properties?.NotificationConfiguration as
@@ -389,8 +375,8 @@ describe('OkibashoStack', () => {
         )?.Key?.FilterRules;
         expect(rules).toEqual(
           expect.arrayContaining([
-            { Name: 'prefix', Value: 'pages/' },
-            { Name: 'suffix', Value: '.metadata.json' },
+            { Name: 'prefix', Value: 'meta/' },
+            { Name: 'suffix', Value: '.json' },
           ]),
         );
       }

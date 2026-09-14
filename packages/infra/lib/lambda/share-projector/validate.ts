@@ -76,7 +76,7 @@ function isValidAllowedCidrs(allowedCidrs: unknown): allowedCidrs is string[] | 
   return allowedCidrs.every(isValidCidr);
 }
 
-/** .metadata.json の share フィールドを検証する。壊れていれば null (=共有無し) */
+/** metadata の share フィールドを検証する。壊れていれば null (=共有無し) */
 export function validateShare(share: unknown): ValidatedShare | null {
   if (typeof share !== 'object' || share === null) {
     return null;
@@ -125,9 +125,9 @@ function isValidExpiresAt(expiresAt: unknown): expiresAt is string | null {
   return !Number.isNaN(new Date(expiresAt).getTime());
 }
 
-/** S3キー "pages/<email>/<slug>/.metadata.json" からprefixを導出する。metadataの中身(owner/slug)は信用しない */
+/** S3キー "meta/<email>/<slug>.json" からprefixを導出する。metadataの中身は信用しない */
 export function prefixFromMetadataKey(s3Key: string): string | null {
-  const match = s3Key.match(/^pages\/([^/]+)\/([^/]+)\/\.metadata\.json$/);
+  const match = s3Key.match(/^meta\/([^/]+)\/([^/]+)\.json$/);
   if (!match) {
     return null;
   }
@@ -161,7 +161,7 @@ export function serializeTombstoneValue(prefix: string): string {
 }
 
 /**
- * .metadata.json の生JSONとprefixから「あるべき状態」を決める。
+ * metadataの生JSONとprefixから「あるべき状態」を決める。
  * metadataが無い/JSON不正/shareが無い/検証失敗/期限切れ/1KB超過 → null
  */
 export function buildDesiredEntry(

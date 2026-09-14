@@ -15,18 +15,18 @@ const VALID_SALT = 'AbCdEfGh12_-34567890Bb';
 const VALID_HASH = 'a'.repeat(64);
 
 describe('prefixFromMetadataKey', () => {
-  it('pages/<email>/<slug>/.metadata.json からprefixを導出する', () => {
-    expect(prefixFromMetadataKey('pages/tanaka@example.jp/q3-report/.metadata.json')).toBe(
+  it('meta/<email>/<slug>.json からprefixを導出する', () => {
+    expect(prefixFromMetadataKey('meta/tanaka@example.jp/q3-report.json')).toBe(
       'pages/tanaka@example.jp/q3-report/',
     );
   });
 
-  it('.metadata.json 以外は null', () => {
+  it('meta/配下のJSON以外は null', () => {
     expect(prefixFromMetadataKey('pages/tanaka@example.jp/q3-report/index.html')).toBeNull();
   });
 
   it('セグメント数が違うkeyは null', () => {
-    expect(prefixFromMetadataKey('pages/.metadata.json')).toBeNull();
+    expect(prefixFromMetadataKey('meta/q3-report.json')).toBeNull();
   });
 });
 
@@ -171,8 +171,6 @@ describe('buildDesiredEntry', () => {
 
   it('shareがあれば desired entry を返す', () => {
     const metadata = {
-      slug: 'q3',
-      owner: 'tanaka@example.jp',
       createdAt: '2025-01-01T00:00:00Z',
       expiresAt: null,
       share: { id: VALID_ID },
@@ -183,21 +181,18 @@ describe('buildDesiredEntry', () => {
     });
   });
 
-  it('metadataがownerやslugと矛盾していてもprefixは呼び出し元の値をそのまま使う(metadataの中身は信用しない)', () => {
+  it('metadataに余分なフィールドがあってもprefixは呼び出し元の値をそのまま使う(metadataの中身は信用しない)', () => {
     const metadata = {
-      slug: 'evil-slug',
-      owner: 'evil@example.jp',
       createdAt: '2025-01-01T00:00:00Z',
       expiresAt: null,
       share: { id: VALID_ID },
+      unknownField: 'evil',
     };
     expect(buildDesiredEntry(metadata, prefix, now)?.value.p).toBe(prefix);
   });
 
   it('shareが無ければ null', () => {
     const metadata = {
-      slug: 'q3',
-      owner: 'tanaka@example.jp',
       createdAt: '2025-01-01T00:00:00Z',
       expiresAt: null,
     };
@@ -206,8 +201,6 @@ describe('buildDesiredEntry', () => {
 
   it('期限切れなら null', () => {
     const metadata = {
-      slug: 'q3',
-      owner: 'tanaka@example.jp',
       createdAt: '2025-01-01T00:00:00Z',
       expiresAt: '2025-01-01T00:00:00Z',
       share: { id: VALID_ID },
@@ -217,8 +210,6 @@ describe('buildDesiredEntry', () => {
 
   it('shareの検証に失敗したら null', () => {
     const metadata = {
-      slug: 'q3',
-      owner: 'tanaka@example.jp',
       createdAt: '2025-01-01T00:00:00Z',
       expiresAt: null,
       share: { id: 'short' },
@@ -233,8 +224,6 @@ describe('buildDesiredEntry', () => {
 
   it('expiresAtがundefined(欠落)なら metadata不正として null', () => {
     const metadata = {
-      slug: 'q3',
-      owner: 'tanaka@example.jp',
       createdAt: '2025-01-01T00:00:00Z',
       share: { id: VALID_ID },
     };
@@ -243,8 +232,6 @@ describe('buildDesiredEntry', () => {
 
   it('expiresAtが非文字列(数値など)なら metadata不正として null', () => {
     const metadata = {
-      slug: 'q3',
-      owner: 'tanaka@example.jp',
       createdAt: '2025-01-01T00:00:00Z',
       expiresAt: 12345,
       share: { id: VALID_ID },
@@ -254,8 +241,6 @@ describe('buildDesiredEntry', () => {
 
   it('expiresAtがパース不能な文字列なら metadata不正として null', () => {
     const metadata = {
-      slug: 'q3',
-      owner: 'tanaka@example.jp',
       createdAt: '2025-01-01T00:00:00Z',
       expiresAt: 'not-a-date',
       share: { id: VALID_ID },
