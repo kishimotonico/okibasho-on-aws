@@ -1,9 +1,4 @@
-import type {
-  DesiredEntry,
-  ShareKvsTombstoneValue,
-  ShareKvsValue,
-  ValidatedShare,
-} from './types.js';
+import type { DesiredEntry, ShareKvsValue, ValidatedShare } from './types.js';
 
 const SHARE_ID_RE = /^[A-Za-z0-9_-]{22}$/;
 const SALT_RE = /^[A-Za-z0-9_-]{22}$/;
@@ -135,7 +130,7 @@ export function prefixFromMetadataKey(s3Key: string): string | null {
 }
 
 export function buildShareKvsValue(prefix: string, share: ValidatedShare): ShareKvsValue {
-  const value: ShareKvsValue = { p: prefix };
+  const value: ShareKvsValue = { p: prefix, id: share.id };
   if (share.basic) {
     value.b = `${share.basic.salt}:${share.basic.hash}`;
   }
@@ -152,12 +147,6 @@ export function serializeKvsValue(value: ShareKvsValue): string | null {
     return null;
   }
   return json;
-}
-
-/** 墓標({"t": prefix})をJSON文字列化する。prefixはS3キー由来なので1KBを超えることは想定しない */
-export function serializeTombstoneValue(prefix: string): string {
-  const value: ShareKvsTombstoneValue = { t: prefix };
-  return JSON.stringify(value);
 }
 
 /**
@@ -203,4 +192,13 @@ export function parseMetadataJson(raw: string): unknown | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * S3イベント通知のオブジェクトキーをデコードする。
+ * S3イベント通知のキーはURLエンコードされ、かつ空白は'+'になっている(フォームエンコードに近い形式)
+ * ため、まず'+'を空白に戻してからdecodeURIComponentする
+ */
+export function decodeS3EventKey(key: string): string {
+  return decodeURIComponent(key.replace(/\+/g, ' '));
 }

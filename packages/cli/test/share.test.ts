@@ -152,7 +152,8 @@ describe('validateAndNormalizeCidrs', () => {
 });
 
 describe('buildShareViewPath', () => {
-  it('/s/<id>/ を返す', () => {
-    expect(buildShareViewPath('a'.repeat(22))).toBe(`/s/${'a'.repeat(22)}/`);
+  it('/s/<tag><id>/ を返す', () => {
+    const tag = 'b'.repeat(11);
+    expect(buildShareViewPath(tag, 'a'.repeat(22))).toBe(`/s/${tag}${'a'.repeat(22)}/`);
   });
 });

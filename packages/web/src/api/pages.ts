@@ -6,6 +6,7 @@ import {
   type S3Client,
 } from '@aws-sdk/client-s3';
 import {
+  computeShareTag,
   contentTypeFromPath,
   DEFAULT_RETENTION_DAYS,
   emailLocalPart,
@@ -29,6 +30,11 @@ export interface ListedPage {
   expiresAt: string | null;
   retention: Retention;
   viewUrl: string;
+  /**
+   * 外部共有 URL の tag（11文字）。computeShareTag は非同期(WebCrypto)なので、
+   * ShareDialog が同期のままで済むよう一覧取得時にここへ計算済みの値を持たせる
+   */
+  shareTag: string;
   share?: PageShare;
 }
 
@@ -160,6 +166,7 @@ export async function listPages(
       if (!metadata) {
         return null;
       }
+      const shareTag = await computeShareTag(email, slug);
       const listed: ListedPage = {
         slug,
         owner: email,
@@ -167,6 +174,7 @@ export async function listPages(
         expiresAt: metadata.expiresAt,
         retention: retentionFromExpiresAt(metadata.expiresAt),
         viewUrl: buildViewUrl(pagesBaseUrl, email, slug),
+        shareTag,
         ...(metadata.share ? { share: metadata.share } : {}),
       };
       return listed;

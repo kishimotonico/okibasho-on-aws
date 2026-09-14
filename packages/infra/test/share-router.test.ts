@@ -108,7 +108,9 @@ function basicAuthHeader(username: string, password: string): string {
   return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 }
 
-const ID = 'AAAAAAAAAAAAAAAAAAAAAA'; // 22文字, [A-Za-z0-9_-]
+const TAG = 'AAAAAAAAAAA'; // 11文字, [A-Za-z0-9_-]
+const SHARE_ID = 'BBBBBBBBBBBBBBBBBBBBBB'; // 22文字, [A-Za-z0-9_-]
+const ID = TAG + SHARE_ID; // 33文字。URLの /s/<id>/ 部分
 
 describe('share-router', () => {
   it('コードサイズは10KB以下(CloudFront Functionsの上限)', () => {
@@ -156,24 +158,24 @@ describe('share-router', () => {
     expect(result).toMatchObject({ statusCode: 404 });
   });
 
-  it('idの形式が不正なら404を返す', async () => {
+  it('idの形式が不正なら404を返す(33文字未満)', async () => {
     const result = await handler(makeEvent('/s/short-id/'));
     expect(result).toMatchObject({ statusCode: 404 });
   });
 
-  it('KVSに無いidは404を返す', async () => {
+  it('KVSに無いtagは404を返す', async () => {
     const result = await handler(makeEvent(`/s/${ID}/`));
     expect(result).toMatchObject({ statusCode: 404, body: 'Not Found' });
   });
 
-  it('墓標エントリ({"t": ...})は404を返す(share-idの再利用防止で残っているだけなので閲覧はさせない)', async () => {
-    store.set(ID, JSON.stringify({ t: 'pages/tanaka@example.jp/q3/' }));
+  it('tagはKVSにあるが値のidが後半22文字と一致しないと404を返す(再発行後の旧URLなど)', async () => {
+    store.set(TAG, JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: 'c'.repeat(22) }));
     const result = await handler(makeEvent(`/s/${ID}/`));
     expect(result).toMatchObject({ statusCode: 404, body: 'Not Found' });
   });
 
   it('制限が無ければ /p 相当の prefix + rest へrewriteし、末尾スラッシュはindex.htmlを補完する', async () => {
-    store.set(ID, JSON.stringify({ p: 'pages/tanaka@example.jp/q3-report/' }));
+    store.set(TAG, JSON.stringify({ p: 'pages/tanaka@example.jp/q3-report/', id: SHARE_ID }));
     const result = await handler(makeEvent(`/s/${ID}/`));
     expect(result).toMatchObject({
       uri: '/pages/tanaka@example.jp/q3-report/index.html',
@@ -181,7 +183,7 @@ describe('share-router', () => {
   });
 
   it('アセットパスもrewriteされる', async () => {
-    store.set(ID, JSON.stringify({ p: 'pages/tanaka@example.jp/q3-report/' }));
+    store.set(TAG, JSON.stringify({ p: 'pages/tanaka@example.jp/q3-report/', id: SHARE_ID }));
     const result = await handler(makeEvent(`/s/${ID}/assets/app.css`));
     expect(result).toMatchObject({
       uri: '/pages/tanaka@example.jp/q3-report/assets/app.css',
@@ -189,7 +191,7 @@ describe('share-router', () => {
   });
 
   it('Authorizationヘッダはオリジンへ転送しない', async () => {
-    store.set(ID, JSON.stringify({ p: 'pages/tanaka@example.jp/q3-report/' }));
+    store.set(TAG, JSON.stringify({ p: 'pages/tanaka@example.jp/q3-report/', id: SHARE_ID }));
     const event = makeEvent(`/s/${ID}/`, { authorization: 'Basic garbage' });
     const result = (await handler(event)) as CloudFrontRequest;
     expect(result.headers.authorization).toBeUndefined();
@@ -197,19 +199,28 @@ describe('share-router', () => {
 
   describe('IP制限', () => {
     it('CIDRに含まれるIPは許可する', async () => {
-      store.set(ID, JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', c: ['203.0.113.0/24'] }));
+      store.set(
+        TAG,
+        JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: SHARE_ID, c: ['203.0.113.0/24'] }),
+      );
       const result = await handler(makeEvent(`/s/${ID}/`, { ip: '203.0.113.5' }));
       expect(result).toMatchObject({ uri: '/pages/tanaka@example.jp/q3/index.html' });
     });
 
     it('CIDRに含まれないIPは403を返す', async () => {
-      store.set(ID, JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', c: ['203.0.113.0/24'] }));
+      store.set(
+        TAG,
+        JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: SHARE_ID, c: ['203.0.113.0/24'] }),
+      );
       const result = await handler(makeEvent(`/s/${ID}/`, { ip: '198.51.100.9' }));
       expect(result).toMatchObject({ statusCode: 403 });
     });
 
     it('/32(単一IP)は完全一致だけ許可する', async () => {
-      store.set(ID, JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', c: ['203.0.113.5/32'] }));
+      store.set(
+        TAG,
+        JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: SHARE_ID, c: ['203.0.113.5/32'] }),
+      );
       expect(await handler(makeEvent(`/s/${ID}/`, { ip: '203.0.113.5' }))).toMatchObject({
         uri: expect.any(String),
       });
@@ -219,16 +230,20 @@ describe('share-router', () => {
     });
 
     it('/0は常に一致する(左シフト32のJS仕様に依存しない実装になっている)', async () => {
-      store.set(ID, JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', c: ['0.0.0.0/0'] }));
+      store.set(
+        TAG,
+        JSON.stringify({ p: 'pages/tanaka@example.jp/q3/', id: SHARE_ID, c: ['0.0.0.0/0'] }),
+      );
       const result = await handler(makeEvent(`/s/${ID}/`, { ip: '8.8.8.8' }));
       expect(result).toMatchObject({ uri: expect.any(String) });
     });
 
     it('複数CIDRのいずれかに一致すれば許可する', async () => {
       store.set(
-        ID,
+        TAG,
         JSON.stringify({
           p: 'pages/tanaka@example.jp/q3/',
+          id: SHARE_ID,
           c: ['198.51.100.0/24', '203.0.113.0/24'],
         }),
       );
@@ -245,9 +260,10 @@ describe('share-router', () => {
 
     beforeEach(() => {
       store.set(
-        ID,
+        TAG,
         JSON.stringify({
           p: 'pages/tanaka@example.jp/q3/',
+          id: SHARE_ID,
           b: `${salt}:${hash}`,
         }),
       );

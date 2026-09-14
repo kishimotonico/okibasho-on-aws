@@ -25,6 +25,8 @@ const DEFAULT_USERNAME = 'guest';
 interface ShareDialogPage {
   slug: string;
   expiresAt: string | null;
+  /** 外部共有 URL の tag（11文字）。ListedPage#shareTag をそのまま渡す */
+  shareTag: string;
   share?: PageShare;
 }
 
@@ -78,9 +80,9 @@ function noticeMessage(notice: Notice): string | null {
   }
 }
 
-function buildShareUrl(pagesBaseUrl: string, id: string): string {
+function buildShareUrl(pagesBaseUrl: string, shareTag: string, id: string): string {
   const base = pagesBaseUrl.replace(/\/$/, '');
-  return `${base}${buildShareViewPath(id)}`;
+  return `${base}${buildShareViewPath(shareTag, id)}`;
 }
 
 /** 外部共有の発行・設定変更・再発行・停止をひとつのダイアログでまとめる */
@@ -128,7 +130,7 @@ export function ShareDialog({
       openIssuedCredentials !== undefined && existingShare
         ? {
             action: 'issue',
-            shareUrl: buildShareUrl(pagesBaseUrl, existingShare.id),
+            shareUrl: buildShareUrl(pagesBaseUrl, page.shareTag, existingShare.id),
             credentials: openIssuedCredentials,
           }
         : null,
@@ -178,7 +180,9 @@ export function ShareDialog({
     setErrors((current) => ({ ...current, username: undefined, password: undefined }));
   };
 
-  const shareUrl = existingShare ? buildShareUrl(pagesBaseUrl, existingShare.id) : null;
+  const shareUrl = existingShare
+    ? buildShareUrl(pagesBaseUrl, page.shareTag, existingShare.id)
+    : null;
 
   interface BuildShareFormResult {
     share: PageShare;
@@ -270,7 +274,7 @@ export function ShareDialog({
       if (wasNewIssue || newPlainPassword) {
         setCompletion({
           action: wasNewIssue ? 'issue' : 'save',
-          shareUrl: buildShareUrl(pagesBaseUrl, share.id),
+          shareUrl: buildShareUrl(pagesBaseUrl, page.shareTag, share.id),
           credentials:
             newPlainPassword && share.basic
               ? { username: share.basic.username, password: newPlainPassword }

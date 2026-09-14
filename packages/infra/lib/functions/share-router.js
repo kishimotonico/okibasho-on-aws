@@ -51,20 +51,23 @@ async function handler(event) {
     }
   }
 
-  // id形式・KVS参照
-  if (!/^[A-Za-z0-9_-]{22}$/.test(id)) {
+  // id形式(tag11文字+share-id22文字の33文字)・KVS参照
+  if (!/^[A-Za-z0-9_-]{33}$/.test(id)) {
     return notFound();
   }
 
+  var tag = id.slice(0, 11);
+  var shareId = id.slice(11);
+
   var entry;
   try {
-    var raw = await kvsHandle.get(id);
+    var raw = await kvsHandle.get(tag);
     entry = JSON.parse(raw);
   } catch (e) {
     return notFound();
   }
 
-  if (!entry || typeof entry.p !== 'string') {
+  if (!entry || typeof entry.p !== 'string' || entry.id !== shareId) {
     return notFound();
   }
 

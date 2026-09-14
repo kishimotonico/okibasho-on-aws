@@ -1,3 +1,5 @@
+import { toBase64Url } from './base64url.js';
+
 const ID_BYTE_LENGTH = 16;
 const SALT_BYTE_LENGTH = 16;
 
@@ -42,15 +44,6 @@ export interface ShareValidationError {
 
 export type ShareValidationResult<T> =
   { ok: true; value: T } | { ok: false; errors: ShareValidationError[] };
-
-function toBase64Url(bytes: Uint8Array): string {
-  let binary = '';
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  const base64 = btoa(binary);
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
 
 /** share-id を CSPRNG で生成する。22 文字の base64url。globalThis.crypto のみ使用（Node 22 / ブラウザ両対応） */
 export function generateShareId(): string {
@@ -240,7 +233,7 @@ export function validateAndNormalizeCidrs(
   return { ok: true, value: normalized };
 }
 
-/** 外部共有の閲覧 URL パス。`/s/<id>/` */
-export function buildShareViewPath(id: string): string {
-  return `/s/${id}/`;
+/** 外部共有の閲覧 URL パス。`/s/<tag 11文字><share-id 22文字>/`。tag は computeShareTag で計算する */
+export function buildShareViewPath(tag: string, id: string): string {
+  return `/s/${tag}${id}/`;
 }

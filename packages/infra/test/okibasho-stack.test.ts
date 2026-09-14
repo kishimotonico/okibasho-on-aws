@@ -308,6 +308,7 @@ describe('OkibashoStack', () => {
         Runtime: 'nodejs22.x',
         Architectures: ['arm64'],
         ReservedConcurrentExecutions: 1,
+        MemorySize: 1024,
       });
 
       const policies = Object.values(template.findResources('AWS::IAM::Policy'));
@@ -325,11 +326,13 @@ describe('OkibashoStack', () => {
           'cloudfront-keyvaluestore:DescribeKeyValueStore',
           'cloudfront-keyvaluestore:ListKeys',
           'cloudfront-keyvaluestore:UpdateKeys',
+          // 存在しないキーのdeleteがResourceNotFoundExceptionになったときの存在確認に使う
+          'cloudfront-keyvaluestore:GetKey',
         ]),
       );
-      // GetKey/PutKey/DeleteKeyのような未使用の単発操作は要求しない
+      // PutKey/DeleteKeyのような未使用の単発操作は要求しない
       expect(kvsStatement?.Action).not.toEqual(
-        expect.arrayContaining(['cloudfront-keyvaluestore:GetKey']),
+        expect.arrayContaining(['cloudfront-keyvaluestore:PutKey']),
       );
 
       const s3GetStatement = statements.find(

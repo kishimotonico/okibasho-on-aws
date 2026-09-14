@@ -14,6 +14,7 @@ export {
   slugFromMetadataKey,
 } from './s3-keys.js';
 export { SLUG_PATTERN, generateRandomSlug, isValidSlug } from './slug.js';
+export { SHARE_TAG_LENGTH, computeShareTag } from './tag.js';
 export {
   SHARE_CIDR_MAX_COUNT,
   SHARE_CIDR_MIN_COUNT,

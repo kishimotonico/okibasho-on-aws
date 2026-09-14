@@ -8,23 +8,29 @@ import {
   CloudFrontKeyValueStoreClient,
   ConflictException,
   DescribeKeyValueStoreCommand,
+  GetKeyCommand,
   ListKeysCommand,
+  ResourceNotFoundException,
   UpdateKeysCommand,
 } from '@aws-sdk/client-cloudfront-keyvaluestore';
-import type { ActualEntry, DiffPlan } from './types.js';
+import type { DiffPlan } from './types.js';
 
 const client = new CloudFrontKeyValueStoreClient({});
 
 const MAX_CONFLICT_RETRIES = 5;
 const MAX_KEYS_PER_UPDATE = 50;
 
-/** shareIdをログに出すときは先頭4文字だけにする */
+/** tag(KVSのkey)をログに出すときは先頭4文字だけにする */
 export function redactId(id: string): string {
   return `${id.slice(0, 4)}…`;
 }
 
-export async function listAllActualEntries(kvsArn: string): Promise<ActualEntry[]> {
-  const entries: ActualEntry[] = [];
+/**
+ * KVS全件を tag -> 生JSON文字列 で返す(15分毎の全件reconcile用)。
+ * tagはprefixから決まるので、値の中身を解釈する必要はなく、文字列としてそのまま突き合わせられる
+ */
+export async function listAllActualEntries(kvsArn: string): Promise<Map<string, string>> {
+  const entries = new Map<string, string>();
   let nextToken: string | undefined;
 
   do {
@@ -33,16 +39,9 @@ export async function listAllActualEntries(kvsArn: string): Promise<ActualEntry[
       new ListKeysCommand({ KvsARN: kvsArn, NextToken: nextToken, MaxResults: 50 }),
     );
     for (const item of result.Items ?? []) {
-      if (!item.Key || item.Value === undefined) {
-        continue;
+      if (item.Key && item.Value !== undefined) {
+        entries.set(item.Key, item.Value);
       }
-      const parsed = parseEntryValue(item.Value);
-      entries.push({
-        id: item.Key,
-        prefix: parsed.prefix,
-        isTombstone: parsed.isTombstone,
-        rawValue: item.Value,
-      });
     }
     nextToken = result.NextToken;
   } while (nextToken);
@@ -50,51 +49,13 @@ export async function listAllActualEntries(kvsArn: string): Promise<ActualEntry[
   return entries;
 }
 
-/**
- * KVSの値をパースして所有prefixと墓標かどうかを判定する。
- * 生きている値は{"p": prefix, ...}、墓標は{"t": prefix}。
- * JSON不正・どちらのフィールドも無い場合はprefix未定(=削除対象)として扱う
- */
-function parseEntryValue(rawValue: string): { prefix: string | undefined; isTombstone: boolean } {
-  try {
-    const parsed = JSON.parse(rawValue) as { p?: unknown; t?: unknown };
-    if (typeof parsed.p === 'string') {
-      return { prefix: parsed.p, isTombstone: false };
-    }
-    if (typeof parsed.t === 'string') {
-      return { prefix: parsed.t, isTombstone: true };
-    }
-    return { prefix: undefined, isTombstone: false };
-  } catch {
-    return { prefix: undefined, isTombstone: false };
-  }
-}
-
-/**
- * 差分をUpdateKeysで適用する。IfMatchはDescribeKeyValueStoreのETag。
- * ConflictException(他の実行との競合)はETagを取り直してリトライする
- */
-export async function applyPlan(kvsArn: string, plan: DiffPlan): Promise<void> {
-  for (const warning of plan.hijackWarnings) {
-    console.warn(
-      `share-id衝突のため書き込みをスキップ: prefix=${warning.prefix} id=${redactId(warning.id)} occupiedBy=${warning.occupiedByPrefix}`,
-    );
-  }
-
-  for (const chunk of chunkPlan(plan)) {
-    await applyChunk(kvsArn, chunk);
-  }
-}
-
 /** UpdateKeys は 1 リクエスト 50 キーまで。puts と deletes の合計で分割する */
-export function chunkPlan(
-  plan: Pick<DiffPlan, 'puts' | 'deletes'>,
-): Array<Pick<DiffPlan, 'puts' | 'deletes'>> {
+export function chunkPlan(plan: DiffPlan): DiffPlan[] {
   const ops = [
     ...plan.deletes.map((key) => ({ kind: 'delete' as const, key })),
     ...plan.puts.map((put) => ({ kind: 'put' as const, put })),
   ];
-  const chunks: Array<Pick<DiffPlan, 'puts' | 'deletes'>> = [];
+  const chunks: DiffPlan[] = [];
   for (let i = 0; i < ops.length; i += MAX_KEYS_PER_UPDATE) {
     const slice = ops.slice(i, i + MAX_KEYS_PER_UPDATE);
     chunks.push({
@@ -105,7 +66,34 @@ export function chunkPlan(
   return chunks;
 }
 
-async function applyChunk(kvsArn: string, plan: Pick<DiffPlan, 'puts' | 'deletes'>): Promise<void> {
+/** 差分をUpdateKeysで適用する。50件を超える場合はチャンクに分けて順に適用する */
+export async function applyPlan(kvsArn: string, plan: DiffPlan): Promise<void> {
+  for (const chunk of chunkPlan(plan)) {
+    await applyChunk(kvsArn, chunk);
+  }
+}
+
+async function keyExists(kvsArn: string, key: string): Promise<boolean> {
+  try {
+    await client.send(new GetKeyCommand({ KvsARN: kvsArn, Key: key }));
+    return true;
+  } catch (err) {
+    if (err instanceof ResourceNotFoundException) {
+      return false;
+    }
+    throw err;
+  }
+}
+
+/**
+ * IfMatchはDescribeKeyValueStoreのETag。
+ * ConflictException(他の実行との競合)はETagを取り直してリトライする。
+ *
+ * 存在しないキーのdeleteをUpdateKeysに渡したときの挙動は公式ドキュメントで未確定
+ * (ResourceNotFoundExceptionになる可能性がある)。1件だけのdelete(put無し)でそれが起きたときだけ、
+ * GetKeyでそのキーが実際に無いことを確かめて成功扱いにする。あれば別の理由のエラーなので再送出する
+ */
+async function applyChunk(kvsArn: string, plan: DiffPlan): Promise<void> {
   for (let attempt = 0; attempt < MAX_CONFLICT_RETRIES; attempt++) {
     const describe = await client.send(new DescribeKeyValueStoreCommand({ KvsARN: kvsArn }));
     if (!describe.ETag) {
@@ -126,6 +114,16 @@ async function applyChunk(kvsArn: string, plan: Pick<DiffPlan, 'puts' | 'deletes
       if (err instanceof ConflictException && attempt < MAX_CONFLICT_RETRIES - 1) {
         console.warn(`UpdateKeysCommand が競合。取り直してリトライする (attempt=${attempt + 1})`);
         continue;
+      }
+      if (
+        err instanceof ResourceNotFoundException &&
+        plan.deletes.length === 1 &&
+        plan.puts.length === 0
+      ) {
+        const exists = await keyExists(kvsArn, plan.deletes[0]!);
+        if (!exists) {
+          return;
+        }
       }
       throw err;
     }

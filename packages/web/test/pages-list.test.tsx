@@ -16,6 +16,7 @@ function page(slug: string, overrides: Partial<ListedPage> = {}): ListedPage {
     expiresAt: '2027-01-01T00:00:00.000Z',
     retention: 'temporary',
     viewUrl: `https://pages.example.com/p/tanaka/${slug}/`,
+    shareTag: 'a'.repeat(11),
     ...overrides,
   };
 }

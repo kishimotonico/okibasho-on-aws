@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildDesiredEntry,
   buildShareKvsValue,
+  decodeS3EventKey,
   isExpired,
   isValidCidr,
   isValidShareId,
@@ -138,9 +139,9 @@ describe('isExpired', () => {
 });
 
 describe('buildShareKvsValue / serializeKvsValue', () => {
-  it('idだけならpだけの値になる', () => {
+  it('idだけならp/idだけの値になる', () => {
     const value = buildShareKvsValue('pages/tanaka@example.jp/q3/', { id: VALID_ID });
-    expect(value).toEqual({ p: 'pages/tanaka@example.jp/q3/' });
+    expect(value).toEqual({ p: 'pages/tanaka@example.jp/q3/', id: VALID_ID });
   });
 
   it('basic/allowedCidrsがあればb/cを含む', () => {
@@ -151,6 +152,7 @@ describe('buildShareKvsValue / serializeKvsValue', () => {
     });
     expect(value).toEqual({
       p: 'pages/tanaka@example.jp/q3/',
+      id: VALID_ID,
       b: `${VALID_SALT}:${VALID_HASH}`,
       c: ['203.0.113.0/24'],
     });
@@ -177,7 +179,7 @@ describe('buildDesiredEntry', () => {
     };
     expect(buildDesiredEntry(metadata, prefix, now)).toEqual({
       id: VALID_ID,
-      value: { p: prefix },
+      value: { p: prefix, id: VALID_ID },
     });
   });
 
@@ -246,5 +248,19 @@ describe('buildDesiredEntry', () => {
       share: { id: VALID_ID },
     };
     expect(buildDesiredEntry(metadata, prefix, now)).toBeNull();
+  });
+});
+
+describe('decodeS3EventKey', () => {
+  it('URLエンコードされたキーをデコードする', () => {
+    expect(decodeS3EventKey('meta/tanaka%40example.jp/q3-report.json')).toBe(
+      'meta/tanaka@example.jp/q3-report.json',
+    );
+  });
+
+  it("'+'は空白にデコードする(S3イベント通知のキーはフォームエンコードに近い形式)", () => {
+    expect(decodeS3EventKey('meta/tanaka%40example.jp/hello+world.json')).toBe(
+      'meta/tanaka@example.jp/hello world.json',
+    );
   });
 });

@@ -23,9 +23,10 @@ export interface ShareProjectionProps {
  * 外部共有のエッジ側(share-router.js と /s/* ビヘイビア)は PagesDelivery が持つ。
  * このConstructはKVSへの書き込み経路(projectorとそのトリガー)だけを担う。
  *
- * projectorは冪等な全件reconcile 1本だけを持ち、metadataの作成・削除のS3イベントと
- * 15分ごとの安全網スケジュールの両方から起動する。イベントの中身は入力に使わないので、
- * イベントの順序・重複・取りこぼしに依存しない。
+ * projectorはmetadataの作成・削除のS3イベントと15分ごとの安全網スケジュールの両方から起動する。
+ * S3イベントは該当ページだけを投影し(ページ単位でUpdateKeysを呼ぶ)、スケジュールだけが
+ * meta/全件とKVS全件を突き合わせる冪等なreconcileを行う。KVSのキーはprefixから決まるtagのため、
+ * イベントの順序・重複には依存しない(取りこぼしだけは安全網のスケジュールが拾う)。
  */
 export class ShareProjection extends Construct {
   readonly keyValueStore: KeyValueStore;
@@ -44,7 +45,8 @@ export class ShareProjection extends Construct {
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
       timeout: Duration.minutes(1),
-      memorySize: 256,
+      // 起動頻度が低くコールドスタートが支配的なため、初期化を速くする目的で上げる
+      memorySize: 1024,
       // 同時実行を1に絞り、KVSのUpdateKeys競合(ConflictException)を実質起こさせない
       reservedConcurrentExecutions: 1,
       environment: {
@@ -106,6 +108,9 @@ export class ShareProjection extends Construct {
           'cloudfront-keyvaluestore:DescribeKeyValueStore',
           'cloudfront-keyvaluestore:ListKeys',
           'cloudfront-keyvaluestore:UpdateKeys',
+          // 存在しないキーのdeleteがResourceNotFoundExceptionになったときだけ、
+          // GetKeyでそのキーが実際に無いことを確かめるために使う
+          'cloudfront-keyvaluestore:GetKey',
         ],
         resources: [this.keyValueStore.keyValueStoreArn],
       }),

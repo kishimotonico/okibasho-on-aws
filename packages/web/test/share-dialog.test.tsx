@@ -10,6 +10,7 @@ import { ShareDialog } from '~/components/ShareDialog';
 import { TooltipProvider } from '~/components/Tooltip';
 
 const pagesBaseUrl = 'https://pages.example.com';
+const SHARE_TAG = 'b'.repeat(11);
 
 function renderDialog(props: ComponentProps<typeof ShareDialog>) {
   return render(
@@ -36,13 +37,14 @@ describe('ShareDialog', () => {
       page: {
         slug: 'q3-report',
         expiresAt: null,
+        shareTag: SHARE_TAG,
         share: { id: 'a'.repeat(22) },
       },
       pagesBaseUrl,
       onSave: vi.fn().mockResolvedValue(undefined),
     });
 
-    const shareUrl = `${pagesBaseUrl}/s/${'a'.repeat(22)}/`;
+    const shareUrl = `${pagesBaseUrl}/s/${SHARE_TAG}${'a'.repeat(22)}/`;
     expect(screen.getByRole('link', { name: shareUrl })).toHaveAttribute('href', shareUrl);
     expect(screen.getByRole('link', { name: shareUrl })).toHaveAttribute('target', '_blank');
 
@@ -57,7 +59,7 @@ describe('ShareDialog', () => {
     renderDialog({
       open: true,
       onOpenChange: vi.fn(),
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave,
     });
@@ -82,7 +84,7 @@ describe('ShareDialog', () => {
     expect(
       await screen.findByRole('heading', { name: '共有URLを発行しました' }),
     ).toBeInTheDocument();
-    const expectedUrl = `${pagesBaseUrl}/s/${share.id}/`;
+    const expectedUrl = `${pagesBaseUrl}/s/${SHARE_TAG}${share.id}/`;
     expect(screen.getByRole('link', { name: expectedUrl })).toHaveAttribute('href', expectedUrl);
     expect(screen.getByText('ユーザー名')).toBeInTheDocument();
     expect(screen.getByText('guest')).toBeInTheDocument();
@@ -101,7 +103,7 @@ describe('ShareDialog', () => {
     renderDialog({
       open: true,
       onOpenChange: vi.fn(),
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave,
     });
@@ -127,7 +129,7 @@ describe('ShareDialog', () => {
     renderDialog({
       open: true,
       onOpenChange: vi.fn(),
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave: vi.fn().mockResolvedValue(undefined),
     });
@@ -149,7 +151,7 @@ describe('ShareDialog', () => {
     renderDialog({
       open: true,
       onOpenChange: vi.fn(),
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave,
     });
@@ -179,7 +181,7 @@ describe('ShareDialog', () => {
     renderDialog({
       open: true,
       onOpenChange: vi.fn(),
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave,
     });
@@ -191,7 +193,7 @@ describe('ShareDialog', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
 
     const share = onSave.mock.calls[0]?.[0];
-    const expectedUrl = `${pagesBaseUrl}/s/${share.id}/`;
+    const expectedUrl = `${pagesBaseUrl}/s/${SHARE_TAG}${share.id}/`;
 
     await user.click(await screen.findByRole('button', { name: 'まとめてコピー' }));
 
@@ -207,7 +209,7 @@ describe('ShareDialog', () => {
     renderDialog({
       open: true,
       onOpenChange: vi.fn(),
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave,
     });
@@ -231,7 +233,7 @@ describe('ShareDialog', () => {
     renderDialog({
       open: true,
       onOpenChange: vi.fn(),
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave,
     });
@@ -261,7 +263,7 @@ describe('ShareDialog', () => {
     renderDialog({
       open: true,
       onOpenChange,
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave,
     });
@@ -278,7 +280,7 @@ describe('ShareDialog', () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    const page = { slug: 'q3-report', expiresAt: null };
+    const page = { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG };
 
     const { rerender } = renderDialog({ open: true, onOpenChange, page, pagesBaseUrl, onSave });
 
@@ -326,7 +328,7 @@ describe('ShareDialog', () => {
     const { rerender } = renderDialog({
       open: true,
       onOpenChange,
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave: vi.fn().mockResolvedValue(undefined),
     });
@@ -339,7 +341,7 @@ describe('ShareDialog', () => {
         <ShareDialog
           open={false}
           onOpenChange={onOpenChange}
-          page={{ slug: 'q3-report', expiresAt: null }}
+          page={{ slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG }}
           pagesBaseUrl={pagesBaseUrl}
           onSave={vi.fn().mockResolvedValue(undefined)}
         />
@@ -350,7 +352,7 @@ describe('ShareDialog', () => {
         <ShareDialog
           open
           onOpenChange={onOpenChange}
-          page={{ slug: 'q3-report', expiresAt: null }}
+          page={{ slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG }}
           pagesBaseUrl={pagesBaseUrl}
           onSave={vi.fn().mockResolvedValue(undefined)}
         />
@@ -372,7 +374,7 @@ describe('ShareDialog', () => {
     renderDialog({
       open: true,
       onOpenChange: vi.fn(),
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave,
     });
@@ -397,6 +399,7 @@ describe('ShareDialog', () => {
       page: {
         slug: 'q3-report',
         expiresAt: null,
+        shareTag: SHARE_TAG,
         share: { id: 'a'.repeat(22) },
       },
       pagesBaseUrl,
@@ -424,6 +427,7 @@ describe('ShareDialog', () => {
       page: {
         slug: 'q3-report',
         expiresAt: null,
+        shareTag: SHARE_TAG,
         share: { id: 'a'.repeat(22) },
       },
       pagesBaseUrl,
@@ -452,6 +456,7 @@ describe('ShareDialog', () => {
       page: {
         slug: 'q3-report',
         expiresAt: null,
+        shareTag: SHARE_TAG,
         share: { id: 'a'.repeat(22), basic: existingBasic },
       },
       pagesBaseUrl,
@@ -486,6 +491,7 @@ describe('ShareDialog', () => {
       page: {
         slug: 'q3-report',
         expiresAt: null,
+        shareTag: SHARE_TAG,
         share: { id: 'a'.repeat(22), basic: existingBasic },
       },
       pagesBaseUrl,
@@ -517,6 +523,7 @@ describe('ShareDialog', () => {
       page: {
         slug: 'q3-report',
         expiresAt: null,
+        shareTag: SHARE_TAG,
         share: { id: 'a'.repeat(22), basic: existingBasic },
       },
       pagesBaseUrl,
@@ -541,7 +548,7 @@ describe('ShareDialog', () => {
     renderDialog({
       open: true,
       onOpenChange: vi.fn(),
-      page: { slug: 'q3-report', expiresAt: null },
+      page: { slug: 'q3-report', expiresAt: null, shareTag: SHARE_TAG },
       pagesBaseUrl,
       onSave,
     });

@@ -31,6 +31,7 @@ function listedPage(slug: string): ListedPage {
     expiresAt: null,
     retention: 'permanent',
     viewUrl: `https://pages.example.com/p/tanaka/${slug}/`,
+    shareTag: 'a'.repeat(11),
   };
 }
 

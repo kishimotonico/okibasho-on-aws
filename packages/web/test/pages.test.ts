@@ -403,6 +403,7 @@ describe('pages API', () => {
       expiresAt: null,
       retention: 'permanent',
       viewUrl: `${pagesBaseUrl}/p/tanaka/q3-report/`,
+      shareTag: 'a'.repeat(11),
       share,
     });
     expect(withShare.share).toEqual(share);
@@ -414,6 +415,7 @@ describe('pages API', () => {
       expiresAt: null,
       retention: 'permanent',
       viewUrl: `${pagesBaseUrl}/p/tanaka/q3-report/`,
+      shareTag: 'a'.repeat(11),
     });
     expect(withoutShare.share).toBeUndefined();
   });
