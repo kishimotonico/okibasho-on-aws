@@ -99,7 +99,7 @@ describe('createPageStore', () => {
     expect(metadata.share).toEqual(next);
   });
 
-  it('保存期間の変更は作成時刻から数え、share を引き継ぐ', async () => {
+  it('保存期間の変更は変更時刻（現在時刻）から数え、share を引き継ぐ', async () => {
     const { fake, store } = setup();
     const createdAt = '2026-08-01T00:00:00.000Z';
     fake.putJson(metadataObjectKey(email, 'q3-report'), { createdAt, expiresAt: null, share });
@@ -108,7 +108,7 @@ describe('createPageStore', () => {
 
     expect(metadata).toEqual({
       createdAt,
-      expiresAt: computeExpiresAt('temporary', createdAt),
+      expiresAt: computeExpiresAt('temporary', now),
       share,
     });
     expect(fake.getJson(metadataObjectKey(email, 'q3-report'))).toEqual(metadata);

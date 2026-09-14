@@ -176,26 +176,6 @@ describe('PagesList', () => {
     );
   });
 
-  it('30日に戻すで即期限切れになるとき警告文を出す', async () => {
-    const user = userEvent.setup();
-    renderList({
-      pages: [
-        page('old-perm', {
-          retention: 'permanent',
-          expiresAt: null,
-          createdAt: '2026-01-01T00:00:00.000Z',
-        }),
-      ],
-    });
-
-    await user.click(within(rowOf('old-perm')).getByRole('button', { name: 'old-permの操作' }));
-    await user.click(screen.getByRole('menuitem', { name: '30日に戻す' }));
-
-    expect(screen.getByRole('alertdialog')).toHaveTextContent(
-      '30日保存に戻すと、作成から30日以上経過しているため即座に期限切れになります。続行しますか？',
-    );
-  });
-
   it('ページがなければ案内を出す', () => {
     renderList({ pages: [] });
 

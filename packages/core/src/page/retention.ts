@@ -18,9 +18,12 @@ export function computeExpiresAt(retention: Retention, base: Date | string): str
 }
 
 /**
- * 保存期間を変えたときの保存期限。起点は作成時刻（変更時刻ではない）。
+ * 保存期間を変えたときの保存期限。起点は変更時刻（アップロード時と同じく now + 30 日）。
  * S3 への書き込みと web の楽観更新が同じ計算になるよう、ここだけで決める
  */
-export function retentionChangeExpiresAt(retention: Retention, createdAt: string): string | null {
-  return computeExpiresAt(retention, createdAt);
+export function retentionChangeExpiresAt(
+  retention: Retention,
+  now: Date | string = new Date(),
+): string | null {
+  return computeExpiresAt(retention, now);
 }

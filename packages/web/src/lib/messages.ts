@@ -48,8 +48,6 @@ export const messages = {
     `「${slug}」を削除しますか？この操作は取り消せません。`,
   retentionDialogTitle: '保存期間を30日に変更',
   retentionDialogDescription: '保存期間を30日に変更しますか？',
-  retentionDialogImmediateExpiry:
-    '30日保存に戻すと、作成から30日以上経過しているため即座に期限切れになります。続行しますか？',
 
   /** 外部共有ダイアログ */
   shareDialogTitleNew: '外部共有',

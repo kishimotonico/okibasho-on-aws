@@ -98,7 +98,7 @@ function applyPagesAction(pages: readonly ListedPage[], action: PagesAction): Li
           ? {
               ...page,
               retention: action.retention,
-              expiresAt: retentionChangeExpiresAt(action.retention, page.createdAt),
+              expiresAt: retentionChangeExpiresAt(action.retention),
             }
           : page,
       );

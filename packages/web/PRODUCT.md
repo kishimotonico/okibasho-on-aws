@@ -65,7 +65,7 @@ MVP でやらないこと（UI に匂わせない）: 管理者ロール・RBAC�
 - slug: `[a-z0-9][a-z0-9_-]{0,63}`。小文字英数字・ハイフン・アンダースコアのみ、最大 64 文字。ユーザー単位で一意。大文字は暗黙変換しない。web では初期表示から `generateRandomSlug`（`packages/core/src/page/slug.ts` を web と CLI で共有）で小文字英数字 10 文字を入れる。空欄で進めようとすると新しい slug を入れ直してから続行する。CLI は従来どおり `--name` 省略時にパス名から slug を作る
 - サイズ上限（クライアント側の目安。IAM では強制できない）: 1 ファイル 50 MB、1 ページ合計 200 MB、ファイル数 200
 - ページ直下に `index.html` が必須。dotfile などの無効なパスはスキップされる。単一ファイル選択では HTML のみ
-- 保存期間: temporary（作成から 30 日固定。変更時刻ではなく `createdAt` 起点）と permanent（無期限）。無期限から 30 日へ戻すと、作成から 30 日以上経過している場合は即座に期限切れになる
+- 保存期間: temporary（最後にそのページを操作した時刻から 30 日）と permanent（無期限）。アップロード（新規・再アップロード）と保存期間の変更のどちらも「操作した時刻」にあたり、そのたびに期限を now + 30 日で数え直す。ただし permanent 化済みのページは、`--permanent` を付けずに再アップロードしても permanent のまま維持する（temporary に戻すのは保存期間変更の操作で行う）
 - ページごとの metadata（`meta/<email>/<slug>.json`）: `{ createdAt, expiresAt, share? }`。slug と owner はキー由来なので metadata には持たない。`expiresAt` が null なら無期限
 - 一覧は `meta/<email>/` 配下を S3 ListObjectsV2 で列挙し、キー名から得た slug ごとに metadata を並列取得する。ページ数が増えると一覧はその分遅くなる。管理 UI の表示順は作成日時（`createdAt`）の新しい順で、S3 の取得順そのものは変えない。再アップロードでは `createdAt` が変わらないので並びも変わらない
 - UI 言語は日本語のみ。i18n は前提にしない（ユーザー確認済み）

@@ -56,9 +56,9 @@ export function buildUploadMetadata(
   };
 }
 
-/** 保存期間だけを変えた metadata */
+/** 保存期間だけを変えた metadata。期限は変更時刻から数え直す */
 export function withRetention(existing: PageMetadata, retention: Retention): PageMetadata {
-  return { ...existing, expiresAt: retentionChangeExpiresAt(retention, existing.createdAt) };
+  return { ...existing, expiresAt: retentionChangeExpiresAt(retention) };
 }
 
 /** 外部共有設定だけを差し替えた metadata。null で共有解除 */
