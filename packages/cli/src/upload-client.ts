@@ -120,6 +120,41 @@ function computeExpiresAt(permanent: boolean): string | null {
   return new Date(Date.now() + DEFAULT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
+const UPLOAD_CONCURRENCY = 4;
+
+/** Put を 4 並列で行う。web の putFilesWithConcurrency と同じ作り */
+async function putFilesWithConcurrency(
+  s3: S3Client,
+  bucket: string,
+  email: string,
+  slug: string,
+  files: readonly PageFileUpload[],
+): Promise<void> {
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < files.length) {
+      const currentIndex = nextIndex++;
+      const file = files[currentIndex];
+      if (!file) {
+        return;
+      }
+
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: pageObjectKey(email, slug, file.path),
+          Body: file.body,
+          ContentType: file.contentType,
+        }),
+      );
+    }
+  }
+
+  const workerCount = Math.min(UPLOAD_CONCURRENCY, files.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+}
+
 export async function uploadPage(
   s3: S3Client,
   bucket: string,
@@ -149,16 +184,7 @@ export async function uploadPage(
     }
   }
 
-  for (const file of input.files) {
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: pageObjectKey(input.email, input.slug, file.path),
-        Body: file.body,
-        ContentType: file.contentType,
-      }),
-    );
-  }
+  await putFilesWithConcurrency(s3, bucket, input.email, input.slug, input.files);
 
   const existingKeys = await listAllKeys(s3, bucket, prefix);
   const staleKeys = existingKeys.filter((key) => !uploadKeys.has(key));
@@ -197,28 +223,30 @@ export async function listPages(
   const metaPrefix = metaOwnerPrefix(email);
   const metadataKeys = await listAllKeys(s3, bucket, metaPrefix);
 
-  const pages: ListedPageMetadata[] = [];
-  for (const metadataKey of metadataKeys) {
-    const slug = slugFromMetadataKey(email, metadataKey);
-    if (!slug) {
-      continue;
-    }
-    const body = await readObjectBody(s3, bucket, metadataKey);
-    if (!body) {
-      continue;
-    }
-    try {
-      const parsed: unknown = JSON.parse(body.toString('utf8'));
-      if (isPageMetadata(parsed)) {
-        pages.push({ ...parsed, slug });
+  // metadata の Get は直列だと台数分待たされるので並列にする
+  const pages = await Promise.all(
+    metadataKeys.map(async (metadataKey): Promise<ListedPageMetadata | null> => {
+      const slug = slugFromMetadataKey(email, metadataKey);
+      if (!slug) {
+        return null;
       }
-    } catch {
-      // 壊れた metadata は一覧から除外
-    }
-  }
+      const body = await readObjectBody(s3, bucket, metadataKey);
+      if (!body) {
+        return null;
+      }
+      try {
+        const parsed: unknown = JSON.parse(body.toString('utf8'));
+        return isPageMetadata(parsed) ? { ...parsed, slug } : null;
+      } catch {
+        // 壊れた metadata は一覧から除外
+        return null;
+      }
+    }),
+  );
 
-  pages.sort((a, b) => a.slug.localeCompare(b.slug));
-  return pages;
+  const listed = pages.filter((page): page is ListedPageMetadata => page !== null);
+  listed.sort((a, b) => a.slug.localeCompare(b.slug));
+  return listed;
 }
 
 export async function removePage(

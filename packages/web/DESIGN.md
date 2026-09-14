@@ -219,8 +219,8 @@ components:
 - **Content:** `UrlField`（URL とコピーが一体の表示部品。詳細は後述）、その下の操作列に「外部共有…」（`text-link`。削除アイコンと並べる、控えめな副次操作）と Trash（一覧と同じ `ConfirmAlertDialog`）
 - **箱の吹き出し:** アップロード成功時、箱から `success` 種別の吹き出し（emerald 系。「公開しました」）を出す。挙動は Box bubble の `info` と同じ（6 秒自動消去・クリックで閉じる）
 - **次のファイルを置く:** 結果の下に第二階層の見た目のボタン（`button--ghost`。エメラルドではない）。押すとフォームを初期状態（乱数 slug・30日・案内文・選択リンク）に戻し、箱も idle に戻す
-- **外部共有…:** クリックすると、今アップロードしたページの `ShareDialog` を開く。開閉は route（`routes/index.tsx`）が一元管理し、一覧の kebab から開いた場合と同じ経路・同じ一覧更新（`router.invalidate`）を使う。すでに外部共有中のページを再アップロードしたときも同じボタンで今の設定を開ける
-- **外部公開を今回新しく選んだとき:** 結果ブロックの表示に加えて、`ShareDialog` を完了画面から自動で開く（一覧の再取得を待ってから開くので、開いた瞬間から一覧と一致する）。中身は ShareDialog の完了画面と同じ（共有URL、パスワードを設定していればユーザー名・パスワード・まとめてコピー）。閉じるのは通常どおり右上の×だけ
+- **外部共有…:** クリックすると、今アップロードしたページの `ShareDialog` を開く。開閉は route（`routes/index.tsx`）が一元管理し、一覧の kebab から開いた場合と同じ経路・同じ一覧反映（書き込んだ内容で該当行を差し替え）を使う。すでに外部共有中のページを再アップロードしたときも同じボタンで今の設定を開ける
+- **外部公開を今回新しく選んだとき:** 結果ブロックの表示に加えて、`ShareDialog` を完了画面から自動で開く（アップロード結果の metadata に share を含めて一覧へ差し込んでから開くので、開いた瞬間から一覧と一致する）。中身は ShareDialog の完了画面と同じ（共有URL、パスワードを設定していればユーザー名・パスワード・まとめてコピー）。閉じるのは通常どおり右上の×だけ
 - **Delete:** AlertDialog で確認してから削除。消したページの slug がフォームに残っていれば乱数に戻す。そのページの成功結果が出ていれば初期状態（フォーム表示）に戻す。一覧から消したときも同じ
 - **Reupload:** 一覧の kebab「再アップロード」は成功状態からでもフォームへ戻す
 
@@ -248,7 +248,7 @@ components:
   - **Footer:** パスワードを新しく設定した場合だけ、右に「まとめてコピー」（`CopyButton` labeled variant。`URL: .. / ユーザー名: .. / パスワード: ..` の3行テキスト）を出す。IP制限だけ・保護なしで発行した場合はフッター自体を出さない（URL は `UrlField` でコピーできる）。どちらの場合も「完了」のような閉じるボタンは置かず、閉じるのは常にヘッダー右上の × だけにする
   - **戻る導線はなし:** 完了画面から設定フォームへ戻る操作は持たない。設定を変えたいときは一覧やアップロード結果から開き直す
 - **反映遅延:** 保存・再発行・停止のあとはフッター直上に field-hint で「反映まで少し時間がかかる」系の案内を出す（パスワードを変えない保存はフォームのまま、それ以外は完了画面の中で案内する）
-- **一覧への反映:** 保存が終わってから一覧を再取得し、ShareDialog はその一覧から自分の対象ページを引き直す（保存直後でも共有URLの表示が一覧と食い違わない）
+- **一覧への反映:** 保存が終わったら、書き込んだ内容（API の戻り値）で一覧の該当行を直接差し替える（一覧全体は取り直さない）。ShareDialog はその一覧から自分の対象ページを引き直す（保存直後でも共有URLの表示が一覧と食い違わない）
 - **平文の扱い:** 生成・入力したパスワードの平文は state だけに持ち、`.metadata.json` には salt 付き SHA-256 のハッシュしか保存しない。ダイアログを閉じる（`open` が false になる）と平文パスワードと完了画面の内容を state から消し、次に開いたときに残っていないようにする
 
 ### UrlField（URL とコピーの統合表示）
@@ -340,9 +340,9 @@ lib/to-user-message.ts     エラーを画面向けの日本語にする
 
 ### 状態の置き場所
 
-- **一覧データ**: `routes/index.tsx` の loader で取得し、`useOptimistic` で削除・保存期間変更を先に画面へ反映する。通信後に `router.invalidate()` で本物と入れ替える
+- **一覧データ**: `routes/index.tsx` の loader で取得し、ローカル state（`basePages`）に入れる。loader が再実行された（初期表示、`PagesLoadError` の「再読み込み」）ときだけ `basePages` を loader の結果へ同期する。`useOptimistic` は `basePages` を土台に削除・保存期間変更を先に画面へ反映し、通信が終わったら一覧全体を取り直さず、書き込んだ内容（削除・保存期間変更・共有変更・アップロードのどれも API 呼び出しの戻り値）で `basePages` の該当行だけを差し替える
 - **route から下ろす合図**: `composerSeed`（再アップロード）・`retiredSlug`（消えたページ）・`highlight`（成功行）は `{ slug, nonce }` の値を props で Composer / PagesList へ渡す。`forwardRef` や `useImperativeHandle` は使わない
-- **ShareDialog の開閉**: `shareSlug`（開いている対象の slug、または `null`）を `routes/index.tsx` が持つ。一覧の kebab「外部共有…」も成功結果の「外部共有…」も同じ `onShare(slug)` を呼ぶだけで、ShareDialog 自体の描画・`pages` からの対象ページの引き直し・保存後の `router.invalidate()` は route 側の一箇所にまとめる。Composer で今回新しく外部公開したときは、`onUploaded` の第2引数（credentials か null）を `shareIssuedCredentials` に控えてから同じ経路で開き、ShareDialog を完了画面から始める（通常どおり開いたときは `undefined` に戻す）
+- **ShareDialog の開閉**: `shareSlug`（開いている対象の slug、または `null`）を `routes/index.tsx` が持つ。一覧の kebab「外部共有…」も成功結果の「外部共有…」も同じ `onShare(slug)` を呼ぶだけで、ShareDialog 自体の描画・`pages` からの対象ページの引き直し・保存後の一覧反映（書き込んだ内容で該当行を差し替え）は route 側の一箇所にまとめる。Composer で今回新しく外部公開したときは、`onUploaded` の第2引数（credentials か null）を `shareIssuedCredentials` に控えてから同じ経路で開き、ShareDialog を完了画面から始める（通常どおり開いたときは `undefined` に戻す）
 - **アップロードの状態**: `useUploadFlow` が `idle / checking / confirming / uploading / success / error` の判別共用体を `useReducer` で持つ。箱の吹き出し（`bubbleOf`）と箱アイコンの phase（`iconPhaseOf`）はこの状態から導出する
 - **コピーの表示**: `useCopyToClipboard` が `idle / copied / failed` を持ち、2秒で idle に戻す。`CopyButton` がこれを使い、一覧側の共通エラー表示へは `onError` / `onCopied` で伝える
 

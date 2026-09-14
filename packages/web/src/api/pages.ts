@@ -74,6 +74,30 @@ export function pageMetadataFromListed(page: ListedPage): PageMetadata {
   };
 }
 
+/**
+ * pageMetadataFromListed の逆。書き込んだ metadata と slug から一覧の行を組み立てる。
+ * アップロード・保存期間変更・共有設定変更の直後に、S3 を読み直さず一覧の該当行を差し替えるために使う。
+ * shareTag（computeShareTag）は WebCrypto を使うため非同期
+ */
+export async function listedPageFromMetadata(
+  email: string,
+  slug: string,
+  metadata: PageMetadata,
+  viewUrl: string,
+): Promise<ListedPage> {
+  const shareTag = await computeShareTag(email, slug);
+  return {
+    slug,
+    owner: email,
+    createdAt: metadata.createdAt,
+    expiresAt: metadata.expiresAt,
+    retention: retentionFromExpiresAt(metadata.expiresAt),
+    viewUrl,
+    shareTag,
+    ...(metadata.share ? { share: metadata.share } : {}),
+  };
+}
+
 async function bodyToString(body: unknown): Promise<string> {
   if (!body) {
     return '';
@@ -166,18 +190,7 @@ export async function listPages(
       if (!metadata) {
         return null;
       }
-      const shareTag = await computeShareTag(email, slug);
-      const listed: ListedPage = {
-        slug,
-        owner: email,
-        createdAt: metadata.createdAt,
-        expiresAt: metadata.expiresAt,
-        retention: retentionFromExpiresAt(metadata.expiresAt),
-        viewUrl: buildViewUrl(pagesBaseUrl, email, slug),
-        shareTag,
-        ...(metadata.share ? { share: metadata.share } : {}),
-      };
-      return listed;
+      return listedPageFromMetadata(email, slug, metadata, buildViewUrl(pagesBaseUrl, email, slug));
     }),
   );
 

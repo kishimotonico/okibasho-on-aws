@@ -131,7 +131,7 @@ describe('Composer', () => {
     expect(upload).toHaveBeenCalledWith(
       expect.objectContaining({ slug: 'q3-report', retention: 'temporary', existing: null }),
     );
-    expect(onUploaded).toHaveBeenCalledWith('q3-report');
+    expect(onUploaded).toHaveBeenCalledWith(uploaded('q3-report'));
   });
 
   it('一覧にある slug なら吹き出しを出し、差し替えるまでアップロードしない', async () => {

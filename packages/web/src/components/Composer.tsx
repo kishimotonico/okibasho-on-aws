@@ -38,11 +38,12 @@ interface ComposerProps {
   /** ページの削除中（route 側のトランジション） */
   deleting: boolean;
   /**
+   * アップロードした行（S3 を読み直さず一覧へ差し込む内容）を渡す。
    * 今回新しく外部公開した場合だけ第2引数を渡す（パスワード無しなら null）。
    * route 側はこれを合図に、完了画面から始まる ShareDialog を自動で開く
    */
   onUploaded: (
-    slug: string,
+    page: ListedPage,
     sharedCredentials?: { username: string; password: string } | null,
   ) => void;
   onDelete: (slug: string) => void;
@@ -157,15 +158,15 @@ export function Composer({
     slug,
     retention,
     onSlugChange: setSlug,
-    onUploaded: (uploadedSlug) => {
+    onUploaded: (page) => {
       const applied = lastAppliedShareRef.current;
       lastAppliedShareRef.current = null;
       if (!applied) {
-        onUploaded(uploadedSlug);
+        onUploaded(page);
         return;
       }
       onUploaded(
-        uploadedSlug,
+        page,
         applied.share.basic
           ? { username: applied.share.basic.username, password: applied.plainPassword ?? '' }
           : null,

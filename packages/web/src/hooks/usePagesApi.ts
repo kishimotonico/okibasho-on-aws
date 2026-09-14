@@ -5,9 +5,11 @@ import { useAuth } from '~/auth/auth-context';
 import {
   buildViewUrl,
   deletePage,
+  listedPageFromMetadata,
   updatePageRetention,
   updatePageShare,
   uploadPage,
+  type ListedPage,
   type Retention,
   type UploadFileInput,
 } from '~/api/pages';
@@ -41,10 +43,11 @@ export interface UploadInput {
 }
 
 export interface PagesApi {
-  upload: (input: UploadInput) => Promise<{ slug: string; viewUrl: string }>;
+  /** 書き込んだ内容から一覧の行を組み立てて返す。呼び出し側はこれで一覧の該当行を差し替えられる */
+  upload: (input: UploadInput) => Promise<ListedPage>;
   remove: (slug: string) => Promise<void>;
-  setRetention: (slug: string, retention: Retention) => Promise<void>;
-  updateShare: (slug: string, share: PageShare | null) => Promise<void>;
+  setRetention: (slug: string, retention: Retention) => Promise<ListedPage>;
+  updateShare: (slug: string, share: PageShare | null) => Promise<ListedPage>;
   viewUrl: (slug: string) => string;
   /** 公開URLの固定部分。表示のためだけに分けて返す */
   urlOrigin: string;
@@ -89,7 +92,7 @@ export function usePagesApi(): PagesApi {
       upload: (input) =>
         run(messages.uploadFailed, async () => {
           const { s3, email } = client();
-          await uploadPage(
+          const metadata = await uploadPage(
             s3,
             config.pagesBucket,
             email,
@@ -102,10 +105,12 @@ export function usePagesApi(): PagesApi {
             },
             input.onProgress,
           );
-          return {
-            slug: input.slug,
-            viewUrl: buildViewUrl(config.pagesBaseUrl, email, input.slug),
-          };
+          return listedPageFromMetadata(
+            email,
+            input.slug,
+            metadata,
+            buildViewUrl(config.pagesBaseUrl, email, input.slug),
+          );
         }),
 
       remove: (slug) =>
@@ -117,13 +122,31 @@ export function usePagesApi(): PagesApi {
       setRetention: (slug, retention) =>
         run(messages.retentionChangeFailed, async () => {
           const { s3, email } = client();
-          await updatePageRetention(s3, config.pagesBucket, email, slug, retention);
+          const metadata = await updatePageRetention(
+            s3,
+            config.pagesBucket,
+            email,
+            slug,
+            retention,
+          );
+          return listedPageFromMetadata(
+            email,
+            slug,
+            metadata,
+            buildViewUrl(config.pagesBaseUrl, email, slug),
+          );
         }),
 
       updateShare: (slug, share) =>
         run(messages.shareUpdateFailed, async () => {
           const { s3, email } = client();
-          await updatePageShare(s3, config.pagesBucket, email, slug, share);
+          const metadata = await updatePageShare(s3, config.pagesBucket, email, slug, share);
+          return listedPageFromMetadata(
+            email,
+            slug,
+            metadata,
+            buildViewUrl(config.pagesBaseUrl, email, slug),
+          );
         }),
     };
   }, [config, session]);

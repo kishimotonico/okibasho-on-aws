@@ -80,7 +80,10 @@ describe('useUploadFlow', () => {
     expect(upload).toHaveBeenCalledWith(
       expect.objectContaining({ slug: 'my-page', retention: 'temporary', existing: null }),
     );
-    expect(onUploaded).toHaveBeenCalledWith('my-page');
+    expect(onUploaded).toHaveBeenCalledWith({
+      slug: 'my-page',
+      viewUrl: 'https://pages.example.com/p/tanaka/my-page/',
+    });
     expect(result.current.bubble).toEqual({
       kind: 'success',
       message: '公開しました',
