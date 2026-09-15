@@ -20,10 +20,7 @@ interface PagesSectionProps {
   onShare: (slug: string) => void;
 }
 
-/**
- * 「アップロード済みページ」セクション。見出しはすぐ出し、中身（PagesList）だけを
- * Suspense で待つ。一覧の取得に失敗してもこのセクションだけがエラー表示になる
- */
+/** 見出しはすぐ出し、中身（PagesList）だけを Suspense で待つ */
 export function PagesSection({ api, email, ...listProps }: PagesSectionProps) {
   return (
     <section className="pages-section" aria-labelledby="uploaded-pages-heading">

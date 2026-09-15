@@ -22,17 +22,11 @@ export interface ListedPage {
    */
   shareTag: string;
   share?: PageShare;
-  /**
-   * 一覧取得時に ListObjectsV2 で見えた metadata の ETag。次回の一覧取得で差分の材料にする。
-   * 書き込み直後に作る行（アップロード・保存期間変更・共有設定変更）には無い
-   */
+  /** 次回の一覧取得での差分の材料。書き込み直後に作る行には無い */
   etag?: string;
 }
 
-/**
- * metadata と slug から一覧の行を組み立てる。書き込み直後の差し替えと、一覧取得
- * （PageStore.list の結果）の変換の両方で使う。shareTag（computeShareTag）は WebCrypto を使うため非同期
- */
+/** shareTag（computeShareTag）は WebCrypto を使うため非同期 */
 export async function listedPageFromMetadata(
   email: string,
   slug: string,
@@ -66,10 +60,7 @@ export function pageMetadataFromListed(page: ListedPage): PageMetadata {
   };
 }
 
-/**
- * previous（前回取得した一覧）を渡すと、PageStore.list の差分取得に使う。
- * etag を持つ行だけが差分の材料になる（書き込み直後に作った行は次回まるごと取り直される）
- */
+/** previous を渡すと PageStore.list の差分取得に使う（etag を持つ行だけが材料になる） */
 export async function listPages(
   store: PageStore,
   email: string,

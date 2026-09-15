@@ -52,10 +52,7 @@ export interface UploadPageOptions extends UploadMetadataInput {
 
 /** 1 ユーザーのページに対する S3 操作。書き込んだ metadata を返すので、呼び出し側は S3 を読み直さなくてよい */
 export interface PageStore {
-  /**
-   * previous を渡すと、ListObjectsV2 の ETag が前回と同じ slug は metadata の GetObject を省き、
-   * 前回の結果を使い回す。変わったもの・新規のものだけ取り直す。省略時は全件 GetObject する
-   */
+  /** previous を渡すと、ETag が前回と同じ slug は GetObject を省き前回の結果を使い回す */
   list(previous?: readonly StoredPage[]): Promise<StoredPage[]>;
   getMetadata(slug: string): Promise<PageMetadata | null>;
   /** ページ成果物の並列 Put、今回含まれないオブジェクトの差分削除、metadata の書き込みを行う */
@@ -209,7 +206,7 @@ export function createPageStore({ s3, bucket, email }: PageStoreTarget): PageSto
       const entries = await listEntries(metaOwnerPrefix(email));
       const previousBySlug = new Map((previous ?? []).map((page) => [page.slug, page]));
 
-      // metadata の Get は直列だと件数分待たされるので並列にする。ETag が前回と同じなら Get を省く
+      // metadata の Get は直列だと件数分待たされるので並列にする
       const pages = await Promise.all(
         entries.map(async ({ key, etag }): Promise<StoredPage | null> => {
           const slug = slugFromMetadataKey(email, key);
@@ -218,6 +215,7 @@ export function createPageStore({ s3, bucket, email }: PageStoreTarget): PageSto
           }
           const cached = previousBySlug.get(slug);
           if (cached && cached.etag === etag) {
+            // ETag が前回と同じなら Get を省く
             return cached;
           }
           const metadata = await getMetadata(slug);

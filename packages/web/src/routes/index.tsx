@@ -30,28 +30,21 @@ export const Route = createFileRoute('/')({
   component: HomePage,
 });
 
-/**
- * defaultSsr: false（src/start.ts）で常にクライアント実行。一覧は await せず prefetch
- * だけ始め、Composer はすぐ表示して一覧セクションを後から追いつかせる。
- * localStorage からの復元（pagesRestored）だけは待つ。待たないと、復元前の
- * prefetchQuery が前回の一覧（ETag 差分取得の材料）を持たず、毎回全件取り直しになる
- */
 async function prefetchPages(): Promise<void> {
-  // 一覧取得（下の await たち）を待たず、S3・Cognito の SDK チャンクの読み込みだけ並行して始める
+  // 一覧取得を待たず、S3・Cognito の SDK チャンクの読み込みだけ並行して始める
   preloadPagesSdk();
 
   const session = await loadAuthSession();
   if (!session) {
-    // 未ログインなら AuthGate がログインへ送るため、ここでは何もしなくてよい
     return;
   }
 
+  // 復元前に prefetch すると差分の材料が無く全件取り直しになる
   await pagesRestored;
 
   const config = getWebConfig();
   const api = createPagesApi(config, session);
-  // ここだけ staleTime を 0 にし、リロードのたびに裏で取り直す（ETag 差分なので安い）。
-  // コンポーネント側の useQuery は既定の staleTime のままにして、マウントで二重に取りに行かせない
+  // リロードのたびに裏で取り直す（ETag 差分なので安い）
   void queryClient.prefetchQuery({
     ...pagesListQueryOptions(api, session.email),
     staleTime: 0,
@@ -113,8 +106,7 @@ function HomePage() {
   const { slug: initialSlug } = Route.useSearch();
   const uploadSectionRef = useRef<HTMLDivElement>(null);
 
-  // 一覧はクエリのキャッシュを唯一の情報源にする。suspend しない読み方なので、
-  // まだ読み込まれていない間は undefined（Composer 側もそれを前提に動く）
+  // suspend しない読み方なので、読み込み前は undefined になる
   const { data: pages } = useQuery(pagesListQueryOptions(api, email));
 
   const [isMutating, startMutation] = useTransition();
@@ -157,13 +149,10 @@ function HomePage() {
 
   const queryKey = pagesQueryKey(email);
 
-  /**
-   * 書き込みが成功したあと、その内容で一覧の該当行を差し替える。
-   * キャッシュがまだ無い（一覧が読み込まれる前）ときは setQueryData せず取得を取り直すだけにする
-   * （無いところへ作ると、直後の in-flight な一覧取得の結果に上書きされて消える恐れがある）
-   */
+  /** 書き込み成功後、その内容で一覧の該当行を差し替える */
   function upsertPage(page: ListedPage) {
     if (queryClient.getQueryData<ListedPage[]>(queryKey) === undefined) {
+      // 無いところへ作ると、直後の in-flight な一覧取得の結果に上書きされて消える
       void queryClient.invalidateQueries({ queryKey });
       return;
     }
@@ -172,16 +161,13 @@ function HomePage() {
     );
   }
 
-  /**
-   * 楽観更新（先にキャッシュを書き換え、失敗したら戻す）。キャッシュがまだ無いときは
-   * upsertPage と同じ理由で楽観更新をせず、成功後に取り直す。in-flight の取得（フォーカス
-   * 再取得など）が古い結果で上書きしないよう、書き換える前に cancelQueries で止める
-   */
+  /** 楽観更新。失敗したら戻す */
   function mutate(action: PagesAction, run: () => Promise<ListedPage | void>) {
     startMutation(async () => {
       setActionError(null);
 
       if (queryClient.getQueryData<ListedPage[]>(queryKey) === undefined) {
+        // upsertPage と同じ理由で楽観更新はせず、成功後に取り直す
         try {
           await run();
           void queryClient.invalidateQueries({ queryKey });
@@ -191,6 +177,7 @@ function HomePage() {
         return;
       }
 
+      // in-flight の取得（フォーカス再取得など）が古い結果で上書きしないよう先に止める
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<ListedPage[]>(queryKey) ?? [];
       queryClient.setQueryData<ListedPage[]>(queryKey, applyPagesAction(previous, action));

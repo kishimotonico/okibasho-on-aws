@@ -41,9 +41,7 @@ const ssrAuthState: AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 function ClientAuthProvider({ children }: { children: ReactNode }) {
-  // /callback の loader（signinCallback）と同じ userManager を、マウント時点で同期に持つ。
-  // useEffect での後付けだと、loader が userLoaded を発火するタイミングに
-  // このコンポーネントの購読が間に合わない場合がある。
+  // useEffect での後付けだと、userLoaded の発火に購読が間に合わないことがある
   const [userManager] = useState<UserManager>(() => getUserManager());
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);

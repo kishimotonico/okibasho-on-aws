@@ -59,10 +59,8 @@ export interface PagesApi {
 }
 
 /**
- * ページに対する変更をまとめる。
- * 認証情報と接続先、S3 の操作（PageStore）の生成、失敗の文言化、一覧の行への変換をここで閉じるので、
- * 呼び出し側は auth / config / S3 を知らなくてよい。
- * React に依存しないので、route の loader（React の外）とコンポーネントの両方から同じ実装を使える。
+ * ページに対する変更をまとめる。呼び出し側は auth / config / S3 を知らなくてよい。
+ * React に依存しないので、route の loader とコンポーネントの両方から同じ実装を使える
  */
 export function createPagesApi(config: WebConfig, session: AuthSession | null): PagesApi {
   const urlOrigin = config.pagesBaseUrl.replace(/\/$/, '');

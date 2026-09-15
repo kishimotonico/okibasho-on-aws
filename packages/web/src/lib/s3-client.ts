@@ -9,10 +9,7 @@ export function cognitoLoginKey(config: WebConfig): string {
   return `cognito-idp.${config.region}.amazonaws.com/${config.userPoolId}`;
 }
 
-/**
- * S3・Cognito の SDK チャンクの読み込みだけを先に始める。ページを開いたらすぐ、
- * 一覧取得（getPageStore 経由でどのみち読み込む）を待たずに呼び、並行させる
- */
+// 一覧取得（getPageStore 経由でどのみち読み込む）を待たず、SDK チャンクの読み込みだけ並行させる
 export function preloadPagesSdk(): void {
   void import('@aws-sdk/client-s3');
   void import('@aws-sdk/credential-providers');
@@ -26,16 +23,16 @@ let cached: { idToken: string; clientPromise: Promise<S3ClientType> } | null = n
  * S3Client の中で Cognito の一時認証情報がキャッシュされるため、
  * 操作のたびに作り直すと毎回 GetCredentialsForIdentity を往復することになる。
  * config はビルド時に固定なので鍵に含めない。
- * Promise の段階でキャッシュに載せ、同時呼び出しが同じ Promise を共有するようにする
- * （await 後に載せると、待っている間の呼び出しがそれぞれ作り直してしまう）。失敗時はキャッシュから外す
  */
 export async function getPagesS3Client(
   config: WebConfig,
   session: AuthSession,
 ): Promise<S3ClientType> {
   if (cached?.idToken !== session.idToken) {
+    // await 前にキャッシュへ載せ、同時呼び出しが同じ Promise を共有するようにする
     const clientPromise = createPagesS3Client(config, session);
     cached = { idToken: session.idToken, clientPromise };
+    // 失敗したら次回作り直せるようキャッシュから外す
     clientPromise.catch(() => {
       if (cached?.clientPromise === clientPromise) {
         cached = null;
@@ -65,11 +62,7 @@ interface CachedCredentials {
   credentials: PagesCredentials;
 }
 
-/**
- * GetCredentialsForIdentity は SDK がキャッシュしないため（GetId と違いリロードのたびに
- * 往復してしまう）、sessionStorage に idToken とセットで残し、有効期限に十分な余裕がある
- * 間だけ使い回す。sessionStorage が使えなくても GetCredentialsForIdentity するだけで壊れない
- */
+// GetCredentialsForIdentity は SDK がキャッシュしないため、有効期限に余裕がある間だけ使い回す
 function loadCachedCredentials(idToken: string): PagesCredentials | null {
   try {
     const raw = window.sessionStorage.getItem(CREDENTIALS_STORAGE_KEY);
@@ -86,6 +79,7 @@ function loadCachedCredentials(idToken: string): PagesCredentials | null {
     }
     return { ...cached.credentials, expiration };
   } catch {
+    // sessionStorage が使えなくても、毎回取り直すだけで壊れない
     return null;
   }
 }
@@ -144,8 +138,7 @@ export async function createPagesS3Client(
       fromCognitoIdentityPool({
         clientConfig: { region: config.region },
         identityPoolId: config.identityPoolId,
-        // GetId の結果（identityId）を SDK 既定のブラウザストレージにユーザー単位でキャッシュさせる。
-        // 未指定だと logins を渡した時点でキャッシュ自体が無効になり、リロードのたびに GetId が走る
+        // 未指定だと logins を渡した時点で GetId のキャッシュが無効になり、リロードのたびに GetId が走る
         userIdentifier: session.email,
         logins: {
           [cognitoLoginKey(config)]: session.idToken,

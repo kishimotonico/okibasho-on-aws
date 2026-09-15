@@ -150,19 +150,13 @@ function validationMessage(errors: readonly { code: string; message: string }[])
 }
 
 export interface UploadFlowOptions {
-  /**
-   * 既存 slug の確認と、差し替えで引き継ぐメタデータの取得元。
-   * まだ一覧が無い（undefined）ときは、submit のたびに api.find で 1 件だけ S3 から読む
-   */
+  /** 既存 slug の確認と、差し替えで引き継ぐメタデータの取得元。undefined なら submit のたびに api.find で読む */
   pages: readonly ListedPage[] | undefined;
   slug: string;
   retention: Retention;
   /** 公開後の新しい slug や、空欄のときに入れ直した slug をフォームへ返す */
   onSlugChange: (slug: string) => void;
-  /**
-   * アップロード結果を一覧の行として渡す。S3 を読み直さず、この内容で一覧の該当行を差し替える。
-   * 今回新しく外部公開した場合だけ第2引数が true になる
-   */
+  /** アップロード結果を一覧の行として渡す。今回新しく外部公開した場合だけ第2引数が true */
   onUploaded: (page: ListedPage, openShare: boolean) => void;
 }
 
@@ -208,11 +202,10 @@ export function useUploadFlow({
   ): Promise<void> {
     dispatch({ type: 'start', slug: targetSlug, total: files.length });
 
-    // 既存ページが既に外部共有中なら、提案された share は使わず既存を引き継ぐ
-    // （pageMetadataFromListed が existing.share を運ぶので、ここでは undefined を渡せば足りる）。
-    // 「今回新しく外部公開したか」も、提案した share が実際に使われたかどうかで決める
     const alreadyShared = existing?.share != null;
+    // 既に外部共有中なら、提案された share は使わず undefined を渡して既存を引き継ぐ
     const shareForUpload = alreadyShared ? undefined : proposedShare;
+    // 新しく外部公開したかは、提案した share が実際に使われたかで決める
     const openShare = !alreadyShared && proposedShare !== undefined;
 
     try {

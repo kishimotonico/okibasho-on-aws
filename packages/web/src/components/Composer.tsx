@@ -29,10 +29,7 @@ export type BoxSpinSignal = { nonce: number } | null;
 
 interface ComposerProps {
   initialSlug?: string;
-  /**
-   * 既存 slug の確認と、差し替え時に引き継ぐメタデータの取得元。
-   * まだ一覧が読み込まれていない間は undefined（useUploadFlow が代わりに1件だけ S3 から読む）
-   */
+  /** 既存 slug の確認と、差し替え時に引き継ぐメタデータの取得元。読み込み前は undefined */
   pages: readonly ListedPage[] | undefined;
   /** 一覧の「再アップロード」。slug を入れてフォーカスする */
   seed: ComposerSignal;
@@ -82,9 +79,9 @@ export function Composer({
   // 「外部にも公開」を選んだときだけ意味を持つ、パスワードを付けるかどうか。既定はオフ
   const [withPassword, setWithPassword] = useState(false);
 
-  // 対象 slug が既に外部共有中なら、公開範囲の選択を固定して既存の share を維持する。
   // 一覧がまだ無い間は固定しない（差し替え時に useUploadFlow が既存の share を優先して引き継ぐ）
   const existingPageForSlug = pages?.find((page) => page.slug === slug.trim());
+  // 既に外部共有中なら公開範囲の選択を固定し、既存の share を維持する
   const lockedShare = existingPageForSlug?.share ?? null;
 
   /**

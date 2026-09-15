@@ -120,10 +120,7 @@ export function consumeReturnPath(): string {
 
 let signinCallbackPromise: Promise<string> | null = null;
 
-/**
- * loader が StrictMode 等で複数回走っても、signinCallback（code_verifier を使い切る
- * token 交換）は一度しか送らないよう Promise をモジュールに保持して共有する
- */
+// loader が複数回走っても signinCallback（code_verifier を使い切る）は一度しか送らない
 export function completeSignInCallbackOnce(): Promise<string> {
   signinCallbackPromise ??= getUserManager()
     .signinCallback()
