@@ -4,6 +4,13 @@ import { completeSignInCallbackOnce } from '~/auth/user-manager';
 import { messages } from '~/lib/messages';
 
 export const Route = createFileRoute('/callback')({
+  // 本番ビルドは prerender した _shell.html を CloudFront の Function で
+  // ディープリンクに被せて配信するが、`vite preview` はそれをせず実サーバーで
+  // このルートをSSRする。ssr未指定だとその結果（loaderがSSR側では何もせず
+  // 終わった「成功」状態）がハイドレーション時にそのまま採用され、
+  // クライアントでloaderが再実行されず/callbackが進まなくなる。
+  // ssr: false でSSR自体を止め、常にクライアントで実行させる。
+  ssr: false,
   loader: handleCallback,
   component: CallbackPending,
   pendingComponent: CallbackPending,
@@ -11,11 +18,6 @@ export const Route = createFileRoute('/callback')({
 });
 
 async function handleCallback(): Promise<void> {
-  if (import.meta.env.SSR) {
-    // prerender では Cognito とやり取りせず、クライアントの初回アクセス時だけ処理する
-    return;
-  }
-
   const returnTo = await completeSignInCallbackOnce();
   // ルートは "/" と "/callback" のみのため、ログイン前のパスは常に "/" 側。
   // ただし ?slug=... の再アップロード指定だけは復元する。
