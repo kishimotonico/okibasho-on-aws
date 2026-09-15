@@ -144,7 +144,7 @@ describe('Composer', () => {
     await user.upload(fileInput(), htmlFile());
 
     expect(
-      screen.getByText('taken-slug はもうあるよ。差し替える？ 保存期間はそのまま'),
+      screen.getByText('taken-slug は既にあります。保存期間はそのままで差し替えますか？'),
     ).toBeInTheDocument();
     expect(upload).not.toHaveBeenCalled();
 
@@ -172,13 +172,13 @@ describe('Composer', () => {
     await user.type(slugInput(), 'taken-slug');
     await user.upload(fileInput(), htmlFile());
     expect(
-      screen.getByText('taken-slug はもうあるよ。差し替える？ 保存期間はそのまま'),
+      screen.getByText('taken-slug は既にあります。保存期間はそのままで差し替えますか？'),
     ).toBeInTheDocument();
 
     // フォーカスで全選択されるので、打ち直すと丸ごと差し替わる
     await user.type(slugInput(), 'taken-slug2');
     expect(
-      screen.queryByText('taken-slug はもうあるよ。差し替える？ 保存期間はそのまま'),
+      screen.queryByText('taken-slug は既にあります。保存期間はそのままで差し替えますか？'),
     ).toBeNull();
 
     await user.upload(fileInput(), htmlFile());
@@ -229,14 +229,16 @@ describe('Composer', () => {
 
   it('失敗は吹き出しに出し、生のエラーは見せない', async () => {
     const user = userEvent.setup();
-    upload.mockRejectedValue(new PagesApiError('つながりません。接続を確かめて、もう一度どうぞ。'));
+    upload.mockRejectedValue(
+      new PagesApiError('接続できませんでした。ネットワークを確認してお試しください。'),
+    );
     renderComposer();
 
     await user.upload(fileInput(), htmlFile());
 
     await waitFor(() =>
       expect(
-        screen.getByText('つながりません。接続を確かめて、もう一度どうぞ。'),
+        screen.getByText('接続できませんでした。ネットワークを確認してお試しください。'),
       ).toBeInTheDocument(),
     );
   });
