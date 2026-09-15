@@ -79,6 +79,7 @@ function renderComposer(props: Partial<Parameters<typeof Composer>[0]> = {}) {
         pages={[]}
         seed={null}
         retired={null}
+        spinSignal={null}
         deleting={false}
         onUploaded={onUploaded}
         onDelete={onDelete}
@@ -115,7 +116,7 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'ファイルを選ぶ' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'フォルダを選ぶ' })).toBeInTheDocument();
     expect(screen.getByText('ここにドロップして公開')).toBeInTheDocument();
-    expect(screen.getByText('保存期間')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存期間 30日' })).toBeInTheDocument();
   });
 
   it('ファイル選択だけでアップロードが走る', async () => {
@@ -144,7 +145,7 @@ describe('Composer', () => {
     await user.upload(fileInput(), htmlFile());
 
     expect(
-      screen.getByText('taken-slug はもうあるよ。差し替える？ 保存期間はそのまま'),
+      screen.getByText('taken-slug は既にあります。保存期間はそのままで差し替えますか？'),
     ).toBeInTheDocument();
     expect(upload).not.toHaveBeenCalled();
 
@@ -172,13 +173,13 @@ describe('Composer', () => {
     await user.type(slugInput(), 'taken-slug');
     await user.upload(fileInput(), htmlFile());
     expect(
-      screen.getByText('taken-slug はもうあるよ。差し替える？ 保存期間はそのまま'),
+      screen.getByText('taken-slug は既にあります。保存期間はそのままで差し替えますか？'),
     ).toBeInTheDocument();
 
     // フォーカスで全選択されるので、打ち直すと丸ごと差し替わる
     await user.type(slugInput(), 'taken-slug2');
     expect(
-      screen.queryByText('taken-slug はもうあるよ。差し替える？ 保存期間はそのまま'),
+      screen.queryByText('taken-slug は既にあります。保存期間はそのままで差し替えますか？'),
     ).toBeNull();
 
     await user.upload(fileInput(), htmlFile());
@@ -229,14 +230,16 @@ describe('Composer', () => {
 
   it('失敗は吹き出しに出し、生のエラーは見せない', async () => {
     const user = userEvent.setup();
-    upload.mockRejectedValue(new PagesApiError('つながりません。接続を確かめて、もう一度どうぞ。'));
+    upload.mockRejectedValue(
+      new PagesApiError('接続できませんでした。ネットワークを確認してお試しください。'),
+    );
     renderComposer();
 
     await user.upload(fileInput(), htmlFile());
 
     await waitFor(() =>
       expect(
-        screen.getByText('つながりません。接続を確かめて、もう一度どうぞ。'),
+        screen.getByText('接続できませんでした。ネットワークを確認してお試しください。'),
       ).toBeInTheDocument(),
     );
   });
@@ -262,7 +265,23 @@ describe('Composer', () => {
     await screen.findByRole('button', { name: '次のファイルを置く' });
   });
 
-  it('成功後は結果だけが残り、次のファイルを置くでフォームに戻る', async () => {
+  it('成功後は結果だけが残り、箱（次のファイルを置く）でフォームに戻る', async () => {
+    // 箱の「開く」演出は reduced-motion では即時。ここではフォームに戻る結果だけを
+    // 確認したいので、900ms の rAF アニメーションを待たずに済むよう reduced-motion を模す
+    const matchMediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query.includes('reduced-motion'),
+          media: query,
+          onchange: null,
+          addListener() {},
+          removeListener() {},
+          addEventListener() {},
+          removeEventListener() {},
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    );
+
     const user = userEvent.setup();
     upload.mockResolvedValue(uploaded('1111111111'));
     renderComposer();
@@ -275,11 +294,14 @@ describe('Composer', () => {
       ).toBeInTheDocument(),
     );
     expect(screen.queryByRole('textbox', { name: /公開URL/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'ファイルを選ぶ' })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: '次のファイルを置く' }));
 
     expect(slugInput()).toHaveValue('2222222222');
     expect(screen.getByRole('button', { name: 'ファイルを選ぶ' })).toBeInTheDocument();
+
+    matchMediaSpy.mockRestore();
   });
 
   it('成功結果は UrlField（リンク+コピー）と「外部共有…」を持つ', async () => {
@@ -329,6 +351,7 @@ describe('Composer', () => {
           pages={[]}
           seed={{ slug: 'from-list', nonce: 1 }}
           retired={null}
+          spinSignal={null}
           deleting={false}
           onUploaded={onUploaded}
           onDelete={onDelete}
@@ -353,6 +376,7 @@ describe('Composer', () => {
           pages={[]}
           seed={null}
           retired={{ slug: 'gone', nonce: 1 }}
+          spinSignal={null}
           deleting={false}
           onUploaded={onUploaded}
           onDelete={onDelete}

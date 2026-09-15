@@ -4,15 +4,19 @@ import {
   useImperativeHandle,
   useRef,
   type CSSProperties,
+  type KeyboardEvent,
   type MouseEvent,
 } from 'react';
 
+import { Tooltip } from '~/components/Tooltip';
 import {
   BOX_ICON_PARAMS,
   build,
   boxIconAnimNeedsFrames,
+  easeInOut,
   effectiveMotion,
   idleAnim,
+  openingTarget,
   stepBoxIconAnim,
   viewBoxFor,
   type BoxIconAnim,
@@ -21,6 +25,7 @@ import {
   type BoxIconScene,
   type SortedNode,
 } from '~/lib/upload-box-icon';
+import { messages } from '~/lib/messages';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const VIEW_BOX = viewBoxFor(BOX_ICON_PARAMS);
@@ -40,6 +45,12 @@ export type UploadBoxIconProps = {
   reducedMotion?: boolean;
   /** spin のあと（uploading 以外）に呼ぶ。ファイル選択ダイアログ用。 */
   onActivate?: () => void;
+  /**
+   * success 状態の箱をクリック（または Enter/Space）したときの「開く」演出が
+   * 終わったら呼ぶ。呼び出し側はここでフォームを初期状態に戻す。
+   * reduced-motion では演出をせず即時に呼ぶ。
+   */
+  onOpened?: () => void;
 };
 
 type Pool = Map<string, SVGElement>;
@@ -157,25 +168,16 @@ function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
       }
       return;
     }
-    if (item.type === 'flap') {
-      applyPath(take(`${prefix}-fill`, 'path'), item.fillPath, {
-        fill: item.fill,
-        stroke: 'none',
+    applyPath(take(`${prefix}-fill`, 'path'), item.fillPath, {
+      fill: item.fill,
+      stroke: 'none',
+    });
+    item.edges.forEach((edge, ei) => {
+      applyPath(take(`${prefix}-e${ei}`, 'path'), edge.d, {
+        fill: 'none',
+        'stroke-width': edge.strokeWidth,
+        'data-role': ei === 3 ? null : 'outline',
       });
-      item.edges.forEach((edge, ei) => {
-        applyPath(take(`${prefix}-e${ei}`, 'path'), edge.d, {
-          fill: 'none',
-          'stroke-width': edge.strokeWidth,
-          'data-role': ei === 3 ? null : 'outline',
-        });
-      });
-      return;
-    }
-    applyPath(take(prefix, 'path'), item.d, {
-      fill: 'none',
-      stroke: item.stroke,
-      'stroke-width': item.strokeWidth,
-      opacity: item.opacity,
     });
   });
 
@@ -189,7 +191,7 @@ function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
 
 export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>(
   function UploadBoxIcon(
-    { phase, dragging, size = 96, forceHover = false, reducedMotion, onActivate },
+    { phase, dragging, size = 96, forceHover = false, reducedMotion, onActivate, onOpened },
     ref,
   ) {
     const rootRef = useRef<HTMLDivElement>(null);
@@ -198,14 +200,17 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
     const draggingRef = useRef(dragging);
     const forceHoverRef = useRef(forceHover);
     const reducedMotionRef = useRef(reducedMotion);
+    const onOpenedRef = useRef(onOpened);
     const hoverRef = useRef(false);
     const spinFnRef = useRef<(() => void) | null>(null);
+    const openFnRef = useRef<(() => void) | null>(null);
     const kickRef = useRef<() => void>(() => {});
 
     phaseRef.current = phase;
     draggingRef.current = dragging;
     forceHoverRef.current = forceHover;
     reducedMotionRef.current = reducedMotion;
+    onOpenedRef.current = onOpened;
 
     useImperativeHandle(
       ref,
@@ -231,6 +236,8 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
       let motion: BoxIconMotion = 'idle';
       let stateT0 = performance.now();
       let spinT0 = -1e9;
+      /** success から開く演出の開始時刻。null なら演出中でない。 */
+      let openingT0: number | null = null;
       let raf = 0;
       let errorTimer = 0;
 
@@ -244,8 +251,51 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
         }
         spinT0 = performance.now();
       };
+      /**
+       * success の箱をクリック/Enter・Space したときの「開く」演出。openingTarget() で
+       * success のシーケンスを反転させつつ、spin は通常のクリック回転と同じ easeInOut を走らせる。
+       * reduced-motion では回転・演出なしで即時に idle へ戻し onOpened を呼ぶ。
+       */
+      const startOpening = () => {
+        if (openingT0 !== null) {
+          // 開くアニメーション中の二度押しは無視する
+          return;
+        }
+        const now = performance.now();
+        if (reduced()) {
+          cur = idleAnim(BOX_ICON_PARAMS);
+          motion = 'idle';
+          stateT0 = now;
+          applyScene(svg, build(BOX_ICON_PARAMS, cur), pool);
+          onOpenedRef.current?.();
+          return;
+        }
+        openingT0 = now;
+        spinT0 = now;
+        ensureRunning();
+      };
       const frame = (now: number) => {
         raf = 0;
+        if (openingT0 !== null) {
+          const u = (now - openingT0) / BOX_ICON_PARAMS.spinMs;
+          if (u >= 1) {
+            openingT0 = null;
+            cur = idleAnim(BOX_ICON_PARAMS);
+            motion = 'idle';
+            stateT0 = now;
+            applyScene(svg, build(BOX_ICON_PARAMS, cur), pool);
+            onOpenedRef.current?.();
+            return;
+          }
+          const su = (now - spinT0) / BOX_ICON_PARAMS.spinMs;
+          cur = {
+            ...openingTarget(BOX_ICON_PARAMS, u),
+            spin: su < 1 ? 360 * easeInOut(su) : 0,
+          };
+          applyScene(svg, build(BOX_ICON_PARAMS, cur), pool);
+          raf = requestAnimationFrame(frame);
+          return;
+        }
         const nextMotion = effectiveMotion(phaseRef.current, draggingRef.current, hovering());
         if (nextMotion !== motion) {
           motion = nextMotion;
@@ -266,6 +316,7 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
           nowMs: now,
           spinStartedAt: spinT0,
           reducedMotion: reduced(),
+          hovering: hovering(),
         };
         cur = stepBoxIconAnim(input);
         applyScene(svg, build(BOX_ICON_PARAMS, cur), pool);
@@ -284,6 +335,7 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
         triggerSpin();
         ensureRunning();
       };
+      openFnRef.current = startOpening;
       kickRef.current = ensureRunning;
 
       applyScene(svg, build(BOX_ICON_PARAMS, cur), pool);
@@ -306,6 +358,7 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
         mq.removeEventListener('change', onMotionPref);
         document.removeEventListener('visibilitychange', onVisibility);
         spinFnRef.current = null;
+        openFnRef.current = null;
         kickRef.current = () => {};
         svg.replaceChildren();
         root.removeAttribute('data-error-fx');
@@ -316,20 +369,39 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
       kickRef.current();
     }, [phase, dragging, forceHover, reducedMotion]);
 
+    const openable = phase === 'success';
+
     const onClick = (event: MouseEvent<HTMLDivElement>) => {
       event.preventDefault();
       event.stopPropagation();
+      if (phaseRef.current === 'success') {
+        openFnRef.current?.();
+        return;
+      }
       spinFnRef.current?.();
       if (phaseRef.current !== 'uploading') {
         onActivate?.();
       }
     };
 
-    return (
+    const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+      if (phaseRef.current !== 'success') {
+        return;
+      }
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault();
+        openFnRef.current?.();
+      }
+    };
+
+    const box = (
       <div
         ref={rootRef}
-        className="upload-box-icon"
-        aria-hidden="true"
+        className={`upload-box-icon${openable ? ' upload-box-icon--openable' : ''}`}
+        aria-hidden={openable ? undefined : true}
+        role={openable ? 'button' : undefined}
+        aria-label={openable ? messages.uploadAnother : undefined}
+        tabIndex={openable ? 0 : undefined}
         style={{ '--upload-box-icon-size': `${size}px` } as CSSProperties}
         onPointerEnter={() => {
           hoverRef.current = true;
@@ -340,6 +412,7 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
           kickRef.current();
         }}
         onClick={onClick}
+        onKeyDown={onKeyDown}
       >
         <svg
           ref={svgRef}
@@ -351,6 +424,14 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
           focusable="false"
         />
       </div>
+    );
+
+    // openable に応じて Tooltip の有無を切り替えると div が再マウントされ、effect の
+    // rAF ループが外れた古い svg を描き続けてしまう。木構造は固定し、open だけで表示を切り替える。
+    return (
+      <Tooltip label={messages.uploadAnother} open={openable ? undefined : false}>
+        {box}
+      </Tooltip>
     );
   },
 );

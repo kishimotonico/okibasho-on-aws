@@ -8,7 +8,7 @@ import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
 
 import { loadAuthSession } from '~/auth/user-manager';
-import { Composer, type ComposerSignal } from '~/components/Composer';
+import { Composer, type BoxSpinSignal, type ComposerSignal } from '~/components/Composer';
 import { PagesList } from '~/components/PagesList';
 import { ShareDialog } from '~/components/ShareDialog';
 import { getWebConfig } from '~/config/env';
@@ -117,6 +117,14 @@ function nextSignal(current: ComposerSignal, slug: string): ComposerSignal {
   return { slug, nonce: (current?.nonce ?? 0) + 1 };
 }
 
+/** ページ地のダブルクリック（イースターエッグ）を composer・一覧・操作できる要素の上では発火させない */
+const BOX_SPIN_IGNORE_SELECTOR =
+  'button, a, input, textarea, select, label, [role], [contenteditable="true"], [tabindex], .composer, .pages-section';
+
+function isBoxSpinBackground(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(BOX_SPIN_IGNORE_SELECTOR) === null;
+}
+
 function HomePage() {
   const api = usePagesApi();
   const loadedPages = Route.useLoaderData();
@@ -138,8 +146,12 @@ function HomePage() {
   const [composerSeed, setComposerSeed] = useState<ComposerSignal>(null);
   const [retiredSlug, setRetiredSlug] = useState<ComposerSignal>(null);
   const [highlight, setHighlight] = useState<ComposerSignal>(null);
+  const [boxSpin, setBoxSpin] = useState<BoxSpinSignal>(null);
   // ShareDialog の開閉は一覧・成功結果ブロックのどちらから開いても同じ経路になるよう、ここで一元管理する
   const [shareSlug, setShareSlug] = useState<string | null>(null);
+  // アップロード直後の自動オープン（今回新しく外部公開したとき）だけ、ShareDialog に
+  // 「発行直後」だと伝える。一覧の「外部共有…」から開いたときは null にして伝えない
+  const [justIssuedSlug, setJustIssuedSlug] = useState<string | null>(null);
   // pages から都度探すことで、保存後に一覧が更新されるとダイアログの表示（共有URLなど）も追随する
   const sharePage = shareSlug ? (pages.find((page) => page.slug === shareSlug) ?? null) : null;
 
@@ -153,6 +165,18 @@ function HomePage() {
     const id = window.setTimeout(() => setHighlight(null), PAGE_HIGHLIGHT_MS);
     return () => window.clearTimeout(id);
   }, [highlight, highlightVisible]);
+
+  // イースターエッグ: 何もないページ地をダブルクリックすると箱がくるっと1回転する
+  useEffect(() => {
+    const onDblClick = (event: MouseEvent) => {
+      if (!isBoxSpinBackground(event.target)) {
+        return;
+      }
+      setBoxSpin((current) => ({ nonce: (current?.nonce ?? 0) + 1 }));
+    };
+    document.addEventListener('dblclick', onDblClick);
+    return () => document.removeEventListener('dblclick', onDblClick);
+  }, []);
 
   /**
    * 先に画面へ反映し、通信が終わったら結果で一覧の本体（basePages）を直す。
@@ -206,6 +230,7 @@ function HomePage() {
     setBasePages((current) => applyPagesAction(current, { type: 'upsert', page }));
     if (openShare) {
       setShareSlug(page.slug);
+      setJustIssuedSlug(page.slug);
     }
   };
 
@@ -216,6 +241,7 @@ function HomePage() {
 
   const handleShare = (slug: string) => {
     setShareSlug(slug);
+    setJustIssuedSlug(null);
   };
 
   return (
@@ -226,6 +252,7 @@ function HomePage() {
           pages={pages}
           seed={composerSeed}
           retired={retiredSlug}
+          spinSignal={boxSpin}
           deleting={isMutating}
           onUploaded={handleUploaded}
           onDelete={handleDelete}
@@ -252,11 +279,13 @@ function HomePage() {
           onOpenChange={(open) => {
             if (!open) {
               setShareSlug(null);
+              setJustIssuedSlug(null);
             }
           }}
           page={sharePage}
           pagesBaseUrl={api.urlOrigin}
           onSave={(share) => handleShareChange(sharePage, share)}
+          justIssued={shareSlug === justIssuedSlug}
         />
       ) : null}
     </div>

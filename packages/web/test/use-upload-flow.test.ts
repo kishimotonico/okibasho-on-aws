@@ -159,7 +159,9 @@ describe('useUploadFlow', () => {
     act(() => result.current.submitDataTransfer(unreadable));
 
     await waitFor(() => expect(result.current.state.kind).toBe('error'));
-    expect(result.current.bubble?.message).toBe('送れませんでした。もう一度どうぞ。');
+    expect(result.current.bubble?.message).toBe(
+      'アップロードに失敗しました。もう一度お試しください。',
+    );
     expect(result.current.accepts).toBe(true);
   });
 

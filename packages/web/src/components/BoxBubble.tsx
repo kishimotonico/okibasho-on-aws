@@ -1,11 +1,14 @@
+import { Check, Copy } from 'lucide-react';
 import type { MouseEvent, ReactNode } from 'react';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { messages } from '~/lib/messages';
 
 export type BoxBubbleKind = 'error' | 'confirm' | 'success';
 
 const AUTO_CLOSE_MS = 6000;
+/** コピー成功後、吹き出しを閉じるまでの短い間（形で示してから消える） */
+const COPIED_CLOSE_MS = 700;
 
 function autoClosableKind(kind: BoxBubbleKind) {
   return kind === 'error' || kind === 'success';
@@ -20,6 +23,8 @@ export function BoxBubble({
   onClose,
   onReplace,
   onCancel,
+  onCopy,
+  copyAriaLabel,
 }: {
   kind: BoxBubbleKind;
   open: boolean;
@@ -29,6 +34,15 @@ export function BoxBubble({
   onClose: () => void;
   onReplace?: () => void;
   onCancel?: () => void;
+  /**
+   * kind === 'success' のときだけ有効。指定すると、吹き出しのクリック（または
+   * Enter/Space）でコピーを実行する。成功したら一瞬 Check アイコン＋「コピーしました」
+   * に切り替えてからフェードで閉じる。失敗したら「URL のコピーに失敗しました」を
+   * 表示したまま通常の自動消去（6秒）に任せる
+   */
+  onCopy?: () => Promise<boolean>;
+  /** onCopy 指定時、コピーできることを支援技術へ伝える aria-label */
+  copyAriaLabel?: string;
 }) {
   const messageId = useId();
   const onCloseRef = useRef(onClose);
@@ -36,6 +50,7 @@ export function BoxBubble({
   const deadlineRef = useRef<number | null>(null);
   const remainingRef = useRef(AUTO_CLOSE_MS);
   const pausedRef = useRef(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   onCloseRef.current = onClose;
 
@@ -84,6 +99,8 @@ export function BoxBubble({
   };
 
   useEffect(() => {
+    setCopyState('idle');
+
     if (!open || persist || !autoClosableKind(kind)) {
       clearTimer();
       pausedRef.current = false;
@@ -104,6 +121,25 @@ export function BoxBubble({
 
   const role = kind === 'error' ? 'alert' : kind === 'confirm' ? 'dialog' : 'status';
   const clickToClose = kind === 'error' || kind === 'success';
+  const copyable = kind === 'success' && Boolean(onCopy);
+
+  const runCopy = async () => {
+    const ok = (await onCopy?.()) ?? false;
+    if (ok) {
+      setCopyState('copied');
+      startTimer(COPIED_CLOSE_MS);
+    } else {
+      setCopyState('failed');
+      startTimer(AUTO_CLOSE_MS);
+    }
+  };
+
+  const displayMessage =
+    copyState === 'copied'
+      ? messages.copied
+      : copyState === 'failed'
+        ? messages.copyUrlFailed
+        : message;
 
   return (
     <div className="box-bubble">
@@ -116,21 +152,50 @@ export function BoxBubble({
         <div
           className={`box-bubble__panel box-bubble__panel--${kind}${
             clickToClose ? ' box-bubble__panel--clickable' : ''
-          }`}
+          }${copyState === 'copied' ? ' box-bubble__panel--copied' : ''}`}
           role={open ? role : undefined}
           aria-labelledby={open && kind === 'confirm' ? messageId : undefined}
+          aria-label={
+            open && copyable ? (copyAriaLabel ?? messages.uploadedCopyAriaLabel) : undefined
+          }
+          tabIndex={open && copyable ? 0 : undefined}
           onClick={(event) => {
             stopBubble(event);
+            if (copyable) {
+              void runCopy();
+              return;
+            }
             if (clickToClose) {
               onClose();
+            }
+          }}
+          onKeyDown={(event) => {
+            if (!copyable) {
+              return;
+            }
+            if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+              event.preventDefault();
+              void runCopy();
             }
           }}
           onPointerDown={stopBubble}
           onPointerEnter={pauseTimer}
           onPointerLeave={resumeTimer}
         >
-          <p id={messageId} className="box-bubble__message">
-            {message}
+          <p
+            id={messageId}
+            className={`box-bubble__message${copyable ? ' box-bubble__message--copy' : ''}`}
+          >
+            <span>{displayMessage}</span>
+            {copyable ? (
+              <span className="box-bubble__copy-icon" aria-hidden="true">
+                {copyState === 'copied' ? (
+                  <Check size={14} strokeWidth={1.75} />
+                ) : (
+                  <Copy size={14} strokeWidth={1.75} />
+                )}
+              </span>
+            ) : null}
           </p>
           {kind === 'confirm' ? (
             <div className="box-bubble__actions">

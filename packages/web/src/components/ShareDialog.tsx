@@ -5,12 +5,13 @@ import {
   SHARE_USERNAME,
   type PageShare,
 } from '@okibasho/core';
-import { X } from 'lucide-react';
+import { Clock, X } from 'lucide-react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useEffect, useState } from 'react';
 
 import { ConfirmAlertDialog } from '~/components/AlertDialog';
 import { CopyButton } from '~/components/CopyButton';
+import { PasswordToggle } from '~/components/PasswordToggle';
 import { Tooltip } from '~/components/Tooltip';
 import { UrlField } from '~/components/UrlField';
 import { formatJstDate } from '~/lib/expiration-status';
@@ -31,14 +32,16 @@ interface ShareDialogProps {
   /** 公開URLのホスト部分（末尾スラッシュなし）。usePagesApi().urlOrigin */
   pagesBaseUrl: string;
   onSave: (share: PageShare | null) => Promise<void>;
+  /** アップロード直後の自動オープンなど、開いた時点で発行直後だと分かっているとき true */
+  justIssued?: boolean;
 }
 
 type ConfirmKind = 'recreate' | 'stop' | null;
-type Notice = 'recreate' | 'stop' | null;
+type Notice = 'issued' | 'stop' | null;
 
 function noticeMessage(notice: Notice): string | null {
   switch (notice) {
-    case 'recreate':
+    case 'issued':
       return messages.shareNoticeRecreate;
     case 'stop':
       return messages.shareNoticeStop;
@@ -58,7 +61,14 @@ function buildShareUrl(pagesBaseUrl: string, shareTag: string, id: string): stri
  * 任意の上乗せ。付けるときだけシステムが自動生成した平文パスワードを、ユーザー名
  * （guest固定）とあわせていつでも読み取り・コピーできる
  */
-export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: ShareDialogProps) {
+export function ShareDialog({
+  open,
+  onOpenChange,
+  page,
+  pagesBaseUrl,
+  onSave,
+  justIssued,
+}: ShareDialogProps) {
   const existingShare = page.share ?? null;
   const hasPassword = Boolean(existingShare?.password);
 
@@ -71,7 +81,9 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
     if (!open) {
       return;
     }
-    setNotice(null);
+    // アップロード直後の自動オープンで、開いた時点ですでに発行済みのときは
+    // 「共有URLを発行」を押した直後と同じ注意を最初から出す
+    setNotice(justIssued && existingShare ? 'issued' : null);
     setConfirmAction(null);
     setError(null);
     // page.slug が変わったとき（別ページを開いたとき）だけ初期化すれば十分
@@ -87,6 +99,7 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
     setError(null);
     try {
       await onSave({ id: generateShareId() });
+      setNotice('issued');
     } catch (err) {
       setError(err instanceof Error ? err.message : messages.shareIssueFailed);
     } finally {
@@ -135,7 +148,7 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
         id: generateShareId(),
         ...(hasPassword ? { password: generateSharePassword() } : {}),
       });
-      setNotice('recreate');
+      setNotice('issued');
     } catch (err) {
       setError(err instanceof Error ? err.message : messages.shareRecreateFailed);
     } finally {
@@ -192,53 +205,47 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
                 onCopyError={() => setError(messages.shareCopyFailed)}
                 onCopySuccess={() => setError(null)}
               />
+              {/* 発行・作り直し直後の注意は、対象のURLの近くに出す */}
+              {notice ? <p className="field-hint">{noticeMessage(notice)}</p> : null}
               {page.expiresAt ? (
-                <p className="field-hint">
-                  {messages.shareExpiresHint(formatJstDate(page.expiresAt))}
-                </p>
+                <div className="share-meta-row">
+                  <Clock size={12} strokeWidth={1.75} aria-hidden />
+                  <span>{messages.shareExpiresMeta(formatJstDate(page.expiresAt))}</span>
+                </div>
               ) : null}
 
-              <div className="share-password-group">
-                <label className="share-password-toggle">
-                  <input
-                    type="checkbox"
-                    checked={hasPassword}
-                    disabled={saving}
-                    onChange={(event) => void handlePasswordToggle(event.target.checked)}
-                  />
-                  {messages.sharePasswordToggle}
-                </label>
-                {!hasPassword ? (
-                  <p className="field-hint">{messages.sharePasswordToggleHint}</p>
-                ) : null}
-
-                {hasPassword ? (
-                  <div className="share-credentials">
-                    <div className="share-credentials__field">
-                      <span className="share-form__field-label">{messages.shareUsernameLabel}</span>
-                      <p className="share-credentials__value share-credentials__value--mono">
-                        {SHARE_USERNAME}
-                      </p>
-                    </div>
-                    <div className="share-credentials__field">
-                      <span className="share-form__field-label">{messages.sharePasswordLabel}</span>
-                      <div className="share-credentials__password">
-                        <span className="share-credentials__value share-credentials__value--mono">
-                          {existingShare.password}
-                        </span>
-                        <CopyButton
-                          value={existingShare.password!}
-                          variant="icon"
-                          label={messages.sharePasswordCopy}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
+              <div className="password-toggle-row">
+                <PasswordToggle
+                  pressed={hasPassword}
+                  disabled={saving}
+                  onToggle={() => void handlePasswordToggle(!hasPassword)}
+                />
               </div>
 
+              {hasPassword ? (
+                <div className="password-panel">
+                  <div className="password-panel__row">
+                    <span className="password-panel__label">{messages.shareUsernameLabel}</span>
+                    <span className="password-panel__value">{SHARE_USERNAME}</span>
+                    <CopyButton
+                      value={SHARE_USERNAME}
+                      variant="icon"
+                      label={messages.shareUsernameCopy}
+                    />
+                  </div>
+                  <div className="password-panel__row">
+                    <span className="password-panel__label">{messages.sharePasswordLabel}</span>
+                    <span className="password-panel__value">{existingShare.password}</span>
+                    <CopyButton
+                      value={existingShare.password!}
+                      variant="icon"
+                      label={messages.sharePasswordCopy}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
               {error ? <p className="message message--error">{error}</p> : null}
-              {notice ? <p className="field-hint">{noticeMessage(notice)}</p> : null}
 
               <div className="ui-dialog__actions">
                 <div className="ui-dialog__actions-secondary">

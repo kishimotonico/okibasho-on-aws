@@ -141,9 +141,9 @@ components:
 
 単一カラム、中央寄せ、最大幅 45rem（720px）。ヘッダー帯はない。ログアウトは右上の小さなユーティリティメニュー。メインは上下 1.75rem / 4rem の余白。狭い画面ではメニューと重ならないよう上余白を足す。
 
-縦の流れ: composer（箱と案内 → ファイルを選ぶ · フォルダを選ぶ → 公開URL → 保存期間）→ アップロード済みページ。成功中は箱の下に結果ブロックと「次のファイルを置く」だけを表示し、案内・slug・保存期間・ファイル選択リンクは隠す。
+縦の流れ: composer（箱と案内 → ファイルを選ぶ · フォルダを選ぶ → 公開URL → 保存期間）→ アップロード済みページ。成功中は箱の下に結果ブロックだけを表示し、案内・slug・保存期間・ファイル選択リンクは隠す（「次のファイルを置く」の専用ボタンは持たず、成功状態の箱自体がその操作になる）。
 
-40rem 以下では公開URLのホスト部分を非表示にし、`/ユーザー名/` と slug 入力を1行に収める。保存期間セグメントは全幅。一覧行は情報と操作を縦に積む。
+40rem 以下では公開URLのホスト部分を非表示にし、`/ユーザー名/` と slug 入力を1行に収める。保存期間・公開範囲のチップ列や結果ブロックの折り返しは各コンポーネントの節（UploadOptions、Success result）を参照。一覧行は常に情報・操作の2カラム（縦には積まない）。
 
 ## Elevation & Depth
 
@@ -175,7 +175,7 @@ components:
 
 ### Tooltip（浮遊要素）
 
-- **Arrow:** Radix の `Arrow` は使わない。本体と同じ背景色・border を持つ回転させた正方形を本体の背後に敷き、本体側の辺を本体の塗りで隠すことで、四角と矢印の継ぎ目の線が見えないようにする
+- **Arrow:** Radix の `Arrow` は使わない。本体と同じ背景色を持つ回転させた正方形を本体の背後に敷き、本体からはみ出して見える2辺だけに border を付ける（本体側を向く2辺には border を付けない）ことで、四角と矢印の継ぎ目に二重線が出ないようにする。影も本体の box-shadow ではなく `filter: drop-shadow` を本体に掛け、本体＋矢印をまとめたシルエットに影を落とす
 - **Utility menu のトリガー等:** hover と focus-visible の両方で開く
 - **slug 入力（クリックして名前を付け直せる）:** Radix の内部制御には任せず、`pointerenter` / `pointerleave` のみで開閉する自前管理。フォーカス（マウス・キーボードとも）では開かない。アップロード開始・成功・箱の吹き出し表示など状態が変わったときも閉じる。位置は入力の中央上
 
@@ -193,31 +193,38 @@ components:
 - **Structure:** ホスト + `/ユーザー名/` + slug 入力を一体表示。狭い画面（40rem 以下）ではホストを非表示にし、`/ユーザー名/` と slug を1行にする
 - **Initial slug:** 初期表示から `generateRandomSlug`（小文字英数字 10 文字）を入れる。必要ならその場で編集する
 - **Edit:** 一体の枠。フォーカスで全選択（フォーカス直後 1 回だけ `mouseup` を打ち消し、クリックで選択が解除されないようにする）。Esc でフォーカス時の値へ戻す。入力中バリデーション。Tooltip「クリックして名前を付け直せる」（紙地・矢印、入力の中央上）
+- **Focus:** 墨 2px の枠は編集できる slug 入力の内側だけに出す（`box-shadow: inset` で入力自身に付け、outline は使わない）。ホスト・`/ユーザー名/` の固定部分は囲わない。入力の角丸は、隣に固定部分や再アップロードの表示があるかどうかで一体枠の内側の角丸（5px）に自動で揃う
 - **Invalid slug:** 「使えるのは小文字の英数字と - _ だけ」。不正な間は吹き出しを消さない
 - **Empty:** 空欄で進めようとすると新しい slug を入れ直してから続行する（送信ボタンによる省略自動生成ではない）
-- **Overwrite highlight:** 上書き確認中は slug 枠を danger 系で強調（`url-input--overwrite`：枠・背景・prefix を `--danger-soft` 寄り）
-- **Reupload:** 一覧の kebab「再アップロード」は成功状態からでもフォームへ戻し、slug を入れて入力へフォーカスし、フォームまでスクロールするだけ。保存期間は常に表示する。既存 slug への差し替えは吹き出し確認。slug を変えれば別ページとして扱う
+- **Overwrite highlight:** 上書き確認中は slug 枠を danger 系で強調（`url-input--overwrite`：枠・背景・prefix を `--danger-soft` 寄り）。フォーカスの墨リングとは独立で、両方が同時に出ても崩れない
+- **Reupload indicator:** slug が一覧の既存ページの slug と一致している間（一覧の「再アップロード」で入った場合も、手入力で一致した場合も）、一体枠の右端・入力の内側に muted な小さいラベル「再アップロード」（0.75rem。エメラルドや danger は使わない）と、新規アップロードに戻す × の icon button（aria-label・Tooltip とも「新規アップロードにする」）を出す。× を押すと slug を `generateRandomSlug()` に戻し、保存期間・公開範囲・パスワードも「次のファイルを置く」と同じ初期状態にまとめて戻してから、入力へフォーカスする（乱数 slug だけ変えて外部公開設定が別ページのものとして残ると誤って公開してしまうため）。busy（アップロード中）の間は出さない
+- **Reupload（一覧からの遷移）:** 一覧の kebab「再アップロード」は成功状態からでもフォームへ戻し、slug を入れて入力へフォーカスし、フォームまでスクロールするだけ。保存期間は常に表示する。既存 slug への差し替えは吹き出し確認。slug を変えれば別ページとして扱う（そのときは上の Reupload indicator も自然に消える）
 
-### 保存期間
+### UploadOptions（保存期間・公開範囲・パスワードのチップ列）
 
-- **Label:** 保存期間（visually-hidden 可）
-- **Control:** ウェル内の 30日 / 無期限セグメント。デフォルトは 30日。選択は薄い墨
+- **Role:** 公開URL（slug 入力）の直下に、保存期間・公開範囲・（外部かつ未ロック時のみ）パスワードのチップを横一列に並べる（`components/UploadOptions.tsx`）。チップは「もう設定済みの値」に見える閉じた表示で、押すとポップオーバーから選ぶ
+- **保存期間チップ:** lucide `Clock` + 現在値（30日 / 無期限）+ `ChevronDown`。押すと radix-ui `DropdownMenu`（`RadioGroup` / `RadioItem`）のポップオーバーで選ぶ。デフォルトは 30日
+- **公開範囲チップ:** 内部のみは `Users`、外部にも公開は `Globe` + 現在値 + `ChevronDown`。同じ `DropdownMenu` の `RadioGroup` で選ぶ。デフォルトは内部のみ
+- **ポップオーバーの位置:** `align="start"` + 小さめの `sideOffset` で、チップの左端・直下にぴったり揃える（チップの中央や右にずれない）。選択中の項目は `DropdownMenu.ItemIndicator` の `Check` で示す
+- **パスワードチップ:** 公開範囲が「外部にも公開」かつ未ロックのときだけ出す。共通部品 `components/PasswordToggle.tsx`（後述）を使う。オンにしたときだけ `generateSharePassword` で自動生成したパスワードを付ける（ユーザー名は `guest` 固定）。あとで一覧の共有ダイアログから確認・付け外しできる
+- **外部共有中のページへの差し替え:** 対象 slug が既に外部共有中なら、公開範囲チップは選択肢を出さず `Globe` + 「外部共有中」の disabled チップに固定し、Tooltip で「設定はそのまま」を補う。パスワードチップは出さない。差し替えても既存の共有URL・パスワードを維持する
+- **リセット:** 箱をクリックしてフォームを初期状態に戻すと内部のみ・パスワードなしに戻る。一覧の「再アップロード」（seed）では保存期間と同様にリセットしない
+- **375px 幅:** セグメントのように全幅化せず `flex-wrap` で折り返すだけなので、縦の伸びが小さい
 
-### 公開範囲（Composer）
+### PasswordToggle（パスワードのオン/オフ）
 
-- **Label:** 公開範囲（visually-hidden 可）
-- **Control:** 保存期間の直下、同じ seg の見た目で「内部のみ / 外部にも公開」。デフォルトは内部のみ
-- **展開:** 「外部にも公開」を選ぶと、直下に案内文が `grid-template-rows: 0fr → 1fr` でにゅっと開く（Box bubble と同じく reduced-motion では `transition: none` で即時）。外部共有URLを自動で発行する旨の一文と、「パスワードを付ける」のチェックボックス（既定はオフ）を表示する。オンにしたときだけ `generateSharePassword` で自動生成したパスワードを付ける（ユーザー名は `guest` 固定）。あとで一覧の共有ダイアログから確認・付け外しできる
-- **外部共有中のページへの差し替え:** 対象 slug が既に外部共有中なら、この seg は選択肢を出さず「外部共有中（設定はそのまま）」に固定された1つのボタン（disabled）になる。展開パネルも開かない。差し替えても既存の共有URL・パスワードを維持する
-- **リセット:** 「次のファイルを置く」で内部のみに戻す。一覧の「再アップロード」（seed）では保存期間と同様にリセットしない
+- **Role:** パスワード保護のオン/オフを、文字とアイコンの両方で示す共通トグル（`components/PasswordToggle.tsx`）。UploadOptions のパスワードチップと ShareDialog の両方から使う（フォームとダイアログでアイコン・見た目を共通化する）
+- **オフ:** lucide `LockOpen` + 「パスワードなし」。罫線だけの控えめなチップ、muted 文字
+- **オン:** lucide `Lock` + 「パスワードあり」。セグメントの選択と同じ薄い墨の塗り（`color-mix(in srgb, var(--text) 8%, var(--well))`）+ 墨文字 + 600。エメラルドは使わない
+- **A11y:** `aria-pressed` のトグルボタン
 
 ### Success result
 
-- **When:** アップロード成功。「次のファイルを置く」を押すまで残す。モーダル・トーストは使わない。連続アップロードはしない（成功中はドロップ・ファイル選択・ドラッグ演出を受け付けない）
+- **When:** アップロード成功。箱をクリック（または Enter/Space）して開くまで残す。モーダル・トーストは使わない。連続アップロードはしない（成功中はドロップ・ファイル選択・ドラッグ演出を受け付けない）
 - **Placement:** 箱の直下（案内文・slug 入力・保存期間・ファイル選択リンクはすべて隠す）
-- **Content:** `UrlField`（URL とコピーが一体の表示部品。詳細は後述）、その下の操作列に「外部共有…」（`text-link`。削除アイコンと並べる、控えめな副次操作）と Trash（一覧と同じ `ConfirmAlertDialog`）
-- **箱の吹き出し:** アップロード成功時、箱から `success` 種別の吹き出し（emerald 系。「公開しました」）を出す。挙動は Box bubble の `info` と同じ（6 秒自動消去・クリックで閉じる）
-- **次のファイルを置く:** 結果の下に第二階層の見た目のボタン（`button--ghost`。エメラルドではない）。押すとフォームを初期状態（乱数 slug・30日・案内文・選択リンク）に戻し、箱も idle に戻す
+- **Content（1行レイアウト）:** `UrlField`（URL とコピーが一体の表示部品。詳細は後述、伸縮）・「外部共有…」（`button--ghost`。globe アイコン付き）・Trash（一覧と同じ `ConfirmAlertDialog`）を高さ（2.25rem 前後）・角丸 6px・罫線をそろえて1行にまとめ、ひとまとまりに見せる（`upload-result__row`。Trash にも罫 1px の枠を付けて外部共有ボタンと揃える）。40rem 以下では URL 枠が1行目、外部共有・削除が2行目右寄せに回る。ボタン「次のファイルを置く」は持たない（廃止。下記参照）
+- **箱の吹き出し:** アップロード成功時、箱から `success` 種別の吹き出し（emerald 系。「公開しました」＋小さなコピーアイコン）を出す。クリックで今アップロードした公開URLをコピーする（挙動は Box bubble 参照）
+- **次のファイルを置く（箱そのものが導線）:** 専用の `button--ghost`（`upload-result__another`）は廃止した。成功状態の箱自体が「次のファイルを置く」の操作になる。箱にマウスを乗せると外側のフラップ2枚が少し開きかけ（`closedOuter` を 1 から 0.82 へ寄せる）、`Tooltip` で「次のファイルを置く」を出す。箱は `role="button"` / `aria-label="次のファイルを置く"` / `tabIndex=0` / `cursor: pointer` を持ち、クリックまたは Enter/Space で箱がヨー回転（`spinMs` 900ms）しながら蓋が開く（成功アニメーションの逆再生: `closed` が 1→0、紙が戻って現れ、床の円の塗りと `--emerald` の線が元に戻る）。終わったらフォーム を初期状態（乱数 slug・30日・内部のみ・パスワード無し・`flow.reset()`）に戻す。reduced-motion では回転・演出なしで即時にフォームへ戻る。uploading 中の箱クリックは無効、開くアニメーション中の二度押しは無視する。詳細は下記 Box icon 参照
 - **外部共有…:** クリックすると、今アップロードしたページの `ShareDialog` を開く。開閉は route（`routes/index.tsx`）が一元管理し、一覧の kebab から開いた場合と同じ経路・同じ一覧反映（書き込んだ内容で該当行を差し替え）を使う。すでに外部共有中のページを再アップロードしたときも同じボタンで今の設定を開ける
 - **外部公開を今回新しく選んだとき:** 結果ブロックの表示に加えて、`ShareDialog` を自動で開く（アップロード結果の metadata に share を含めて一覧へ差し込んでから開くので、開いた瞬間から一覧と一致し、発行済みの表示で始まる。パスワードを付けていれば共有URL・ユーザー名・パスワードが、付けていなければ共有URLだけがすでに見える）。閉じるのは通常どおり右上の×だけ
 - **Delete:** AlertDialog で確認してから削除。消したページの slug がフォームに残っていれば乱数に戻す。そのページの成功結果が出ていれば初期状態（フォーム表示）に戻す。一覧から消したときも同じ
@@ -229,25 +236,30 @@ components:
 - **Placement:** 箱アイコンの直下に `position: absolute` で重ねて表示する（通常フローには置かない）。ブランド名や案内文にかぶってよい。三角形のしっぽは中央
 - **Kinds:** `error`（danger 地・シェイクと同時）、`confirm`（上書き確認。紙地）、`success`（アップロード成功。emerald-soft 地。DESIGN のエメラルドは箱アイコンと成功フィードバックにだけ使う原則に合致させた種別）
 - **Overwrite:** 新規アップロードで既存 slug にぶつかったときだけ。「差し替える」「やめる」。保存期間は変わらない旨を短く示す
-- **Dismiss:** × ボタンは持たない。`error` / `success` は吹き出し自体のクリック（`cursor: pointer`）で閉じる。`confirm` は「差し替える」「やめる」でのみ閉じる。`error` / `success` は 6 秒で自動消去（`persist` と confirm とホバー中は消さない）。確認待ち中は2回目のドロップを無視する
+- **success のコピー操作:** 「公開しました」の右に小さな lucide `Copy` アイコン（1.1rem 前後、`currentColor`）を添える。吹き出し自体のクリック（または Enter/Space。`tabIndex=0`）で、今アップロードした公開URLをクリップボードへコピーする。成功したら一瞬 `Check` アイコン＋「コピーしました」に切り替えてからフェードで閉じる（700ms 前後。文言では説明せず形で示す）。失敗したら「URL のコピーに失敗しました」を表示したまま通常の自動消去（6秒）に任せる（`UrlField` / `CopyButton` と同じ失敗表現に寄せる）。説明テキスト（「クリックでコピー」等）は本文に足さず、`aria-label` で支援技術に伝える
+- **Dismiss:** × ボタンは持たない。`error` / コピーを持たない `success` は吹き出し自体のクリック（`cursor: pointer`）で閉じる。コピーを持つ `success` はクリックでコピーしてから閉じる（上記）。`confirm` は「差し替える」「やめる」でのみ閉じる。`error` / `success` は 6 秒で自動消去（`persist` と confirm とホバー中は消さない）。確認待ち中は2回目のドロップを無視する
 - **Motion:** 開閉は `opacity` のフェードのみ（高さのアニメーションはしない）。absolute 重ねのため開閉で下の要素は動かない。reduced-motion では即時
 - **本文の余白:** 本文（ボタン行がある `confirm` も含む）に対して上下左右が均等になるようパディングを揃える
 
 ### ShareDialog（外部共有）
 
 - **Role:** 外部の人に渡す別URL（`/s/<tag><share-id>/`）の発行・作り直し・停止。一覧の kebab、または成功結果ブロックの「外部共有…」から開く（開閉は route が一元管理）。内部URL（`/p/`）はそのまま使えることを最初の説明文で伝える
-- **Shape:** Radix Dialog を AlertDialog と同じトークンで装飾（`ui-dialog`）。確認が要る操作（作り直す・停止）は入れ子で AlertDialog（`ui-alert`）を重ねる。z-index は `ui-dialog` を `ui-alert` より低くし、確認ダイアログが必ず最前面に来るようにする
+- **Shape:** Radix Dialog を AlertDialog と同じトークンで装飾（`ui-dialog`）。パディングはゆったり（`1.3rem 1.4rem 1.4rem`）。確認が要る操作（作り直す・停止）は入れ子で AlertDialog（`ui-alert`）を重ねる。z-index は `ui-dialog` を `ui-alert` より低くし、確認ダイアログが必ず最前面に来るようにする
 - **Close:** ヘッダー右上に lucide `X` の icon button（aria-label・Tooltip とも「閉じる」）。フッターにテキストの「閉じる」は置かない。Esc・外側クリックでも閉じる（Radix の既定）
-- **未発行:** 説明文だけを表示し、主ボタンは「共有URLを発行」。入力欄は持たない。この時点ではパスワードは付けない（秘匿URLだけで発行する）
-- **発行済み:** タイトル直下に `UrlField`（URL とコピーを一体にした表示部品。詳細は後述）。保存期間があればその下に「保存期限（日付）を過ぎると共有も終わります」を field-hint で出す。続けて「パスワードを付ける」のチェックボックスを置く。オフのままなら field-hint で秘匿URLだけでも保護になる旨を短く添える。オンにした瞬間にシステムがパスワードを自動生成して保存し、ユーザー名（`guest` 固定）とパスワードを常に平文（等幅フォント）で読み取り表示する（パスワードには個別コピーの icon button を添える）。オフに戻すとパスワードを外して保存し、資格情報の表示も消える。「最初の1回だけ表示」の完了画面は持たない。フッターには「作り直す」「共有を停止」（`text-link` / `text-link--danger`）と、パスワードを付けているときだけ右に「まとめてコピー」（`CopyButton` labeled variant。`URL: .. / ユーザー名: .. / パスワード: ..` の3行テキスト）を置く。付けていないときは URL 単体のコピーで足りるため出さない
-- **作り直す:** 新しい share-id を発行する操作。パスワードを付けている場合はパスワードも同時に作り直す（付けていなければ付けないまま）。確認ダイアログを経て実行し、成功すると新しい URL（・パスワード）がそのまま表示に反映される
-- **反映遅延:** 発行・作り直し・停止・パスワードの付け外しのあとは field-hint で「反映まで少し時間がかかる」系の案内を出す
+- **未発行:** 説明文は「外部向けの別URLを発行します。内部URLはそのまま使えます。」の二文に短縮。主ボタンは「共有URLを発行」。入力欄は持たない。この時点ではパスワードは付けない（秘匿URLだけで発行する）
+- **発行済み:** タイトル直下に `UrlField`（URL とコピーを一体にした表示部品。詳細は後述）。保存期限があればその直下に小さな meta 行（lucide `Clock` 12px + 「2026/10/15 21:00 まで」。無期限のときは出さない）。「保存期限（日付）を過ぎると共有も終わります」のような長い文は出さない
+- **パスワードのオン/オフ:** `components/PasswordToggle.tsx`（UploadOptions と共通部品）を使う。オフのままなら秘匿URLだけでも保護になる旨のヒント文は出さない（チップの「パスワードなし」表示自体が状態を伝える）
+- **オンのときの表示:** `--bg` 地・角丸 8px の `password-panel` ブロックの中に、オンにした瞬間にシステムが自動生成したパスワードとユーザー名（`guest` 固定）を常に平文（等幅フォント）で読み取り表示する。ユーザー名・パスワードそれぞれに個別コピーの icon button を添える。オフに戻すとパスワードを外して保存し、表示も消える。「最初の1回だけ表示」の完了画面は持たない
+- **フッター:** 「作り直す」「共有を停止」（`text-link` / `text-link--danger`）と、パスワードを付けているときだけ右に「まとめてコピー」（`CopyButton` labeled variant。`URL: .. / ユーザー名: .. / パスワード: ..` の3行テキスト）を置く。付けていないときは URL 単体のコピーで足りるため出さない。直前の要素との間隔を他の要素間より広く取り、フッターだと一目で分かるようにする
+- **作り直す:** 新しい share-id を発行する操作。パスワードを付けている場合は、それも同時に作り直す（付けていなければ付けないまま）。確認ダイアログを経て実行し、成功すると新しい URL（・パスワード）がそのまま表示に反映される
+- **反映遅延:** 外部共有 URL は発行してから開けるようになるまで数秒のラグがあり、すぐ開くと 404 になる。発行・作り直しの直後（アップロード直後の自動オープンで発行済みのときも含む）は URL の直下に muted な1行「開けるようになるまで数秒かかることがあります。」を、停止の直後は同じ位置に「無効になるまで数秒かかることがあります。」を出す（エメラルドの帯にはしない）。アップロード直後の自動オープンで発行直後だと分かるよう、route から `justIssued` prop を渡す
+- **要素間の余白:** URL 枠・保存期限のメタ行・パスワードのトグル・パスワードのブロック・エラーや注意書きは、区切り線を使わず余白だけで一定のリズムに揃える
 - **一覧への反映:** 保存が終わったら、書き込んだ内容（API の戻り値）で一覧の該当行を直接差し替える（一覧全体は取り直さない）。ShareDialog はその一覧から自分の対象ページを引き直す（保存直後でも共有URL・パスワードの表示が一覧と食い違わない）
 - **パスワードの扱い:** パスワードは任意で、秘匿URL（share-id）だけでも共有として成立する上での追加の保護という位置付け。metadata は所有者本人しか読めない IAM 境界の内側にあるため、付けたパスワードはハッシュ化・salt を行わず平文で保存する。ダイアログはその平文をいつでも読み取り表示・コピーでき、閉じても再表示できなくなることはない
 
 ### UrlField（URL とコピーの統合表示）
 
-- **Role:** URL とコピーをひとつの枠に統合した共通表示部品（`components/UrlField.tsx`）。ShareDialog の共有URLで使う
+- **Role:** URL とコピーをひとつの枠に統合した共通表示部品（`components/UrlField.tsx`）。ShareDialog の共有URLと、成功結果ブロック（UploadResult）の1行レイアウトで使う
 - **Shape:** `.url-input` と同じ系統の一つの枠（罫・角丸・高さ・背景）。枠内に URL を新しいタブで開くリンクとして表示し、右端に枠と一体化したコピーの icon button（`CopyButton` の `icon` variant をそのまま使う）を置く
 - **Truncation:** URL は1行。長い場合は先頭側を省略し、slug / share-id 側（末尾）が見えるようにする
 - **Keyboard:** リンクとコピーボタンはそれぞれ独立にフォーカスでき、focus-visible の見た目は他の入力・ボタンと揃える
@@ -260,7 +272,7 @@ components:
 ### アップロード済みページ
 
 - **Heading:** 「アップロード済みページ」。フォームより弱いセクション
-- **Row:** 下線だけ。主表示は slug、副表示は URL と有効期限
+- **Row:** 下線だけ。主表示は slug、副表示は URL と有効期限。行の上下 padding（0.7rem）は対称。副表示（URL・有効期限）は margin-top: 0.15rem / margin-bottom: 0 で、上より下の余白が大きく見えないようにする
 - **Expiration:** 日本時間の絶対日時を主表示。例: `2026/8/20 21:00 まで（あと2日）`。無期限は「無期限」。期限切れは `期限切れ（yyyy/M/d）`
 - **Direct:** 「ページを開く」「URLをコピー」（icon button + tooltip + aria-label）
 - **Share:** 外部共有中のページは slug の直後に小さな icon button（muted、既存の icon button より一回り小さく、slug の横で主張しない大きさ）を置く。押すとその行の ShareDialog を開く。パスワードを付けているページは lucide `GlobeLock`（Tooltip・aria-label は「外部共有中」）、付けていないページは `Globe`（「外部共有中（パスワードなし）」）で出し分ける。行の高さは共有の有無・パスワードの有無で変えない
@@ -270,10 +282,15 @@ components:
 
 ### Box icon
 
-- **Role:** ブランドマーク、ドロップのアフォーダンス、状態フィードバック（idle / hover / drag / uploading / success / error）
+- **Role:** ブランドマーク、ドロップのアフォーダンス、状態フィードバック（idle / hover / drag / uploading / success / error）。成功後は「次のファイルを置く」の操作でもある
 - **Motion:** チューナーの幾何を rAF 1本で描く。目標に収束し時間駆動がなければループを止める
 - **Error:** idle 形状へ戻る + 短いシェイクと `--danger` のフラッシュ。reduced-motion では色だけ
-- **Click:** idle / hover ではクリックで回転し、ファイル選択ダイアログを開く。uploading 中は開かない。reduced-motion では回転を省略
+- **Click（idle / hover）:** クリックで回転し、ファイル選択ダイアログを開く。uploading 中は開かない。reduced-motion では回転を省略
+- **成功時の蓋の色:** 閉じた蓋のフラップは常に `--well`（白）のまま。アップロード完了は床の円の緑（線 `--emerald` ＋ `rFill` の `--emerald-soft` 塗り）だけで伝える
+- **success 状態のホバー:** 箱にマウスを乗せると、一番外側のフラップ2枚だけが少し開きかける。内側2枚まで開くと4枚が貫通して見えるため動かさない。ホバーを外すと元に戻る。reduced-motion では動かさない
+- **success 状態のクリック:** 「次のファイルを置く」の操作。クリックまたは Enter/Space で、箱がヨー回転しながら success の完了形を逆再生し、終わったらフォームを初期状態に戻す。reduced-motion では演出なしで即時に戻す。uploading 中と、開くアニメーション中の二度押しは無効
+- **アクセシビリティ:** success 状態の箱は `role="button"` / `aria-label="次のファイルを置く"` / `tabIndex=0` を持ち、既存の `Tooltip` コンポーネントで同じラベルを hover / focus-visible に出す。idle / hover / drag / uploading / error では非対話の装飾（`aria-hidden`）のまま
+- **イースターエッグ（未予告）:** 何もないページ地をダブルクリックすると箱が `spin()` で1回転する（ファイル選択は開かない。uploading 中や reduced-motion では既存の `spin()` のガードでそのまま何も起きない）
 - **Favicon:** idle の静的 SVG。CSS 変数は使わずライトパレットの実色を焼き込む
 
 ### Buttons
@@ -307,19 +324,26 @@ components/Composer.tsx フォームの骨組み。useUploadFlow と useWindowFi
                          state を持つ。外部なら id を自動生成し、パスワードを付ける場合だけ
                          あわせて自動生成する（既定はオフ）
   SlugField.tsx          公開URL。全選択・Esc・ツールチップの開閉を内包
-  RetentionToggle.tsx    30日 / 無期限
-  VisibilityToggle.tsx   内部のみ / 外部にも公開。対象 slug が共有中なら固定表示になる
+  UploadOptions.tsx      保存期間・公開範囲・（外部かつ未ロック時のみ）パスワードのチップ列。
+                         保存期間・公開範囲はチップ+DropdownMenu の RadioGroup、パスワードは
+                         PasswordToggle
+  PasswordToggle.tsx     パスワードのオン/オフ共通トグル（UploadOptions と ShareDialog で共通）
   PickLinks.tsx          ファイルを選ぶ · フォルダを選ぶ（隠し input を内包）
-  UploadResult.tsx       UrlField・「外部共有…」・削除（確認ダイアログ）・次のファイルを置く
+  UploadResult.tsx       UrlField・「外部共有…」・削除（確認ダイアログ）を1行にまとめる。
+                         「次のファイルを置く」は箱自体の操作になったためボタンは持たない
+  UploadBoxIcon.tsx      箱アイコン。success 状態では「次のファイルを置く」の
+                         role="button" にもなる（onOpened で開くアニメーション完了を通知）
   DragOverlay.tsx        ウィンドウ全体のドラッグ強調
 components/PagesList.tsx 一覧。表示専用（確認ダイアログ・コピー失敗の表示だけ持つ。ShareDialog の開閉は route へ委譲）
   PageRow.tsx             一覧の1行。表示とコールバック。共有中は控えめな icon button（パスワード有り GlobeLock / 無し Globe）を出し、押すと ShareDialog を開く
-components/ShareDialog.tsx 外部共有の発行・作り直し・停止、パスワードの付け外し（Radix Dialog）。確認は AlertDialog に委譲。
+components/ShareDialog.tsx 外部共有の発行・作り直し・停止、パスワードの付け外し（Radix Dialog）。
+                            パスワードのオン/オフは PasswordToggle。確認は AlertDialog に委譲。
                             パスワードを付けているときだけユーザー名・パスワードを読み取り表示する
                             （「最初の1回だけ表示」の完了画面は持たない）
 components/UrlField.tsx     URL とコピーを一体にした表示部品（ShareDialog / UploadResult で使う）
 components/CopyButton.tsx   URLコピーの共通部品（UploadResult / PageRow / ShareDialog / UrlField で使う）
-components/BoxBubble.tsx    箱の直下の吹き出し（error / confirm / success）
+components/BoxBubble.tsx    箱の直下の吹き出し（error / confirm / success）。
+                            success は onCopy を渡すとクリックで公開URLをコピーする
 components/{AlertDialog,Menu,Tooltip}.tsx  radix-ui のラッパー
 components/UtilityMenu.tsx  右上のログアウトメニュー
 hooks/useUploadFlow.ts     アップロードの状態機械（useReducer）
@@ -346,6 +370,7 @@ lib/to-user-message.ts     エラーを画面向けの日本語にする
 - 静的チェック: `pnpm --filter @okibasho/web typecheck` / `pnpm --filter @okibasho/web test` / `pnpm format:check` / `pnpm --filter @okibasho/web build`
 - 実機確認はブラウザ自動操作（agent-browser など）で行い、幅 1280 と 375（`innerWidth` を実際に 375 にする）の両方を撮る
 - 箱アイコン単体は `/dev/upload-box-icon` のハーネスで確認できる（dev サーバーのみ、build には含まれない）
+- UploadOptions のチップ列・PasswordToggle・ShareDialog・SlugField・PagesList/PageRow（一覧）は `/dev/options` のハーネスで props だけで描画して確認できる（Composer 本体は Cognito ログインが必要で開けないため。dev サーバーのみ）
 - 本番未公開のため防衛的なテストは書かない。テストは仕様変更で意味を失ったものを消しつつ、見た目と操作の確認は実機で行う
 
 ## Do's and Don'ts
@@ -363,7 +388,7 @@ lib/to-user-message.ts     エラーを画面向けの日本語にする
 - **Do** フォーカスを墨 2px リングで示す
 - **Do** 一覧をフラットな行にし、直接操作は開くとコピー、ほかは kebab にまとめる
 - **Do** 日本語敬体で、フォルダ・公開URL・アップロード済みページの用語に揃える
-- **Do** 成功中はフォームを隠して結果ブロックだけを見せ、「次のファイルを置く」で明示的に戻す
+- **Do** 成功中はフォームを隠して結果ブロックだけを見せ、成功状態の箱を「次のファイルを置く」の操作にして明示的に戻す
 
 ### Don't:
 

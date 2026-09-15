@@ -13,14 +13,16 @@ export const messages = {
   invalidSlug: '使えるのは小文字の英数字と - _ だけ',
   notHtml: 'HTML 以外は置けません',
   uploaded: '公開しました',
-  uploadFailed: '送れませんでした。もう一度どうぞ。',
+  uploadedCopyAriaLabel: '公開しました。クリックで公開URLをコピーします',
+  uploadFailed: 'アップロードに失敗しました。もう一度お試しください。',
   loginRequired: 'ログインが必要です',
   copyUrl: 'URLをコピー',
   copied: 'コピーしました',
   copyFailed: 'コピーに失敗しました',
   copyUrlFailed: 'URL のコピーに失敗しました',
   uploadAnother: '次のファイルを置く',
-  confirmOverwrite: (slug: string) => `${slug} はもうあるよ。差し替える？ 保存期間はそのまま`,
+  confirmOverwrite: (slug: string) =>
+    `${slug} は既にあります。保存期間はそのままで差し替えますか？`,
 
   /** 一覧 */
   listHeading: 'アップロード済みページ',
@@ -52,12 +54,11 @@ export const messages = {
   /** 外部共有ダイアログ */
   shareDialogTitleNew: '外部共有',
   shareDialogTitleEdit: '外部共有の設定',
-  shareDialogDescriptionNew: '外部の人に渡す別のURLを発行します。内部URLはそのまま使えます。',
+  shareDialogDescriptionNew: '外部向けの別URLを発行します。内部URLはそのまま使えます。',
   shareUrlLabel: '共有URL',
-  shareExpiresHint: (dateLabel: string) => `保存期限（${dateLabel}）を過ぎると共有も終わります`,
-  sharePasswordToggle: 'パスワードを付ける',
-  sharePasswordToggleHint: 'オンにすると、開くときにユーザー名とパスワードの入力が必要になります。',
+  shareExpiresMeta: (dateLabel: string) => `${dateLabel} まで`,
   shareUsernameLabel: 'ユーザー名',
+  shareUsernameCopy: 'ユーザー名をコピー',
   sharePasswordLabel: 'パスワード',
   sharePasswordCopy: 'パスワードをコピー',
   shareIssue: '共有URLを発行',
@@ -71,12 +72,12 @@ export const messages = {
   shareCopyFailed: 'URL のコピーに失敗しました',
   shareRecreateDialogTitle: 'URLを作り直す',
   shareRecreateDialogDescription:
-    '古いURLは使えなくなります（パスワードを付けている場合はそれも作り直します）。続行しますか？',
+    '古いURLは使えなくなります。パスワードを付けている場合は、それも同時に作り直します。続行しますか？',
   shareStopDialogTitle: '外部共有を停止する',
   shareStopDialogDescription: '共有URLは使えなくなります。続行しますか？',
   shareStopFailed: '共有停止に失敗しました',
-  shareNoticeRecreate: '新しいURLに切り替わるまで少し時間がかかることがあります。',
-  shareNoticeStop: '無効になるまで少し時間がかかることがあります。',
+  shareNoticeRecreate: '開けるようになるまで数秒かかることがあります。',
+  shareNoticeStop: '無効になるまで数秒かかることがあります。',
   shareClose: '閉じる',
   shareCopyAll: 'まとめてコピー',
   shareCopyAllText: (url: string, username: string, password: string) =>
@@ -104,6 +105,13 @@ export const messages = {
   publicUrlLabel: '公開URL',
   publicUrlAriaLabel: (urlOrigin: string, userPath: string, value: string) =>
     userPath ? `公開URL ${urlOrigin}${userPath}${value}` : '公開URL',
+  /** slug が既存ページと一致しているときの小さなラベルと、新規アップロードに戻す × */
+  resetToNewUpload: '新規アップロードにする',
+  /**
+   * × の aria-label。40rem 以下では隣の「再アップロード」ラベルを CSS で隠すため、
+   * ボタン単体でも状況が伝わるよう「再アップロード中」を明示する
+   */
+  resetToNewUploadAriaLabel: '再アップロード中です。新規アップロードにする',
 
   /** 保存期間 */
   retentionLabel: '保存期間',
@@ -114,9 +122,12 @@ export const messages = {
   shareVisibilityLabel: '公開範囲',
   shareVisibilityInternalOption: '内部のみ',
   shareVisibilityExternalOption: '外部にも公開',
-  shareVisibilityLocked: '外部共有中（設定はそのまま）',
-  shareVisibilityAutoNotice: '外部共有URLを自動で発行します。',
-  shareVisibilityPasswordToggle: 'パスワードを付ける',
+  shareVisibilityLocked: '外部共有中',
+  shareVisibilityLockedHint: '設定はそのまま',
+
+  /** パスワードのオン/オフ（PasswordToggle。Composer のチップと ShareDialog で共通） */
+  sharePasswordChipOff: 'パスワードなし',
+  sharePasswordChipOn: 'パスワードあり',
 
   /** 一覧の期限表示 */
   expiredLabel: (dateLabel: string) => `期限切れ（${dateLabel}）`,
@@ -124,7 +135,7 @@ export const messages = {
     `${dateTimeLabel} まで（あと${daysRemaining}日）`,
 
   /** 通信エラー */
-  networkError: 'つながりません。接続を確かめて、もう一度どうぞ。',
+  networkError: '接続できませんでした。ネットワークを確認してお試しください。',
 
   /** アップロードの検証 */
   validationFilesRequired: 'ファイルを選んでください',
