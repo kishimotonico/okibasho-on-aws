@@ -69,7 +69,7 @@ aws s3 sync packages/web/dist/client s3://<AppBucketName> --delete
 aws cloudfront create-invalidation --distribution-id <id> --paths '/*'
 ```
 
-`_shell.html` は毎回入れ替わるので、`Cache-Control` を短くして上げるか、デプロイのたびに invalidation を打つ。ハッシュ付きのアセットはそのまま長期キャッシュでよい。
+Cache-Control はアップロード時に指定しない。CloudFront の Response Headers Policy が behavior ごとに付与する（`/assets/*` は `public, max-age=31536000, immutable`、`_shell.html` を含むそれ以外は `no-cache`）。ハッシュ付きアセットは長期キャッシュしてよく、`_shell.html` は毎回再検証させるためデプロイのたびに invalidation を打つ。
 
 ## 並行の指針
 

@@ -139,6 +139,34 @@ exports[`OkibashoStack > テンプレートが意図せず変化していない 
     },
   },
   "Resources": {
+    "AppDeliveryAssetsResponseHeaders1BA4432B": {
+      "Properties": {
+        "ResponseHeadersPolicyConfig": {
+          "CustomHeadersConfig": {
+            "Items": [
+              {
+                "Header": "Cache-Control",
+                "Override": true,
+                "Value": "public, max-age=31536000, immutable",
+              },
+            ],
+          },
+          "Name": "OkibashoAppDeliveryAssetsResponseHeaders8503707D",
+          "SecurityHeadersConfig": {
+            "ContentSecurityPolicy": {
+              "ContentSecurityPolicy": "frame-ancestors 'none'",
+              "Override": true,
+            },
+            "StrictTransportSecurity": {
+              "AccessControlMaxAgeSec": 31536000,
+              "IncludeSubdomains": true,
+              "Override": true,
+            },
+          },
+        },
+      },
+      "Type": "AWS::CloudFront::ResponseHeadersPolicy",
+    },
     "AppDeliveryBucketAB77B814": {
       "DeletionPolicy": "Delete",
       "Properties": {
@@ -330,6 +358,18 @@ exports[`OkibashoStack > テンプレートが意図せず変化していない 
     "AppDeliveryDistribution02142691": {
       "Properties": {
         "DistributionConfig": {
+          "CacheBehaviors": [
+            {
+              "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+              "Compress": true,
+              "PathPattern": "/assets/*",
+              "ResponseHeadersPolicyId": {
+                "Ref": "AppDeliveryAssetsResponseHeaders1BA4432B",
+              },
+              "TargetOriginId": "OkibashoAppDeliveryDistributionOrigin1BAC13D3D",
+              "ViewerProtocolPolicy": "redirect-to-https",
+            },
+          ],
           "Comment": "trusted 管理UI配信",
           "DefaultCacheBehavior": {
             "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
@@ -353,7 +393,7 @@ exports[`OkibashoStack > テンプレートが意図せず変化していない 
           },
           "DefaultRootObject": "_shell.html",
           "Enabled": true,
-          "HttpVersion": "http2",
+          "HttpVersion": "http2and3",
           "IPV6Enabled": true,
           "Origins": [
             {
@@ -394,6 +434,15 @@ exports[`OkibashoStack > テンプレートが意図せず変化していない 
     "AppDeliveryResponseHeadersC3C12CC1": {
       "Properties": {
         "ResponseHeadersPolicyConfig": {
+          "CustomHeadersConfig": {
+            "Items": [
+              {
+                "Header": "Cache-Control",
+                "Override": true,
+                "Value": "no-cache",
+              },
+            ],
+          },
           "Name": "OkibashoAppDeliveryResponseHeadersDED897DD",
           "SecurityHeadersConfig": {
             "ContentSecurityPolicy": {
