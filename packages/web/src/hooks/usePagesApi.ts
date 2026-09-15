@@ -43,10 +43,7 @@ export interface UploadInput {
 }
 
 export interface PagesApi {
-  /**
-   * 一覧（ListedPage[]、作成日時の新しい順）。
-   * previous を渡すと、前回の結果を差分取得（ETag が同じ slug は取り直さない）の材料にする
-   */
+  /** 一覧（作成日時の新しい順）。previous を渡すと差分取得（ETag が同じ slug は取り直さない）の材料にする */
   list: (previous?: readonly ListedPage[]) => Promise<ListedPage[]>;
   /** 1 件だけ metadata を読んで一覧の行にする。無ければ null */
   find: (slug: string) => Promise<ListedPage | null>;

@@ -30,10 +30,8 @@ export interface ListedPage {
 }
 
 /**
- * metadata と slug から一覧の行を組み立てる。
- * 書き込み（アップロード・保存期間変更・共有設定変更）の直後に、S3 を読み直さず一覧の該当行を
- * 差し替える用途と、一覧取得（PageStore.list の結果）を行に変換する用途の両方で使う。
- * shareTag（computeShareTag）は WebCrypto を使うため非同期
+ * metadata と slug から一覧の行を組み立てる。書き込み直後の差し替えと、一覧取得
+ * （PageStore.list の結果）の変換の両方で使う。shareTag（computeShareTag）は WebCrypto を使うため非同期
  */
 export async function listedPageFromMetadata(
   email: string,

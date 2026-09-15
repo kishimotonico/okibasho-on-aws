@@ -31,12 +31,10 @@ export const Route = createFileRoute('/')({
 });
 
 /**
- * defaultSsr: false（src/start.ts）により常にクライアントでのみ実行される。
- * 一覧は loader では await しない。prefetch を始めるだけにして、
- * Composer はすぐ表示し、一覧セクションだけが後から追いつく。
- * localStorage からの復元（pagesRestored）だけは待つ。待たずに prefetchQuery すると
- * 前回の一覧（ETag 差分取得の材料）が間に合わず、復元後の結果を毎回捨てて
- * 全件取り直すことになる
+ * defaultSsr: false（src/start.ts）で常にクライアント実行。一覧は await せず prefetch
+ * だけ始め、Composer はすぐ表示して一覧セクションを後から追いつかせる。
+ * localStorage からの復元（pagesRestored）だけは待つ。待たないと、復元前の
+ * prefetchQuery が前回の一覧（ETag 差分取得の材料）を持たず、毎回全件取り直しになる
  */
 async function prefetchPages(): Promise<void> {
   // 一覧取得（下の await たち）を待たず、S3・Cognito の SDK チャンクの読み込みだけ並行して始める
@@ -161,9 +159,8 @@ function HomePage() {
 
   /**
    * 書き込みが成功したあと、その内容で一覧の該当行を差し替える。
-   * キャッシュがまだ無い（一覧が読み込まれる前）ときは、無いところへ新しい一覧を
-   * 作ってしまうと直後に in-flight の一覧取得（初回 fetch やフォーカス再取得）の結果で
-   * 上書きされて消える恐れがあるので setQueryData せず、取得を取り直すだけにする
+   * キャッシュがまだ無い（一覧が読み込まれる前）ときは setQueryData せず取得を取り直すだけにする
+   * （無いところへ作ると、直後の in-flight な一覧取得の結果に上書きされて消える恐れがある）
    */
   function upsertPage(page: ListedPage) {
     if (queryClient.getQueryData<ListedPage[]>(queryKey) === undefined) {
@@ -176,11 +173,9 @@ function HomePage() {
   }
 
   /**
-   * 先にキャッシュへ反映し、失敗したら元に戻して actionError を出す
-   * （TanStack Query の楽観更新の定石）。成功したら書き込んだ内容で該当行を差し替える。
-   * キャッシュがまだ無いときは upsertPage と同じ理由で楽観更新をせず、成功後に取り直す。
-   * キャッシュがあるときも、in-flight の取得（フォーカス再取得など）が楽観更新を
-   * 古い結果で上書きしないよう、書き換える前に cancelQueries で止める
+   * 楽観更新（先にキャッシュを書き換え、失敗したら戻す）。キャッシュがまだ無いときは
+   * upsertPage と同じ理由で楽観更新をせず、成功後に取り直す。in-flight の取得（フォーカス
+   * 再取得など）が古い結果で上書きしないよう、書き換える前に cancelQueries で止める
    */
   function mutate(action: PagesAction, run: () => Promise<ListedPage | void>) {
     startMutation(async () => {

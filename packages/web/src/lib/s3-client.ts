@@ -26,9 +26,8 @@ let cached: { idToken: string; clientPromise: Promise<S3ClientType> } | null = n
  * S3Client の中で Cognito の一時認証情報がキャッシュされるため、
  * 操作のたびに作り直すと毎回 GetCredentialsForIdentity を往復することになる。
  * config はビルド時に固定なので鍵に含めない。
- * Promise の段階でキャッシュに載せ、同時に呼ばれても同じ Promise を共有させる
- * （client を await してから載せると、その間の同時呼び出しがそれぞれ作り直してしまう）。
- * 作成に失敗したら次回作り直せるよう、キャッシュから外す。
+ * Promise の段階でキャッシュに載せ、同時呼び出しが同じ Promise を共有するようにする
+ * （await 後に載せると、待っている間の呼び出しがそれぞれ作り直してしまう）。失敗時はキャッシュから外す
  */
 export async function getPagesS3Client(
   config: WebConfig,

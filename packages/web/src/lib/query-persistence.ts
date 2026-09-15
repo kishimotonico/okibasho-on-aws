@@ -21,13 +21,12 @@ const persister: Persister | null = import.meta.env.SSR
   : createAsyncStoragePersister({ storage: window.localStorage });
 
 /**
- * 一覧のクエリ（queryKey: ['pages', email]）だけを localStorage に残す。metadata には
- * 外部共有の平文パスワードも入るが、localStorage に置くのはユーザーと合意済み。
+ * 一覧のクエリ（queryKey: ['pages', email]）だけを localStorage に残す。外部共有の
+ * 平文パスワードを含む metadata も置くが、ユーザーと合意済み。
  *
- * PersistQueryClientProvider（React の副作用）で復元すると、route の loader が始める
- * prefetchQuery のほうが先に走ってしまい、前回の一覧（差分取得の材料）が間に合わない。
- * このモジュールが読み込まれた時点で復元を始め、loader はこの Promise を待ってから
- * prefetchQuery する（lib/pages-queries.ts の queryFn 内 await ではなく、prefetch の前に待つ）
+ * loader の prefetchQuery より先に復元を終える必要がある（前回の一覧が ETag 差分取得の
+ * 材料になるため）ので、React の副作用ではなくこのモジュールの読み込み時点で復元を始める。
+ * loader はこの Promise を待ってから prefetchQuery する
  */
 export const pagesRestored: Promise<void> = persister
   ? persistQueryClientRestore({
