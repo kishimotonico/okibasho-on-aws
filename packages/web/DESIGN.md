@@ -270,7 +270,7 @@ components:
 ### アップロード済みページ
 
 - **Heading:** 「アップロード済みページ」。フォームより弱いセクション
-- **Row:** 下線だけ。主表示は slug、副表示は URL と有効期限
+- **Row:** 下線だけ。主表示は slug、副表示は URL と有効期限。行の上下 padding（0.7rem）は対称。副表示（URL・有効期限）は `.page-row .page-row__url` / `.page-row .page-row__meta`（2クラスで specificity を上げている）で margin-top: 0.15rem / margin-bottom: 0 を明示し、`.page p { margin: 0 0 0.75rem }` に specificity 勝負で上書きされて下側だけ margin が余分に付く（上より下の余白が大きく見える）ことを防ぐ
 - **Expiration:** 日本時間の絶対日時を主表示。例: `2026/8/20 21:00 まで（あと2日）`。無期限は「無期限」。期限切れは `期限切れ（yyyy/M/d）`
 - **Direct:** 「ページを開く」「URLをコピー」（icon button + tooltip + aria-label）
 - **Share:** 外部共有中のページは slug の直後に小さな icon button（muted、既存の icon button より一回り小さく、slug の横で主張しない大きさ）を置く。押すとその行の ShareDialog を開く。パスワードを付けているページは lucide `GlobeLock`（Tooltip・aria-label は「外部共有中」）、付けていないページは `Globe`（「外部共有中（パスワードなし）」）で出し分ける。行の高さは共有の有無・パスワードの有無で変えない

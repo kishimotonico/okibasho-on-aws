@@ -1006,7 +1006,14 @@ button.text-link,
   overflow-wrap: anywhere;
 }
 
-.page-row__url {
+/*
+ * 2クラスにして specificity を上げる（`.page p { margin: 0 0 0.75rem }` と
+ * 同じ specificity（クラス1つ+要素1つ）だとソース順で決着してしまい、
+ * ファイルの並びを変えるたびに崩れうる。ここでは margin-top: 0.15rem /
+ * margin-bottom: 0 を明確に上書きし、行の下側にだけ余白が重なって
+ * 上側より大きく見える不具合を直す
+ */
+.page-row .page-row__url {
   margin: 0.15rem 0 0;
   overflow: hidden;
   color: var(--muted);
@@ -1022,7 +1029,7 @@ button.text-link,
   unicode-bidi: isolate;
 }
 
-.page-row__meta {
+.page-row .page-row__meta {
   margin: 0.15rem 0 0;
   color: var(--muted);
   font-size: 0.75rem;
