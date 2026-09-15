@@ -115,7 +115,7 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'ファイルを選ぶ' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'フォルダを選ぶ' })).toBeInTheDocument();
     expect(screen.getByText('ここにドロップして公開')).toBeInTheDocument();
-    expect(screen.getByText('保存期間')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存期間 30日' })).toBeInTheDocument();
   });
 
   it('ファイル選択だけでアップロードが走る', async () => {

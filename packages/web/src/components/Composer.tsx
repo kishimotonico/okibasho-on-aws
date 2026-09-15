@@ -10,11 +10,10 @@ import { useEffect, useRef, useState } from 'react';
 import { BoxBubble } from '~/components/BoxBubble';
 import { DragOverlay } from '~/components/DragOverlay';
 import { PickLinks } from '~/components/PickLinks';
-import { RetentionToggle } from '~/components/RetentionToggle';
 import { isSlugInvalid, SlugField } from '~/components/SlugField';
 import { UploadBoxIcon } from '~/components/UploadBoxIcon';
+import { UploadOptions, type PageVisibility } from '~/components/UploadOptions';
 import { UploadResult } from '~/components/UploadResult';
-import { VisibilityToggle, type PageVisibility } from '~/components/VisibilityToggle';
 import { usePagesApi } from '~/hooks/usePagesApi';
 import { useUploadFlow } from '~/hooks/useUploadFlow';
 import { useWindowFileDrag } from '~/hooks/useWindowFileDrag';
@@ -166,7 +165,6 @@ export function Composer({
   const overwrite = state.kind === 'confirming';
   const progressLabel =
     state.kind === 'uploading' && state.total > 1 ? `${state.completed}/${state.total}` : '1件';
-  const sharePanelOpen = visibility === 'external' && !lockedShare;
 
   return (
     <div className="upload-panel">
@@ -248,34 +246,16 @@ export function Composer({
               urlOrigin={api.urlOrigin}
               userPath={api.userPath}
             />
-            <RetentionToggle value={retention} onChange={setRetention} disabled={busy} />
-            <VisibilityToggle
-              value={visibility}
-              onChange={setVisibility}
-              disabled={busy}
+            <UploadOptions
+              retention={retention}
+              onRetentionChange={setRetention}
+              visibility={visibility}
+              onVisibilityChange={setVisibility}
               locked={Boolean(lockedShare)}
+              withPassword={withPassword}
+              onPasswordToggle={() => setWithPassword((current) => !current)}
+              disabled={busy}
             />
-            <div
-              className={`share-visibility-panel${sharePanelOpen ? ' share-visibility-panel--open' : ''}`}
-              aria-hidden={!sharePanelOpen}
-              inert={!sharePanelOpen}
-            >
-              <div className="share-visibility-panel__inner">
-                <p className="field-hint">{messages.shareVisibilityAutoNotice}</p>
-                <label className="share-password-toggle share-password-toggle--tight">
-                  <input
-                    type="checkbox"
-                    checked={withPassword}
-                    disabled={busy}
-                    onChange={(event) => setWithPassword(event.target.checked)}
-                  />
-                  {messages.shareVisibilityPasswordToggle}
-                </label>
-                {!withPassword ? (
-                  <p className="field-hint">{messages.sharePasswordToggleHint}</p>
-                ) : null}
-              </div>
-            </div>
           </>
         ) : null}
       </div>
