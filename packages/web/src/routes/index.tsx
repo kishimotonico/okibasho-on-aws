@@ -20,6 +20,7 @@ import { PAGE_HIGHLIGHT_MS, sortPagesByCreatedAt } from '~/lib/page-list-highlig
 import { pagesListQueryOptions, pagesQueryKey } from '~/lib/pages-queries';
 import { queryClient } from '~/lib/query-client';
 import { pagesRestored } from '~/lib/query-persistence';
+import { preloadPagesSdk } from '~/lib/s3-client';
 
 export const Route = createFileRoute('/')({
   validateSearch: (search: Record<string, unknown>): { slug?: string } => ({
@@ -41,6 +42,9 @@ async function prefetchPages(): Promise<void> {
     // SPA シェルの生成時は認証も S3 も触らない
     return;
   }
+
+  // 一覧取得（下の await たち）を待たず、S3・Cognito の SDK チャンクの読み込みだけ並行して始める
+  preloadPagesSdk();
 
   const session = await loadAuthSession();
   if (!session) {

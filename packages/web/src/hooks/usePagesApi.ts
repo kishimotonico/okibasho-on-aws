@@ -70,11 +70,11 @@ export interface PagesApi {
 export function createPagesApi(config: WebConfig, session: AuthSession | null): PagesApi {
   const urlOrigin = config.pagesBaseUrl.replace(/\/$/, '');
 
-  function target() {
+  async function target() {
     if (!session) {
       throw new PagesApiError(messages.loginRequired);
     }
-    return { store: getPageStore(config, session), email: session.email };
+    return { store: await getPageStore(config, session), email: session.email };
   }
 
   async function run<T>(fallback: string, action: () => Promise<T>): Promise<T> {
@@ -94,7 +94,7 @@ export function createPagesApi(config: WebConfig, session: AuthSession | null): 
     action: (store: PageStore) => Promise<PageMetadata>,
   ): Promise<ListedPage> {
     return run(fallback, async () => {
-      const { store, email } = target();
+      const { store, email } = await target();
       const metadata = await action(store);
       return listedPageFromMetadata(email, slug, metadata, config.pagesBaseUrl);
     });
@@ -108,14 +108,14 @@ export function createPagesApi(config: WebConfig, session: AuthSession | null): 
 
     list: (previous) =>
       run(messages.listLoadFailed, async () => {
-        const { store, email } = target();
+        const { store, email } = await target();
         const pages = await listPages(store, email, config.pagesBaseUrl, previous);
         return sortPagesByCreatedAt(pages);
       }),
 
     find: (slug) =>
       run(messages.listLoadFailed, async () => {
-        const { store, email } = target();
+        const { store, email } = await target();
         const metadata = await store.getMetadata(slug);
         return metadata ? listedPageFromMetadata(email, slug, metadata, config.pagesBaseUrl) : null;
       }),
@@ -136,7 +136,8 @@ export function createPagesApi(config: WebConfig, session: AuthSession | null): 
 
     remove: (slug) =>
       run(messages.removeFailed, async () => {
-        await target().store.remove(slug);
+        const { store } = await target();
+        await store.remove(slug);
       }),
 
     setRetention: (slug, retention) =>
