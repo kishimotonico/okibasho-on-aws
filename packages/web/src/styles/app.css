@@ -404,7 +404,7 @@ button.text-link,
   margin: 0;
   font-size: 1.05rem;
   font-weight: 700;
-  /* コピーしたい需要がなく、ページ地のダブルクリック（イースターエッグ）が
+  /* コピーしたい需要がなく、ページ地のダブルクリック（イースターエッグ）で
      近くの単語選択に広がる副作用の芽をここでも一つ減らしておく */
   user-select: none;
 }
@@ -640,10 +640,9 @@ button.text-link,
 
 /*
  * `.url-input .url-input__reupload-clear`（クラス2つ）にして specificity を上げる。
- * button 要素向けの汎用スタイル（例: dev harness の `.harness button`。クラス1つ+要素1つで
- * 単一クラスの `.url-input__reupload-clear` と同じ specificity になり、ソース順で負けると
- * padding・背景・枠線・文字色が上書きされて × アイコンが枠だけの丸に見えてしまう）に
- * 埋もれないようにする
+ * button 要素向けの汎用スタイル（クラス1つ+要素1つで、単一クラスの
+ * `.url-input__reupload-clear` と同じ specificity になる）にソース順で負けると、
+ * padding・背景・枠線・文字色が上書きされて × アイコンが枠だけの丸に見えてしまう。
  */
 .url-input .url-input__reupload-clear {
   display: inline-flex;
@@ -1092,11 +1091,11 @@ button.text-link,
 }
 
 /*
- * 2クラスにして specificity を上げる（`.page p { margin: 0 0 0.75rem }` と
- * 同じ specificity（クラス1つ+要素1つ）だとソース順で決着してしまい、
- * ファイルの並びを変えるたびに崩れうる。ここでは margin-top: 0.15rem /
- * margin-bottom: 0 を明確に上書きし、行の下側にだけ余白が重なって
- * 上側より大きく見える不具合を直す
+ * `.page-row .page-row__url` / `.page-row .page-row__meta`（2クラス）にして specificity を
+ * 上げる。`.page p { margin: 0 0 0.75rem }` と同じ specificity（クラス1つ+要素1つ）だと
+ * ソース順で決着してしまい、ファイルの並びを変えるたびに崩れうる。ここでは
+ * margin-top / margin-bottom を明示して上書きし、行の下側だけ余白が余分に付いて
+ * 上より大きく見える不具合を防ぐ。
  */
 .page-row .page-row__url {
   margin: 0.15rem 0 0;

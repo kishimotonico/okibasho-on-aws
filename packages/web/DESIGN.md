@@ -272,7 +272,7 @@ components:
 ### アップロード済みページ
 
 - **Heading:** 「アップロード済みページ」。フォームより弱いセクション
-- **Row:** 下線だけ。主表示は slug、副表示は URL と有効期限。行の上下 padding（0.7rem）は対称。副表示（URL・有効期限）は `.page-row .page-row__url` / `.page-row .page-row__meta`（2クラスで specificity を上げている）で margin-top: 0.15rem / margin-bottom: 0 を明示し、`.page p { margin: 0 0 0.75rem }` に specificity 勝負で上書きされて下側だけ margin が余分に付く（上より下の余白が大きく見える）ことを防ぐ
+- **Row:** 下線だけ。主表示は slug、副表示は URL と有効期限。行の上下 padding（0.7rem）は対称。副表示（URL・有効期限）は margin-top: 0.15rem / margin-bottom: 0 で、上より下の余白が大きく見えないようにする
 - **Expiration:** 日本時間の絶対日時を主表示。例: `2026/8/20 21:00 まで（あと2日）`。無期限は「無期限」。期限切れは `期限切れ（yyyy/M/d）`
 - **Direct:** 「ページを開く」「URLをコピー」（icon button + tooltip + aria-label）
 - **Share:** 外部共有中のページは slug の直後に小さな icon button（muted、既存の icon button より一回り小さく、slug の横で主張しない大きさ）を置く。押すとその行の ShareDialog を開く。パスワードを付けているページは lucide `GlobeLock`（Tooltip・aria-label は「外部共有中」）、付けていないページは `Globe`（「外部共有中（パスワードなし）」）で出し分ける。行の高さは共有の有無・パスワードの有無で変えない
@@ -286,9 +286,9 @@ components:
 - **Motion:** チューナーの幾何を rAF 1本で描く。目標に収束し時間駆動がなければループを止める
 - **Error:** idle 形状へ戻る + 短いシェイクと `--danger` のフラッシュ。reduced-motion では色だけ
 - **Click（idle / hover）:** クリックで回転し、ファイル選択ダイアログを開く。uploading 中は開かない。reduced-motion では回転を省略
-- **成功時の蓋の色（DECISION 2.5 からの意図的な変更）:** DECISION 2.5 は「フラップの塗りと蓋のアクセント輪郭（lid）が `--emerald-soft` に染まる」までを success の完了形として定義しているが、今回はこの緑の蓋を採用しない。閉じた蓋のフラップは常に `--well`（白）のままにし、`lidOp` / `lid` ノードの概念自体を実装から外した（`BoxIconAnim` に `lidOp` は無い）。アップロード完了は床の円の緑（線 `--emerald` ＋ `rFill` の `--emerald-soft` 塗り）だけで伝える。理由: ホバーで蓋が開きかけたとき、閉じた蓋の緑とその下に見え始める開口部の陰影が重なって見た目が崩れていたため（ユーザー確認済み）
-- **success 状態のホバー（新規。DECISION 未定義）:** 箱にマウスを乗せると、一番外側のフラップ2枚（`PAIR_B` の `br`/`fl`。閉じたとき上に重なって合わせ目を作る組）だけが少し開きかける。この2枚専用の `closedOuter` の目標値を 1 から `SUCCESS_HOVER_CLOSED_OUTER`（0.82）へ指数補間で戻す（`upload-box-icon.ts` の `stepBoxIconAnim`。success のシーケンスが終わった後、`elapsedMs >= SUCCESS_SEQUENCE_MS` のときだけ hovering を見る）。内側2枚（`bl`/`fr`）の `closed` は 1 のまま動かさない——4枚とも開くとフラップ同士が貫通して見えたため、外側2枚だけにした（ユーザー確認済み）。ホバーを外すと `closedOuter` も 1 へ戻る。reduced-motion では動かさない
-- **success 状態のクリック（新規。DECISION 未定義）:** 「次のファイルを置く」の操作。クリックまたは Enter/Space で、箱がヨー回転（`spinMs` 900ms）しながら success の完了形を逆再生する（`closed` が 1→0 でフラップが開く、紙が `sFloat` の高さへ戻って現れる、床の円の塗りと `--emerald` の線が元に戻る。純粋関数 `openingTarget(params, u)` が u∈[0,1] に対する目標値を返す）。終わったら `onOpened` を呼び、呼び出し側（Composer）がフォームを初期状態に戻す。reduced-motion では演出なしで即時に `onOpened` を呼ぶ。uploading 中のクリックは無効、開くアニメーション中の二度押しは無視する（`openingT0` で管理し、進行中の再クリックを無視）
+- **成功時の蓋の色:** 閉じた蓋のフラップは常に `--well`（白）のまま。DECISION 2.5 は蓋（lidOp）が `--emerald-soft` に染まる仕様だが、ホバーで蓋が開きかけたとき緑と開口部の陰影が重なって見た目が崩れるため採用していない。アップロード完了は床の円の緑（線 `--emerald` ＋ `rFill` の `--emerald-soft` 塗り）だけで伝える
+- **success 状態のホバー:** 箱にマウスを乗せると、一番外側のフラップ2枚（`PAIR_B` の `br`/`fl`。閉じたとき上に重なって合わせ目を作る組）だけが少し開きかける。内側2枚（`bl`/`fr`）は4枚とも開くとフラップ同士が貫通して見えるため動かさない。ホバーを外すと元に戻る。reduced-motion では動かさない
+- **success 状態のクリック:** 「次のファイルを置く」の操作。クリックまたは Enter/Space で、箱がヨー回転しながら success の完了形を逆再生し、終わったらフォームを初期状態に戻す。reduced-motion では演出なしで即時に戻す。uploading 中と、開くアニメーション中の二度押しは無効
 - **アクセシビリティ:** success 状態の箱は `role="button"` / `aria-label="次のファイルを置く"` / `tabIndex=0` を持ち、既存の `Tooltip` コンポーネントで同じラベルを hover / focus-visible に出す。idle / hover / drag / uploading / error では非対話の装飾（`aria-hidden`）のまま
 - **イースターエッグ（未予告）:** 何もないページ地をダブルクリックすると箱が `spin()` で1回転する（ファイル選択は開かない。uploading 中や reduced-motion では既存の `spin()` のガードでそのまま何も起きない）
 - **Favicon:** idle の静的 SVG。CSS 変数は使わずライトパレットの実色を焼き込む

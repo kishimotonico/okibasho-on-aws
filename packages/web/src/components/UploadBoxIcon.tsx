@@ -252,9 +252,9 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
         spinT0 = performance.now();
       };
       /**
-       * success の箱をクリック/Enter・Space したときの「開く」演出（ユーザー決定 3）。
-       * success の一度きりのシーケンス（2.5）を openingTarget() で反転させつつ、
-       * spin は通常のクリック回転と同じ easeInOut(0→360) を spinMs で走らせる。
+       * success の箱をクリック/Enter・Space したときの「開く」演出。
+       * success の一度きりのシーケンスを openingTarget() で反転させつつ、spin は通常の
+       * クリック回転と同じ easeInOut(0→360) を spinMs で走らせる。
        * reduced-motion では回転・演出なしで即時に idle へ戻し onOpened を呼ぶ。
        */
       const startOpening = () => {
@@ -428,10 +428,10 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
       </div>
     );
 
-    // Tooltip は openable の有無にかかわらず常に同じ木構造で包む。box の有無で
-    // 出し分けると、この div がツリー上の型が変わって React に毎回アンマウント/
-    // 再マウントされ、rAF ループが古い（もう画面に無い）svg を更新し続けて
-    // 見た目が真っ白になる。`open` を制御して見せる/見せないだけを切り替える
+    // Tooltip は openable の有無にかかわらず常に同じ木構造で包む。box の有無で出し分けると、
+    // この div がツリー上の型が変わって React に毎回アンマウント/再マウントされ、
+    // rAF ループが古い（もう画面に無い）svg を更新し続けて見た目が真っ白になる。
+    // `open` を制御して見せる/見せないだけを切り替える。
     return (
       <Tooltip label={messages.uploadAnother} open={openable ? undefined : false}>
         {box}

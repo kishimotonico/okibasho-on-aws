@@ -44,10 +44,9 @@ export type BoxIconAnim = {
   dBack: number;
   closed: number;
   /**
-   * 一番外側のフラップ2枚（`PAIR_B` の br/fl）専用の closed。
-   * 通常は `closed` と同値（`target`/`openingTarget` が毎回ミラーする）。
-   * success 完了後のホバーだけ、この値だけを `SUCCESS_HOVER_CLOSED_OUTER` へ寄せて、
-   * 内側2枚（bl/fr）は `closed=1` のまま貫通を避ける。
+   * 一番外側のフラップ2枚（`PAIR_B` の br/fl）専用の closed。通常は `closed` と同値。
+   * success 完了後のホバーだけこの値を寄せて外側2枚を開きかけさせる。内側2枚まで
+   * 一緒に開くと4枚が貫通して見えるため、外側だけを動かす。
    */
   closedOuter: number;
   ringT: number;
@@ -279,18 +278,17 @@ export function idleAnim(p: BoxIconParams): BoxIconAnim {
 }
 
 /**
- * success で箱にホバーしたときに、一番外側のフラップ2枚（`PAIR_B` の br/fl）だけ
- * わずかに開きかける（closedOuter の目標値）。内側2枚（bl/fr）は closed=1 のまま
- * 動かさない（4枚とも開くと貫通して見えるため。ユーザー確認済み）。
- * DECISION 2.2 の bobAmp 同様、見た目で決めた値（モックは 0.94。ここは 0.82）。
+ * success 完了後にホバーしたときの、外側フラップ2枚（closedOuter）の目標値。
+ * 内側2枚は closed=1 のまま動かさない（4枚とも開くと貫通して見えるため）。
  */
 export const SUCCESS_HOVER_CLOSED_OUTER = 0.82;
 
 /**
  * 各状態の目標値。t は状態に入ってからの経過ミリ秒。
  * error はチューナー未定義のため IDLE へ戻す。
- * DECISION 2.5 と異なり、success で蓋をエメラルドに染める lidOp は持たない
- * （ユーザー決定: 閉じた蓋は --well のまま。成功は床の円の緑だけで伝える。詳細は DESIGN.md）。
+ * DECISION 2.5 は success で蓋（lidOp）をエメラルドに染める仕様だが、ここでは採用していない。
+ * ホバーで蓋が開きかけたとき、緑とその下に見え始める開口部の陰影が重なって見た目が崩れたため、
+ * 閉じた蓋のフラップは常に --well のままにし、成功は床の円の緑だけで伝える（DESIGN.md 参照）。
  */
 export function target(p: BoxIconParams, state: BoxIconMotion, t: number): BoxIconAnim {
   const g = idleAnim(p);
@@ -322,7 +320,7 @@ export function target(p: BoxIconParams, state: BoxIconMotion, t: number): BoxIc
     g.ringT = 1;
     g.ringFill = ease((u - 0.6) / 0.4);
   }
-  // closedOuter は常に closed をミラーする（ホバー後の分岐だけ stepBoxIconAnim が上書きする）。
+  // closedOuter は常に closed をミラーする。ホバー後の分岐だけ stepBoxIconAnim が上書きする。
   g.closedOuter = g.closed;
   return g;
 }
@@ -395,10 +393,9 @@ export type StepBoxIconAnimInput = {
  * チューナー render() 1フレーム分。
  * uploading / success、および hover の sheetZ は目標値を直接代入。それ以外は指数補間。
  * spin は easeInOut で 0→360。reduced-motion ではポーズへ即時切替、spin は 0。
- * success のシーケンスが終わったあとだけ、hovering に応じて closedOuter
- * （一番外側のフラップ2枚 br/fl だけ）を SUCCESS_HOVER_CLOSED_OUTER（開きかけ）/ 1（閉じたまま）
- * へ指数補間で寄せる。内側2枚（bl/fr）の closed は 1 で固定し、4枚とも開いて貫通するのを避ける
- * （DECISION 未定義・今回追加。reduced-motion では動かさない）。
+ * success のシーケンスが終わったあとだけ、hovering に応じて closedOuter（外側フラップ2枚）を
+ * SUCCESS_HOVER_CLOSED_OUTER / 1 へ指数補間で寄せる。内側2枚の closed は 1 のまま固定し、
+ * 4枚とも開いて貫通するのを避ける（reduced-motion では動かさない）。
  */
 export function stepBoxIconAnim(input: StepBoxIconAnimInput): BoxIconAnim {
   const { cur, params, motion, elapsedMs, nowMs, spinStartedAt, reducedMotion, hovering } = input;
@@ -447,12 +444,11 @@ export function boxIconAnimNeedsFrames(input: StepBoxIconAnimInput): boolean {
     if (motion === 'success' && elapsedMs < SUCCESS_SEQUENCE_MS) {
       return true;
     }
-    // click 直後、マウント時に一度だけ予約された rAF がまだ発火していないと
-    // ensureRunning() は「既に予約済み」として新しい frame を積まない（そのまま
-    // 既存の予約に乗る）。その古い予約の rAF タイムスタンプ（このフレームの
-    // nowMs）は、直前に performance.now() で取った spinStartedAt よりわずかに
-    // 早いことがあり、素の引き算だと負になって「回転中ではない」と誤判定して
-    // しまう（回転が1フレームも進まず終わるバグ）。0 未満は 0 として扱う
+    // click 直後、まだ発火していない rAF が予約済みのとき ensureRunning() は新しい frame を
+    // 積まず、その古い予約に乗る。その rAF のタイムスタンプ（このフレームの nowMs）は、
+    // 直前に performance.now() で取った spinStartedAt よりわずかに早いことがあり、
+    // 素の引き算だと負になって回転中と判定できなくなる（回転が1フレームも進まず終わるバグ）。
+    // 0 未満は 0 として扱う。
     const spinElapsed = Math.max(0, nowMs - spinStartedAt);
     if (spinElapsed < params.spinMs) {
       return true;
@@ -479,9 +475,7 @@ export type BoxIconOpeningAnim = Pick<
 
 /**
  * success 完了状態からクリックで開くときの、経過分数 u（0〜1）に対する目標値。
- * DECISION に定義はなく、2.5（success）を反転させた今回の追加仕様（ユーザー決定 3）。
- * spin は別途 easeInOut(u) * 360 で計算し、この戻り値には含めない
- * （呼び出し側で spin を合成して1フレーム分の BoxIconAnim を組み立てる）。
+ * spin は別途 easeInOut(u) * 360 で計算し、この戻り値には含めない。
  */
 export function openingTarget(p: BoxIconParams, u: number): BoxIconOpeningAnim {
   const uu = clamp01(u);
@@ -489,7 +483,7 @@ export function openingTarget(p: BoxIconParams, u: number): BoxIconOpeningAnim {
   return {
     sheetOp: clamp01((uu - 0.28) / 0.4),
     closed,
-    // 開くときは4枚とも同じ量で開く（貫通対策は success 完了後のホバーだけの演出）。
+    // 開くときは4枚とも同じ量で開く。貫通対策は success 完了後のホバーだけの演出。
     closedOuter: closed,
     ringFill: 1 - clamp01(uu / 0.5),
     ringT: 1 - clamp01((uu - 0.6) / 0.4),
@@ -665,15 +659,11 @@ export function build(p: BoxIconParams, st: BoxIconAnim): BoxIconScene {
     }
   }
 
-  // ユーザー決定 1: 閉じた蓋は --well のまま。DECISION 2.5 の「蓋が薄緑になる」は採用しない
-  // （成功はフラップと重なって見た目が崩れていたため。床の円の緑だけで伝える。DESIGN.md 参照）。
-
   const closedOuter = st.closedOuter;
 
   SIDES.forEach((s) => {
     const back = s.key === 'bl' || s.key === 'br';
-    // 一番外側の2枚（PAIR_B の br/fl）だけ closedOuter を使う。success 完了後のホバーで
-    // この2枚だけ開きかけ、内側2枚（bl/fr）は closed=1 のまま貫通を避ける（通常は同値）。
+    // 一番外側の2枚（PAIR_B の br/fl）だけ closedOuter を使う（通常は closed と同値）。
     const sideClosed = PAIR_B[s.key] ? closedOuter : closed;
     const len = lerp(back ? p.bLen : p.fLen, 0.5, sideClosed);
     const angDeg = lerp(back ? p.bAng + st.dBack : p.fAng + st.dFront, 0, sideClosed);

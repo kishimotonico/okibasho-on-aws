@@ -311,7 +311,7 @@ describe('openingTarget', () => {
 });
 
 describe('色トークンと viewBox', () => {
-  it('紙は --emerald / --emerald-soft を使う。閉じた蓋は --well のまま（ユーザー決定 1）', () => {
+  it('紙は --emerald / --emerald-soft を使う。閉じた蓋は --well のまま', () => {
     const idle = build(P, idleAnim(P));
     const sheet = idle.items.find((item) => item.type === 'sheet');
     expect(sheet).toMatchObject({
