@@ -13,6 +13,7 @@ export const messages = {
   invalidSlug: '使えるのは小文字の英数字と - _ だけ',
   notHtml: 'HTML 以外は置けません',
   uploaded: '公開しました',
+  uploadedCopyAriaLabel: '公開しました。クリックで公開URLをコピーします',
   uploadFailed: '送れませんでした。もう一度どうぞ。',
   loginRequired: 'ログインが必要です',
   copyUrl: 'URLをコピー',

@@ -220,8 +220,8 @@ components:
 
 - **When:** アップロード成功。箱をクリック（または Enter/Space）して開くまで残す。モーダル・トーストは使わない。連続アップロードはしない（成功中はドロップ・ファイル選択・ドラッグ演出を受け付けない）
 - **Placement:** 箱の直下（案内文・slug 入力・保存期間・ファイル選択リンクはすべて隠す）
-- **Content:** `UrlField`（URL とコピーが一体の表示部品。詳細は後述）、その下の操作列に「外部共有…」（`text-link`。削除アイコンと並べる、控えめな副次操作）と Trash（一覧と同じ `ConfirmAlertDialog`）。ボタン「次のファイルを置く」は持たない（廃止。下記参照）
-- **箱の吹き出し:** アップロード成功時、箱から `success` 種別の吹き出し（emerald 系。「公開しました」）を出す。挙動は Box bubble の `info` と同じ（6 秒自動消去・クリックで閉じる）
+- **Content（1行レイアウト）:** `UrlField`（URL とコピーが一体の表示部品。詳細は後述、伸縮）・「外部共有…」（`button--ghost`。globe アイコン付き）・Trash（一覧と同じ `ConfirmAlertDialog`）を高さ（2.25rem 前後）・角丸 6px・罫線をそろえて1行にまとめ、ひとまとまりに見せる（`upload-result__row`。Trash にも罫 1px の枠を付けて外部共有ボタンと揃える）。40rem 以下では URL 枠が1行目、外部共有・削除が2行目右寄せに回る。ボタン「次のファイルを置く」は持たない（廃止。下記参照）
+- **箱の吹き出し:** アップロード成功時、箱から `success` 種別の吹き出し（emerald 系。「公開しました」＋小さなコピーアイコン）を出す。クリックで今アップロードした公開URLをコピーする（挙動は Box bubble 参照）
 - **次のファイルを置く（箱そのものが導線）:** 専用の `button--ghost`（`upload-result__another`）は廃止した。成功状態の箱自体が「次のファイルを置く」の操作になる。箱にマウスを乗せると蓋が少し開きかけ（`closed` を 1 から 0.9 前後へ戻す）、`Tooltip` で「次のファイルを置く」を出す。箱は `role="button"` / `aria-label="次のファイルを置く"` / `tabIndex=0` / `cursor: pointer` を持ち、クリックまたは Enter/Space で箱がヨー回転（`spinMs` 900ms）しながら蓋が開く（成功アニメーションの逆再生: `closed` が 1→0、紙が戻って現れ、床の円の塗りと `--emerald` の線が元に戻る）。終わったらフォーム を初期状態（乱数 slug・30日・内部のみ・パスワード無し・`flow.reset()`）に戻す。reduced-motion では回転・演出なしで即時にフォームへ戻る。uploading 中の箱クリックは無効、開くアニメーション中の二度押しは無視する。詳細は下記 Box icon 参照
 - **外部共有…:** クリックすると、今アップロードしたページの `ShareDialog` を開く。開閉は route（`routes/index.tsx`）が一元管理し、一覧の kebab から開いた場合と同じ経路・同じ一覧反映（書き込んだ内容で該当行を差し替え）を使う。すでに外部共有中のページを再アップロードしたときも同じボタンで今の設定を開ける
 - **外部公開を今回新しく選んだとき:** 結果ブロックの表示に加えて、`ShareDialog` を自動で開く（アップロード結果の metadata に share を含めて一覧へ差し込んでから開くので、開いた瞬間から一覧と一致し、発行済みの表示で始まる。パスワードを付けていれば共有URL・ユーザー名・パスワードが、付けていなければ共有URLだけがすでに見える）。閉じるのは通常どおり右上の×だけ
@@ -234,7 +234,8 @@ components:
 - **Placement:** 箱アイコンの直下に `position: absolute` で重ねて表示する（通常フローには置かない）。ブランド名や案内文にかぶってよい。三角形のしっぽは中央
 - **Kinds:** `error`（danger 地・シェイクと同時）、`confirm`（上書き確認。紙地）、`success`（アップロード成功。emerald-soft 地。DESIGN のエメラルドは箱アイコンと成功フィードバックにだけ使う原則に合致させた種別）
 - **Overwrite:** 新規アップロードで既存 slug にぶつかったときだけ。「差し替える」「やめる」。保存期間は変わらない旨を短く示す
-- **Dismiss:** × ボタンは持たない。`error` / `success` は吹き出し自体のクリック（`cursor: pointer`）で閉じる。`confirm` は「差し替える」「やめる」でのみ閉じる。`error` / `success` は 6 秒で自動消去（`persist` と confirm とホバー中は消さない）。確認待ち中は2回目のドロップを無視する
+- **success のコピー操作:** 「公開しました」の右に小さな lucide `Copy` アイコン（1.1rem 前後、`currentColor`）を添える。吹き出し自体のクリック（または Enter/Space。`tabIndex=0`）で、今アップロードした公開URLをクリップボードへコピーする。成功したら一瞬 `Check` アイコン＋「コピーしました」に切り替えてからフェードで閉じる（700ms 前後。文言では説明せず形で示す）。失敗したら「URL のコピーに失敗しました」を表示したまま通常の自動消去（6秒）に任せる（`UrlField` / `CopyButton` と同じ失敗表現に寄せる）。説明テキスト（「クリックでコピー」等）は本文に足さず、`aria-label` で支援技術に伝える
+- **Dismiss:** × ボタンは持たない。`error` / コピーを持たない `success` は吹き出し自体のクリック（`cursor: pointer`）で閉じる。コピーを持つ `success` はクリックでコピーしてから閉じる（上記）。`confirm` は「差し替える」「やめる」でのみ閉じる。`error` / `success` は 6 秒で自動消去（`persist` と confirm とホバー中は消さない）。確認待ち中は2回目のドロップを無視する
 - **Motion:** 開閉は `opacity` のフェードのみ（高さのアニメーションはしない）。absolute 重ねのため開閉で下の要素は動かない。reduced-motion では即時
 - **本文の余白:** 本文（ボタン行がある `confirm` も含む）に対して上下左右が均等になるようパディングを揃える
 
@@ -255,7 +256,7 @@ components:
 
 ### UrlField（URL とコピーの統合表示）
 
-- **Role:** URL とコピーをひとつの枠に統合した共通表示部品（`components/UrlField.tsx`）。ShareDialog の共有URLで使う
+- **Role:** URL とコピーをひとつの枠に統合した共通表示部品（`components/UrlField.tsx`）。ShareDialog の共有URLと、成功結果ブロック（UploadResult）の1行レイアウトで使う
 - **Shape:** `.url-input` と同じ系統の一つの枠（罫・角丸・高さ・背景）。枠内に URL を新しいタブで開くリンクとして表示し、右端に枠と一体化したコピーの icon button（`CopyButton` の `icon` variant をそのまま使う）を置く
 - **Truncation:** URL は1行。長い場合は先頭側を省略し、slug / share-id 側（末尾）が見えるようにする
 - **Keyboard:** リンクとコピーボタンはそれぞれ独立にフォーカスでき、focus-visible の見た目は他の入力・ボタンと揃える
@@ -324,7 +325,7 @@ components/Composer.tsx フォームの骨組み。useUploadFlow と useWindowFi
                          PasswordToggle
   PasswordToggle.tsx     パスワードのオン/オフ共通トグル（UploadOptions と ShareDialog で共通）
   PickLinks.tsx          ファイルを選ぶ · フォルダを選ぶ（隠し input を内包）
-  UploadResult.tsx       UrlField・「外部共有…」・削除（確認ダイアログ）。
+  UploadResult.tsx       UrlField・「外部共有…」・削除（確認ダイアログ）を1行にまとめる。
                          「次のファイルを置く」は箱自体の操作になったためボタンは持たない
   UploadBoxIcon.tsx      箱アイコン。success 状態では「次のファイルを置く」の
                          role="button" にもなる（onOpened で開くアニメーション完了を通知）
@@ -337,7 +338,8 @@ components/ShareDialog.tsx 外部共有の発行・作り直し・停止、パ�
                             （「最初の1回だけ表示」の完了画面は持たない）
 components/UrlField.tsx     URL とコピーを一体にした表示部品（ShareDialog / UploadResult で使う）
 components/CopyButton.tsx   URLコピーの共通部品（UploadResult / PageRow / ShareDialog / UrlField で使う）
-components/BoxBubble.tsx    箱の直下の吹き出し（error / confirm / success）
+components/BoxBubble.tsx    箱の直下の吹き出し（error / confirm / success）。
+                            success は onCopy を渡すとクリックで公開URLをコピーする
 components/{AlertDialog,Menu,Tooltip}.tsx  radix-ui のラッパー
 components/UtilityMenu.tsx  右上のログアウトメニュー
 hooks/useUploadFlow.ts     アップロードの状態機械（useReducer）

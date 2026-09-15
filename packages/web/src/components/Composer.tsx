@@ -14,6 +14,7 @@ import { isSlugInvalid, SlugField } from '~/components/SlugField';
 import { UploadBoxIcon } from '~/components/UploadBoxIcon';
 import { UploadOptions, type PageVisibility } from '~/components/UploadOptions';
 import { UploadResult } from '~/components/UploadResult';
+import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 import { usePagesApi } from '~/hooks/usePagesApi';
 import { useUploadFlow } from '~/hooks/useUploadFlow';
 import { useWindowFileDrag } from '~/hooks/useWindowFileDrag';
@@ -63,6 +64,8 @@ export function Composer({
   const composerRef = useRef<HTMLDivElement>(null);
   const slugInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 箱の吹き出し「公開しました」のクリックコピー用
+  const { copy: copyBubbleUrl } = useCopyToClipboard();
 
   const [slug, setSlug] = useState(() => initialSlug ?? generateRandomSlug());
   const [retention, setRetention] = useState<Retention>(DEFAULT_RETENTION);
@@ -188,6 +191,11 @@ export function Composer({
             onClose={flow.dismissNotice}
             onReplace={bubble?.kind === 'confirm' ? flow.replace : undefined}
             onCancel={bubble?.kind === 'confirm' ? flow.cancel : undefined}
+            onCopy={
+              bubble?.kind === 'success' && success
+                ? () => copyBubbleUrl(success.viewUrl)
+                : undefined
+            }
           >
             <UploadBoxIcon
               phase={flow.iconPhase}

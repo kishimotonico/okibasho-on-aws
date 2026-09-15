@@ -17,7 +17,9 @@ interface UploadResultProps {
 }
 
 /**
- * 公開できたあとに箱の下へ残るブロック。URL とコピー、外部共有、削除。
+ * 公開できたあとに箱の下へ残るブロック。URL とコピー、外部共有、削除を1行にまとめる
+ * （高さ・角丸・罫線をそろえて一体に見せる。40rem 以下では URL 枠が1行目、
+ * 外部共有・削除が2行目右寄せに回る）。
  * 「次のファイルを置く」は箱自体の操作になったため、ここにはボタンを持たない
  * （UploadBoxIcon の success クリック → onOpened → Composer がフォームを初期化する）。
  */
@@ -37,34 +39,35 @@ export function UploadResult({ slug, viewUrl, deleting, onDelete, onShare }: Upl
         onConfirm={onDelete}
       />
 
-      <UrlField
-        url={viewUrl}
-        onCopyError={() => setCopyError(messages.copyUrlFailed)}
-        onCopySuccess={() => setCopyError(null)}
-      />
-      {copyError ? <p className="message message--error">{copyError}</p> : null}
-
-      <div className="upload-result__actions">
-        <button
-          type="button"
-          className="button button--ghost upload-result__share"
-          onClick={onShare}
-        >
-          <Globe size={16} strokeWidth={1.75} aria-hidden />
-          <span>{messages.share}</span>
-        </button>
-        <Tooltip label={messages.remove}>
+      <div className="upload-result__row">
+        <UrlField
+          url={viewUrl}
+          onCopyError={() => setCopyError(messages.copyUrlFailed)}
+          onCopySuccess={() => setCopyError(null)}
+        />
+        <div className="upload-result__actions">
           <button
             type="button"
-            className="icon-button upload-result__delete"
-            aria-label={messages.remove}
-            disabled={deleting}
-            onClick={() => setConfirmOpen(true)}
+            className="button button--ghost upload-result__share"
+            onClick={onShare}
           >
-            <Trash2 size={16} strokeWidth={1.75} aria-hidden />
+            <Globe size={16} strokeWidth={1.75} aria-hidden />
+            <span>{messages.share}</span>
           </button>
-        </Tooltip>
+          <Tooltip label={messages.remove}>
+            <button
+              type="button"
+              className="icon-button upload-result__delete"
+              aria-label={messages.remove}
+              disabled={deleting}
+              onClick={() => setConfirmOpen(true)}
+            >
+              <Trash2 size={16} strokeWidth={1.75} aria-hidden />
+            </button>
+          </Tooltip>
+        </div>
       </div>
+      {copyError ? <p className="message message--error">{copyError}</p> : null}
     </div>
   );
 }

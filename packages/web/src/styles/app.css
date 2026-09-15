@@ -466,6 +466,20 @@ button.text-link,
   padding-top: 0.15rem;
 }
 
+/* 1行レイアウト: URL一体枠（伸縮）＋ 外部共有・削除（末尾）。高さ・角丸・罫線をそろえて
+   ひとまとまりに見せる。40rem 以下では stack（レスポンシブ節を参照） */
+.upload-result__row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.upload-result__row .url-field {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
 /* 削除アイコンボタン（2.25rem 角）と高さを揃える。同じ ghost だが控えめに見えるよう、
    padding とフォントサイズを絞る */
 .upload-result__share {
@@ -476,8 +490,11 @@ button.text-link,
   font-weight: 600;
 }
 
+/* 外部共有ボタンと高さ・角丸・罫線をそろえ、1行の中で一体に見えるようにする */
 .upload-result__delete {
   flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
 }
 
 .upload-result__actions {
@@ -486,7 +503,11 @@ button.text-link,
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  margin-top: 0.65rem;
+}
+
+.upload-result__row .upload-result__actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
 }
 
 /* ---------- SlugField（公開URL。固定部分 + slug 入力） ---------- */
@@ -878,6 +899,25 @@ button.text-link,
   font-size: 0.875rem;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+/* success かつコピー操作を持つときだけ、テキストの右にコピーの意図を示す小さなアイコンを添える。
+   文言では説明せず、形（Copy → コピー成功で Check）で伝える */
+.box-bubble__message--copy {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.box-bubble__copy-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  opacity: 0.75;
+}
+
+.box-bubble__panel--copied .box-bubble__copy-icon {
+  opacity: 1;
 }
 
 .box-bubble__actions {
@@ -1366,5 +1406,15 @@ button.text-link,
 
   .url-input__user {
     padding-left: 0.65rem;
+  }
+
+  .upload-result__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .upload-result__row .url-field {
+    flex: 0 0 auto;
+    width: 100%;
   }
 }
