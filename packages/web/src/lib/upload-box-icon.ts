@@ -43,6 +43,13 @@ export type BoxIconAnim = {
   dFront: number;
   dBack: number;
   closed: number;
+  /**
+   * 一番外側のフラップ2枚（`PAIR_B` の br/fl）専用の closed。
+   * 通常は `closed` と同値（`target`/`openingTarget` が毎回ミラーする）。
+   * success 完了後のホバーだけ、この値だけを `SUCCESS_HOVER_CLOSED_OUTER` へ寄せて、
+   * 内側2枚（bl/fr）は `closed=1` のまま貫通を避ける。
+   */
+  closedOuter: number;
   ringT: number;
   ringFill: number;
   ringDash: number;
@@ -64,6 +71,7 @@ const INTERP_KEYS = [
   'dFront',
   'dBack',
   'closed',
+  'closedOuter',
   'ringT',
   'ringFill',
   'ringDash',
@@ -261,6 +269,7 @@ export function idleAnim(p: BoxIconParams): BoxIconAnim {
     dFront: 0,
     dBack: 0,
     closed: 0,
+    closedOuter: 0,
     ringT: 0,
     ringFill: 0,
     ringDash: 0,
@@ -270,10 +279,12 @@ export function idleAnim(p: BoxIconParams): BoxIconAnim {
 }
 
 /**
- * success で箱にホバーしたときに蓋がわずかに開きかける（closed の目標値）。
- * DECISION 2.2 の bobAmp 同様、見た目で決めた値（モックは 0.94。ここは 0.9）。
+ * success で箱にホバーしたときに、一番外側のフラップ2枚（`PAIR_B` の br/fl）だけ
+ * わずかに開きかける（closedOuter の目標値）。内側2枚（bl/fr）は closed=1 のまま
+ * 動かさない（4枚とも開くと貫通して見えるため。ユーザー確認済み）。
+ * DECISION 2.2 の bobAmp 同様、見た目で決めた値（モックは 0.94。ここは 0.82）。
  */
-export const SUCCESS_HOVER_CLOSED = 0.9;
+export const SUCCESS_HOVER_CLOSED_OUTER = 0.82;
 
 /**
  * 各状態の目標値。t は状態に入ってからの経過ミリ秒。
@@ -311,6 +322,8 @@ export function target(p: BoxIconParams, state: BoxIconMotion, t: number): BoxIc
     g.ringT = 1;
     g.ringFill = ease((u - 0.6) / 0.4);
   }
+  // closedOuter は常に closed をミラーする（ホバー後の分岐だけ stepBoxIconAnim が上書きする）。
+  g.closedOuter = g.closed;
   return g;
 }
 
@@ -382,8 +395,9 @@ export type StepBoxIconAnimInput = {
  * チューナー render() 1フレーム分。
  * uploading / success、および hover の sheetZ は目標値を直接代入。それ以外は指数補間。
  * spin は easeInOut で 0→360。reduced-motion ではポーズへ即時切替、spin は 0。
- * success のシーケンスが終わったあとだけ、hovering に応じて closed を
- * SUCCESS_HOVER_CLOSED（開きかけ）/ 1（閉じたまま）へ指数補間で寄せる
+ * success のシーケンスが終わったあとだけ、hovering に応じて closedOuter
+ * （一番外側のフラップ2枚 br/fl だけ）を SUCCESS_HOVER_CLOSED_OUTER（開きかけ）/ 1（閉じたまま）
+ * へ指数補間で寄せる。内側2枚（bl/fr）の closed は 1 で固定し、4枚とも開いて貫通するのを避ける
  * （DECISION 未定義・今回追加。reduced-motion では動かさない）。
  */
 export function stepBoxIconAnim(input: StepBoxIconAnimInput): BoxIconAnim {
@@ -399,8 +413,9 @@ export function stepBoxIconAnim(input: StepBoxIconAnimInput): BoxIconAnim {
     next[key] = assignDirect ? g[key] : lerp(cur[key], g[key], ANIM_CONVERGE_K);
   }
   if (motion === 'success' && elapsedMs >= SUCCESS_SEQUENCE_MS) {
-    const liftTarget = hovering ? SUCCESS_HOVER_CLOSED : 1;
-    next.closed = lerp(cur.closed, liftTarget, ANIM_CONVERGE_K);
+    next.closed = 1;
+    const outerLiftTarget = hovering ? SUCCESS_HOVER_CLOSED_OUTER : 1;
+    next.closedOuter = lerp(cur.closedOuter, outerLiftTarget, ANIM_CONVERGE_K);
   }
   const su = (nowMs - spinStartedAt) / params.spinMs;
   next.spin = su < 1 ? 360 * easeInOut(su) : 0;
@@ -446,6 +461,7 @@ export type BoxIconOpeningAnim = Pick<
   BoxIconAnim,
   | 'sheetOp'
   | 'closed'
+  | 'closedOuter'
   | 'ringFill'
   | 'ringT'
   | 'ringDash'
@@ -463,9 +479,12 @@ export type BoxIconOpeningAnim = Pick<
  */
 export function openingTarget(p: BoxIconParams, u: number): BoxIconOpeningAnim {
   const uu = clamp01(u);
+  const closed = 1 - ease(clamp01((uu - 0.05) / 0.75));
   return {
     sheetOp: clamp01((uu - 0.28) / 0.4),
-    closed: 1 - ease(clamp01((uu - 0.05) / 0.75)),
+    closed,
+    // 開くときは4枚とも同じ量で開く（貫通対策は success 完了後のホバーだけの演出）。
+    closedOuter: closed,
     ringFill: 1 - clamp01(uu / 0.5),
     ringT: 1 - clamp01((uu - 0.6) / 0.4),
     ringDash: 0,
@@ -640,17 +659,18 @@ export function build(p: BoxIconParams, st: BoxIconAnim): BoxIconScene {
     }
   }
 
-  const fAng = lerp(p.fAng + st.dFront, 0, closed);
-  const bAng = lerp(p.bAng + st.dBack, 0, closed);
-  const bLen = lerp(p.bLen, 0.5, closed);
-  const fLen = lerp(p.fLen, 0.5, closed);
   // ユーザー決定 1: 閉じた蓋は --well のまま。DECISION 2.5 の「蓋が薄緑になる」は採用しない
   // （成功はフラップと重なって見た目が崩れていたため。床の円の緑だけで伝える。DESIGN.md 参照）。
 
+  const closedOuter = st.closedOuter;
+
   SIDES.forEach((s) => {
     const back = s.key === 'bl' || s.key === 'br';
-    const len = back ? bLen : fLen;
-    const angDeg = back ? bAng : fAng;
+    // 一番外側の2枚（PAIR_B の br/fl）だけ closedOuter を使う。success 完了後のホバーで
+    // この2枚だけ開きかけ、内側2枚（bl/fr）は closed=1 のまま貫通を避ける（通常は同値）。
+    const sideClosed = PAIR_B[s.key] ? closedOuter : closed;
+    const len = lerp(back ? p.bLen : p.fLen, 0.5, sideClosed);
+    const angDeg = lerp(back ? p.bAng + st.dBack : p.fAng + st.dFront, 0, sideClosed);
     const ang = (angDeg * Math.PI) / 180;
     const d: Vec3 = [-s.n[0] * Math.cos(ang), -s.n[1] * Math.cos(ang), Math.sin(ang)];
     const ca = CORNERS[s.a];
@@ -660,11 +680,11 @@ export function build(p: BoxIconParams, st: BoxIconAnim): BoxIconScene {
     const q3: Quad3 = [h1, h2, add(h2, mul(d, len)), add(h1, mul(d, len))];
     const q = projectQuad(q3, P3);
     push(q);
-    const wFar = lerp(p.wOut, p.wIn, closed);
+    const wFar = lerp(p.wOut, p.wIn, sideClosed);
     items.push({
       type: 'flap',
       key: s.key,
-      depth: depthOf(q3) + (PAIR_B[s.key] ? 1.0 * closed : 0),
+      depth: depthOf(q3) + (PAIR_B[s.key] ? 1.0 * sideClosed : 0),
       angDeg,
       len,
       fill: 'var(--well)',
