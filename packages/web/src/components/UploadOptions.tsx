@@ -99,11 +99,17 @@ export function UploadOptions({
 
       {locked ? (
         <Tooltip label={messages.shareVisibilityLockedHint}>
+          {/*
+           * disabled 属性の要素は pointer イベントを出さず Tooltip が開けないため、
+           * aria-disabled + tabIndex で見た目と操作不可はそのままに、hover / focus は通す
+           */}
           <button
             type="button"
             className="chip"
-            disabled
+            aria-disabled="true"
+            tabIndex={0}
             aria-label={messages.shareVisibilityLocked}
+            onClick={(event) => event.preventDefault()}
           >
             <Globe size={14} strokeWidth={1.75} aria-hidden className="chip__icon" />
             {messages.shareVisibilityLocked}

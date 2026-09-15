@@ -674,11 +674,12 @@ button.text-link,
   white-space: nowrap;
 }
 
-.chip:hover:not(:disabled) {
+.chip:hover:not(:disabled):not([aria-disabled='true']) {
   background: color-mix(in srgb, var(--text) 5%, var(--well));
 }
 
-.chip:disabled {
+.chip:disabled,
+.chip[aria-disabled='true'] {
   cursor: not-allowed;
   color: var(--muted);
 }
