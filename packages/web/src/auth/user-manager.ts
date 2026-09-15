@@ -117,3 +117,17 @@ export function consumeReturnPath(): string {
   sessionStorage.removeItem(RETURN_PATH_KEY);
   return value && value.startsWith('/') ? value : '/';
 }
+
+let signinCallbackPromise: Promise<string> | null = null;
+
+/**
+ * /callback の loader から呼ぶ。StrictMode やルーターの再実行で loader が複数回走っても、
+ * signinCallback（code・code_verifier を使い切る token 交換）は一度しか送らないよう
+ * Promise をモジュールに保持して共有する。
+ */
+export function completeSignInCallbackOnce(): Promise<string> {
+  signinCallbackPromise ??= getUserManager()
+    .signinCallback()
+    .then(() => consumeReturnPath());
+  return signinCallbackPromise;
+}

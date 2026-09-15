@@ -10,7 +10,6 @@ import {
 import type { User, UserManager } from 'oidc-client-ts';
 
 import {
-  consumeReturnPath,
   getLogoutUrl,
   getUserManager,
   saveReturnPath,
@@ -26,7 +25,6 @@ export interface AuthState {
   session: AuthSession | null;
   login: (returnPath?: string) => Promise<void>;
   logout: () => Promise<void>;
-  completeSignInCallback: () => Promise<string>;
 }
 
 const ssrAuthState: AuthState = {
@@ -36,25 +34,19 @@ const ssrAuthState: AuthState = {
   session: null,
   login: async () => {},
   logout: async () => {},
-  completeSignInCallback: async () => '/',
 };
 
 const AuthContext = createContext<AuthState | null>(null);
 
 function ClientAuthProvider({ children }: { children: ReactNode }) {
-  const [userManager, setUserManager] = useState<UserManager | null>(null);
+  // /callback の loader（signinCallback）と同じ userManager を、マウント時点で同期に持つ。
+  // useEffect での後付けだと、loader が userLoaded を発火するタイミングに
+  // このコンポーネントの購読が間に合わない場合がある。
+  const [userManager] = useState<UserManager>(() => getUserManager());
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setUserManager(getUserManager());
-  }, []);
-
-  useEffect(() => {
-    if (!userManager) {
-      return;
-    }
-
     let active = true;
 
     userManager
@@ -89,9 +81,6 @@ function ClientAuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (returnPath?: string) => {
-      if (!userManager) {
-        return;
-      }
       saveReturnPath(returnPath ?? `${window.location.pathname}${window.location.search}`);
       await userManager.signinRedirect();
     },
@@ -99,36 +88,22 @@ function ClientAuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    if (!userManager) {
-      return;
-    }
     // Cognitoは標準のRP-Initiated Logoutに対応していないため、
     // ローカルの状態を消してから独自形式の /logout へ自分で飛ばす
     await userManager.removeUser();
     window.location.assign(getLogoutUrl());
   }, [userManager]);
 
-  const completeSignInCallback = useCallback(async () => {
-    if (!userManager) {
-      return '/';
-    }
-    await userManager.signinCallback();
-    const loaded = await userManager.getUser();
-    setUser(loaded);
-    return consumeReturnPath();
-  }, [userManager]);
-
   const value = useMemo<AuthState>(
     () => ({
-      isLoading: userManager === null || isLoading,
+      isLoading,
       isAuthenticated: user !== null && !user.expired,
       user,
       session: sessionFromUser(user),
       login,
       logout,
-      completeSignInCallback,
     }),
-    [completeSignInCallback, isLoading, login, logout, user, userManager],
+    [isLoading, login, logout, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
