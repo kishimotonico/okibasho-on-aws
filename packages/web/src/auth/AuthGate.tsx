@@ -6,11 +6,7 @@ import { LoadingShell } from '~/components/LoadingShell';
 import { UtilityMenu } from '~/components/UtilityMenu';
 import { messages } from '~/lib/messages';
 
-// 管理UIはチーム内専用でIAMがセキュリティ境界のため、未ログインで見せる画面は用意しない。
-// ここで全ページを一括してログインゲートする（/callback はコールバック処理のため素通し）。
-// UtilityMenu・main も含めてここでまとめて出し分ける（トップページの loader 待ちも
-// isLoading に含める）。DOM 上の位置を1か所に保つことで、認証確認と loader 待ちの
-// 乗り換え時に LoadingShell が作り直されず、弧アニメーションが巻き戻らない
+// 管理UIはチーム内専用でIAMがセキュリティ境界のため、未ログインで見せる画面は用意しない
 export function AuthGate({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const { pathname, isRoutePending } = useRouterState({
@@ -33,6 +29,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
     void auth.login(`${window.location.pathname}${window.location.search}`);
   }, [auth, isCallback]);
 
+  // 認証確認・未ログイン・トップページの loader 待ちを1つの状態にまとめ、常に同じ
+  // LoadingShell インスタンスを描画する（切り替えると弧アニメーションが巻き戻る）
   const isLoading = !isCallback && (auth.isLoading || !auth.isAuthenticated || isRoutePending);
 
   return (
