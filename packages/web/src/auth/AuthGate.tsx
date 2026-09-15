@@ -29,11 +29,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (auth.isLoading || !auth.isAuthenticated) {
-    // この分岐では UtilityMenu・main を描画しないので、LoadingShell 側で main を持つ
+    // この分岐では UtilityMenu を描画しないので、LoadingShell 側で main を持つ。
+    // モバイル幅では UtilityMenu が行を取るため、同じ寸法のプレースホルダーで場所を空けておく
     return (
-      <main className="main">
-        <LoadingShell lead={messages.loadingLead} />
-      </main>
+      <>
+        <div className="utility-menu" aria-hidden>
+          <span className="utility-menu__placeholder" />
+        </div>
+        <main className="main">
+          <LoadingShell lead={messages.loadingLead} />
+        </main>
+      </>
     );
   }
 

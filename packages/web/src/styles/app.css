@@ -1560,6 +1560,14 @@ button.text-link,
   z-index: 20;
 }
 
+/* 読み込み中（AuthGate）は本物のトリガー（.icon-button, 2.25rem角）の代わりに置く、
+   操作できない同寸法のプレースホルダー。モバイル幅で行を取る分の高さを合わせる */
+.utility-menu__placeholder {
+  display: block;
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
 /* ---------- 浮遊レイヤーの開閉アニメーション ---------- */
 
 @keyframes ui-overlay-in {
