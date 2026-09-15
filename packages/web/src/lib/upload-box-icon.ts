@@ -45,8 +45,8 @@ export type BoxIconAnim = {
   closed: number;
   /**
    * 一番外側のフラップ2枚（`PAIR_B` の br/fl）専用の closed。通常は `closed` と同値。
-   * success 完了後のホバーだけこの値を寄せて外側2枚を開きかけさせる。内側2枚まで
-   * 一緒に開くと4枚が貫通して見えるため、外側だけを動かす。
+   * success 完了後のホバーだけこの値を単独で動かして外側2枚を開きかけさせる。
+   * 内側2枚まで一緒に開くと4枚が貫通して見えるため、外側だけにする。
    */
   closedOuter: number;
   ringT: number;
@@ -277,18 +277,12 @@ export function idleAnim(p: BoxIconParams): BoxIconAnim {
   };
 }
 
-/**
- * success 完了後にホバーしたときの、外側フラップ2枚（closedOuter）の目標値。
- * 内側2枚は closed=1 のまま動かさない（4枚とも開くと貫通して見えるため）。
- */
+/** success 完了後にホバーしたときの closedOuter の目標値（closedOuter の説明を参照）。 */
 export const SUCCESS_HOVER_CLOSED_OUTER = 0.82;
 
 /**
  * 各状態の目標値。t は状態に入ってからの経過ミリ秒。
  * error はチューナー未定義のため IDLE へ戻す。
- * DECISION 2.5 は success で蓋（lidOp）をエメラルドに染める仕様だが、ここでは採用していない。
- * ホバーで蓋が開きかけたとき、緑とその下に見え始める開口部の陰影が重なって見た目が崩れたため、
- * 閉じた蓋のフラップは常に --well のままにし、成功は床の円の緑だけで伝える（DESIGN.md 参照）。
  */
 export function target(p: BoxIconParams, state: BoxIconMotion, t: number): BoxIconAnim {
   const g = idleAnim(p);
@@ -393,9 +387,8 @@ export type StepBoxIconAnimInput = {
  * チューナー render() 1フレーム分。
  * uploading / success、および hover の sheetZ は目標値を直接代入。それ以外は指数補間。
  * spin は easeInOut で 0→360。reduced-motion ではポーズへ即時切替、spin は 0。
- * success のシーケンスが終わったあとだけ、hovering に応じて closedOuter（外側フラップ2枚）を
- * SUCCESS_HOVER_CLOSED_OUTER / 1 へ指数補間で寄せる。内側2枚の closed は 1 のまま固定し、
- * 4枚とも開いて貫通するのを避ける（reduced-motion では動かさない）。
+ * success のシーケンスが終わったあとだけ、hovering に応じて closedOuter を
+ * SUCCESS_HOVER_CLOSED_OUTER / 1 へ指数補間で寄せる（reduced-motion では動かさない）。
  */
 export function stepBoxIconAnim(input: StepBoxIconAnimInput): BoxIconAnim {
   const { cur, params, motion, elapsedMs, nowMs, spinStartedAt, reducedMotion, hovering } = input;
@@ -444,11 +437,9 @@ export function boxIconAnimNeedsFrames(input: StepBoxIconAnimInput): boolean {
     if (motion === 'success' && elapsedMs < SUCCESS_SEQUENCE_MS) {
       return true;
     }
-    // click 直後、まだ発火していない rAF が予約済みのとき ensureRunning() は新しい frame を
-    // 積まず、その古い予約に乗る。その rAF のタイムスタンプ（このフレームの nowMs）は、
-    // 直前に performance.now() で取った spinStartedAt よりわずかに早いことがあり、
-    // 素の引き算だと負になって回転中と判定できなくなる（回転が1フレームも進まず終わるバグ）。
-    // 0 未満は 0 として扱う。
+    // ensureRunning() は予約済みの rAF があれば新しく積まないため、spin() 直後のフレームは
+    // spinStartedAt より前のタイムスタンプで来ることがある。負のまま比べると回転が始まらないので
+    // 0 に丸める。
     const spinElapsed = Math.max(0, nowMs - spinStartedAt);
     if (spinElapsed < params.spinMs) {
       return true;
@@ -483,7 +474,7 @@ export function openingTarget(p: BoxIconParams, u: number): BoxIconOpeningAnim {
   return {
     sheetOp: clamp01((uu - 0.28) / 0.4),
     closed,
-    // 開くときは4枚とも同じ量で開く。貫通対策は success 完了後のホバーだけの演出。
+    // 開いている間は4枚とも重ならないので、外側だけ分ける必要はない。
     closedOuter: closed,
     ringFill: 1 - clamp01(uu / 0.5),
     ringT: 1 - clamp01((uu - 0.6) / 0.4),

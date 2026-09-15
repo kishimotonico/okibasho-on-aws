@@ -286,8 +286,8 @@ components:
 - **Motion:** チューナーの幾何を rAF 1本で描く。目標に収束し時間駆動がなければループを止める
 - **Error:** idle 形状へ戻る + 短いシェイクと `--danger` のフラッシュ。reduced-motion では色だけ
 - **Click（idle / hover）:** クリックで回転し、ファイル選択ダイアログを開く。uploading 中は開かない。reduced-motion では回転を省略
-- **成功時の蓋の色:** 閉じた蓋のフラップは常に `--well`（白）のまま。DECISION 2.5 は蓋（lidOp）が `--emerald-soft` に染まる仕様だが、ホバーで蓋が開きかけたとき緑と開口部の陰影が重なって見た目が崩れるため採用していない。アップロード完了は床の円の緑（線 `--emerald` ＋ `rFill` の `--emerald-soft` 塗り）だけで伝える
-- **success 状態のホバー:** 箱にマウスを乗せると、一番外側のフラップ2枚（`PAIR_B` の `br`/`fl`。閉じたとき上に重なって合わせ目を作る組）だけが少し開きかける。内側2枚（`bl`/`fr`）は4枚とも開くとフラップ同士が貫通して見えるため動かさない。ホバーを外すと元に戻る。reduced-motion では動かさない
+- **成功時の蓋の色:** 閉じた蓋のフラップは常に `--well`（白）のまま。アップロード完了は床の円の緑（線 `--emerald` ＋ `rFill` の `--emerald-soft` 塗り）だけで伝える
+- **success 状態のホバー:** 箱にマウスを乗せると、一番外側のフラップ2枚だけが少し開きかける。内側2枚まで開くと4枚が貫通して見えるため動かさない。ホバーを外すと元に戻る。reduced-motion では動かさない
 - **success 状態のクリック:** 「次のファイルを置く」の操作。クリックまたは Enter/Space で、箱がヨー回転しながら success の完了形を逆再生し、終わったらフォームを初期状態に戻す。reduced-motion では演出なしで即時に戻す。uploading 中と、開くアニメーション中の二度押しは無効
 - **アクセシビリティ:** success 状態の箱は `role="button"` / `aria-label="次のファイルを置く"` / `tabIndex=0` を持ち、既存の `Tooltip` コンポーネントで同じラベルを hover / focus-visible に出す。idle / hover / drag / uploading / error では非対話の装飾（`aria-hidden`）のまま
 - **イースターエッグ（未予告）:** 何もないページ地をダブルクリックすると箱が `spin()` で1回転する（ファイル選択は開かない。uploading 中や reduced-motion では既存の `spin()` のガードでそのまま何も起きない）

@@ -166,8 +166,7 @@ export function OptionsHarness() {
 
         <h2>アップロード済みページ（PagesList / PageRow）</h2>
         <p className="harness__note">
-          実際の一覧と同じ `.page` 配下の入れ子で描画する（`.page p` の margin と衝突する
-          specificity バグを再現するため、harness__stage では包まない）。
+          実際の一覧と同じく `.page` の中に置く（`.page p` の margin が効いた状態で確かめるため）。
         </p>
         <div className="page" style={{ background: 'var(--well)', borderRadius: 'var(--radius)' }}>
           <section className="pages-section" aria-labelledby="uploaded-pages-heading">

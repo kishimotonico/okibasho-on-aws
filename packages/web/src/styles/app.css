@@ -404,8 +404,7 @@ button.text-link,
   margin: 0;
   font-size: 1.05rem;
   font-weight: 700;
-  /* コピーしたい需要がなく、ページ地のダブルクリック（イースターエッグ）で
-     近くの単語選択に広がる副作用の芽をここでも一つ減らしておく */
+  /* ページ地をダブルクリックしたとき、近くのこの文字が単語選択されないようにする */
   user-select: none;
 }
 
@@ -638,12 +637,8 @@ button.text-link,
   white-space: nowrap;
 }
 
-/*
- * `.url-input .url-input__reupload-clear`（クラス2つ）にして specificity を上げる。
- * button 要素向けの汎用スタイル（クラス1つ+要素1つで、単一クラスの
- * `.url-input__reupload-clear` と同じ specificity になる）にソース順で負けると、
- * padding・背景・枠線・文字色が上書きされて × アイコンが枠だけの丸に見えてしまう。
- */
+/* button 要素向けの汎用スタイル（要素＋クラス）と同じ詳細度だと padding や枠線を
+   上書きされうるため、2クラスにしておく */
 .url-input .url-input__reupload-clear {
   display: inline-flex;
   flex-shrink: 0;
@@ -1090,13 +1085,8 @@ button.text-link,
   overflow-wrap: anywhere;
 }
 
-/*
- * `.page-row .page-row__url` / `.page-row .page-row__meta`（2クラス）にして specificity を
- * 上げる。`.page p { margin: 0 0 0.75rem }` と同じ specificity（クラス1つ+要素1つ）だと
- * ソース順で決着してしまい、ファイルの並びを変えるたびに崩れうる。ここでは
- * margin-top / margin-bottom を明示して上書きし、行の下側だけ余白が余分に付いて
- * 上より大きく見える不具合を防ぐ。
- */
+/* `.page p` と同じ詳細度だとソース順で勝ち負けが決まってしまうので、
+   2クラスにして行の上下の余白をここで確定させる */
 .page-row .page-row__url {
   margin: 0.15rem 0 0;
   overflow: hidden;

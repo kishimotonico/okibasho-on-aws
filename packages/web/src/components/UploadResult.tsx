@@ -17,11 +17,8 @@ interface UploadResultProps {
 }
 
 /**
- * 公開できたあとに箱の下へ残るブロック。URL とコピー、外部共有、削除を1行にまとめる
- * （高さ・角丸・罫線をそろえて一体に見せる。40rem 以下では URL 枠が1行目、
- * 外部共有・削除が2行目右寄せに回る）。
- * 「次のファイルを置く」は箱自体の操作になったため、ここにはボタンを持たない
- * （UploadBoxIcon の success クリック → onOpened → Composer がフォームを初期化する）。
+ * 公開できたあとに箱の下へ残るブロック。URL とコピー、外部共有、削除を1行にまとめる。
+ * 「次のファイルを置く」は成功状態の箱のクリックが担うため、ここにはボタンを持たない。
  */
 export function UploadResult({ slug, viewUrl, deleting, onDelete, onShare }: UploadResultProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
