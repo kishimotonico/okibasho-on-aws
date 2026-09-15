@@ -31,6 +31,7 @@ export const Route = createFileRoute('/')({
 });
 
 /**
+ * defaultSsr: false（src/start.ts）により常にクライアントでのみ実行される。
  * 一覧は loader では await しない。prefetch を始めるだけにして、
  * Composer はすぐ表示し、一覧セクションだけが後から追いつく。
  * localStorage からの復元（pagesRestored）だけは待つ。待たずに prefetchQuery すると
@@ -38,11 +39,6 @@ export const Route = createFileRoute('/')({
  * 全件取り直すことになる
  */
 async function prefetchPages(): Promise<void> {
-  if (import.meta.env.SSR) {
-    // SPA シェルの生成時は認証も S3 も触らない
-    return;
-  }
-
   // 一覧取得（下の await たち）を待たず、S3・Cognito の SDK チャンクの読み込みだけ並行して始める
   preloadPagesSdk();
 

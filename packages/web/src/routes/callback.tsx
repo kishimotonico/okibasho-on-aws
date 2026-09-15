@@ -4,12 +4,8 @@ import { completeSignInCallbackOnce } from '~/auth/user-manager';
 import { messages } from '~/lib/messages';
 
 export const Route = createFileRoute('/callback')({
-  // 本番ビルドは prerender した _shell.html を CloudFront の Function で
-  // ディープリンクに被せて配信するが、`vite preview` はそれをせず実サーバーで
-  // このルートをSSRする。ssr未指定だとその結果（loaderがSSR側では何もせず
-  // 終わった「成功」状態）がハイドレーション時にそのまま採用され、
-  // クライアントでloaderが再実行されず/callbackが進まなくなる。
-  // ssr: false でSSR自体を止め、常にクライアントで実行させる。
+  // defaultSsr: false（src/start.ts）で全ルート既定になったが、
+  // signinCallback を誤ってサーバーで実行させないための明示
   ssr: false,
   loader: handleCallback,
   component: CallbackPending,
