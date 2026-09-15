@@ -17,9 +17,8 @@ export interface PageMaintenanceProps {
 }
 
 /**
- * share-id → S3 prefix の投影(CloudFront KVS)と、それを正本(meta/配下のmetadataの
- * share フィールド)から作り直すLambda。roadmap.md の cleanup Lambda(期限切れ削除)は
- * この Lambda の定期処理に統合しており、別 Lambda としては作らない。
+ * share-id → S3 prefix の投影(CloudFront KVS)と、期限切れページの削除を担うLambda。
+ * 正本はmeta/配下のmetadataのshareフィールドとexpiresAtで、KVSはそこからの投影にすぎない。
  *
  * 外部共有のエッジ側(share-router.js と /s/* ビヘイビア)は PagesDelivery が持つ。
  * このConstructはKVSへの書き込み経路とページのお掃除(定期処理とそのトリガー)だけを担う。
