@@ -52,7 +52,12 @@ async function prefetchPages(): Promise<void> {
 
   const config = getWebConfig();
   const api = createPagesApi(config, session);
-  void queryClient.prefetchQuery(pagesListQueryOptions(api, session.email));
+  // ここだけ staleTime を 0 にし、リロードのたびに裏で取り直す（ETag 差分なので安い）。
+  // コンポーネント側の useQuery は既定の staleTime のままにして、マウントで二重に取りに行かせない
+  void queryClient.prefetchQuery({
+    ...pagesListQueryOptions(api, session.email),
+    staleTime: 0,
+  });
 }
 
 type PagesAction =

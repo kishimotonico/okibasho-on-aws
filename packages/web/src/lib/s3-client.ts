@@ -78,6 +78,16 @@ function saveCachedCredentials(idToken: string, credentials: PagesCredentials): 
   }
 }
 
+/** ログアウト時、sessionStorage の一時クレデンシャルと S3Client の使い回し（cached）をまとめて消す */
+export function clearPagesCredentialsCache(): void {
+  try {
+    window.sessionStorage.removeItem(CREDENTIALS_STORAGE_KEY);
+  } catch {
+    // 消せなくても次回 GetCredentialsForIdentity するだけなので致命的ではない
+  }
+  cached = null;
+}
+
 function withSessionCredentialsCache(
   idToken: string,
   provider: ReturnType<typeof fromCognitoIdentityPool>,
