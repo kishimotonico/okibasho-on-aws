@@ -309,15 +309,18 @@ components:
 
 ## 依存と構成
 
-UI 部品は radix-ui（DropdownMenu / Tooltip / AlertDialog）を DESIGN のトークンで包んで使う。アイコンは lucide-react。slug 生成と検証、メタデータ型、S3 に対するページ操作（PageStore）は `@okibasho/core` を web から参照する。箱アイコン（`UploadBoxIcon.tsx` / `upload-box-icon.ts`）は自前の幾何なので、ライブラリで置き換えない。幾何の決定値と状態ごとの目標値はコード（`BOX_ICON_PARAMS` / `target`）が正。
+UI 部品は radix-ui（DropdownMenu / Tooltip / AlertDialog）を DESIGN のトークンで包んで使う。アイコンは lucide-react。slug 生成と検証、メタデータ型、S3 に対するページ操作（PageStore）は `@okibasho/core` を web から参照する。箱アイコン（`UploadBoxIcon.tsx` / `upload-box-icon.ts`）は自前の幾何なので、ライブラリで置き換えない。幾何の決定値と状態ごとの目標値はコード（`BOX_ICON_PARAMS` / `target`）が正。一覧の取得・キャッシュは `@tanstack/react-query` に委ね、エラー表示の再試行は `react-error-boundary` の `ErrorBoundary` を使う。
 
 ### ファイル構成
 
 ```
-routes/index.tsx        一覧を loader で取得。route の state（composerSeed / retiredSlug /
-                         highlight / actionError / shareSlug）と useOptimistic を持つ。
-                         ShareDialog もここで開閉する
+routes/index.tsx        一覧の prefetch を loader で始める（await しない）。route の state
+                         （composerSeed / retiredSlug / highlight / actionError / shareSlug）を持つ。
+                         一覧はクエリキャッシュ（useQuery）を唯一の情報源にし、削除・保存期間変更は
+                         先にキャッシュを書き換える楽観更新、アップロード・共有変更は成功後に
+                         書き込んだ内容で該当行を差し替える。ShareDialog もここで開閉する
                          （一覧・成功結果・アップロード直後の自動オープンのどれでも同じ経路）
+routes/__root.tsx        QueryClientProvider（lib/query-client.ts の唯一の QueryClient）を持つ
 routes/callback.tsx      Cognito のログインコールバック
 components/Composer.tsx フォームの骨組み。useUploadFlow と useWindowFileDrag をつなぐ。
                          公開範囲（内部のみ / 外部にも公開）と、パスワードを付けるかどうかの
@@ -334,6 +337,10 @@ components/Composer.tsx フォームの骨組み。useUploadFlow と useWindowFi
   UploadBoxIcon.tsx      箱アイコン。success 状態では「次のファイルを置く」の
                          role="button" にもなる（onOpened で開くアニメーション完了を通知）
   DragOverlay.tsx        ウィンドウ全体のドラッグ強調
+components/PagesSection.tsx 「アップロード済みページ」セクション。見出しはすぐ出し、中身（PagesList）だけを
+                            Suspense（useSuspenseQuery）で待つ。fallback は下線だけのスケルトン。
+                            取得失敗はこのセクション内の ErrorBoundary + QueryErrorResetBoundary で
+                            受け、「再読み込み」でクエリを取り直す
 components/PagesList.tsx 一覧。表示専用（確認ダイアログ・コピー失敗の表示だけ持つ。ShareDialog の開閉は route へ委譲）
   PageRow.tsx             一覧の1行。表示とコールバック。共有中は控えめな icon button（パスワード有り GlobeLock / 無し Globe）を出し、押すと ShareDialog を開く
 components/ShareDialog.tsx 外部共有の発行・作り直し・停止、パスワードの付け外し（Radix Dialog）。
@@ -349,8 +356,13 @@ components/UtilityMenu.tsx  右上のログアウトメニュー
 hooks/useUploadFlow.ts     アップロードの状態機械（useReducer）
 hooks/useWindowFileDrag.ts ウィンドウ全体のドラッグ監視。isDragging だけ返す
 hooks/useCopyToClipboard.ts クリップボードへのコピーと一時表示状態（2秒で idle に戻る）
-hooks/usePagesApi.ts       認証・接続先から PageStore（@okibasho/core）を作り、結果を一覧の行に、失敗を文言にする API
+hooks/usePagesApi.ts       React に依存しない createPagesApi（session / config から PagesApi を作る。
+                            list / find / upload / remove / setRetention / updateShare）と、
+                            それを auth context / env から組み立てる薄いラッパー usePagesApi
 lib/listed-page.ts         metadata を一覧の行（ListedPage。公開URL・保存期間・共有 URL の tag 付き）にする変換と一覧取得
+lib/pages-queries.ts       一覧の queryOptions（queryKey は ['pages', email]）。
+                            loader（prefetchQuery）とコンポーネント（useQuery / useSuspenseQuery）で共有する
+lib/query-client.ts        アプリで唯一の QueryClient
 lib/s3-client.ts           idToken ごとの S3Client のキャッシュと PageStore の生成
 lib/messages.ts            画面に出す日本語の集約
 lib/to-user-message.ts     エラーを画面向けの日本語にする
@@ -358,7 +370,7 @@ lib/to-user-message.ts     エラーを画面向けの日本語にする
 
 ### 状態の置き場所
 
-- **一覧データ**: `routes/index.tsx` の loader で取得し、ローカル state（`basePages`）に入れる。loader が再実行された（初期表示、`PagesLoadError` の「再読み込み」）ときだけ `basePages` を loader の結果へ同期する。`useOptimistic` は `basePages` を土台に削除・保存期間変更を先に画面へ反映し、通信が終わったら一覧全体を取り直さず、書き込んだ内容（削除・保存期間変更・共有変更・アップロードのどれも API 呼び出しの戻り値）で `basePages` の該当行だけを差し替える
+- **一覧データ**: TanStack Query のキャッシュ（`lib/query-client.ts` の QueryClient、queryKey `['pages', email]`）を唯一の情報源にする。`routes/index.tsx` の loader は一覧を await せず `prefetchQuery` を始めるだけ。Composer は suspend しない `useQuery` で読み、まだ無ければ `undefined` として扱う。「アップロード済みページ」の中身だけ `useSuspenseQuery`（`components/PagesSection.tsx`）で待つ。削除・保存期間変更は `queryClient.setQueryData` で先にキャッシュを書き換える楽観更新で、失敗したら元に戻す。アップロード・共有変更は成功後に、書き込んだ内容（API 呼び出しの戻り値）でキャッシュの該当行を差し替える（一覧全体は取り直さない）
 - **route から下ろす合図**: `composerSeed`（再アップロード）・`retiredSlug`（消えたページ）・`highlight`（成功行）は `{ slug, nonce }` の値を props で Composer / PagesList へ渡す。`forwardRef` や `useImperativeHandle` は使わない
 - **ShareDialog の開閉**: `shareSlug`（開いている対象の slug、または `null`）を `routes/index.tsx` が持つ。一覧の kebab「外部共有…」も成功結果の「外部共有…」も同じ `onShare(slug)` を呼ぶだけで、ShareDialog 自体の描画・`pages` からの対象ページの引き直し・保存後の一覧反映（書き込んだ内容で該当行を差し替え）は route 側の一箇所にまとめる。Composer で今回新しく外部公開したときは、`onUploaded` の第2引数に `true` を渡すだけで同じ経路が開く（共有URL・パスワードの有無は ShareDialog が常に一覧の `page.share` から表示するので、値を運ぶ必要が無い）
 - **アップロードの状態**: `useUploadFlow` が `idle / checking / confirming / uploading / success / error` の判別共用体を `useReducer` で持つ。箱の吹き出し（`bubbleOf`）と箱アイコンの phase（`iconPhaseOf`）はこの状態から導出する

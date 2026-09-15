@@ -26,7 +26,6 @@ export const messages = {
 
   /** 一覧 */
   listHeading: 'アップロード済みページ',
-  listLoading: '一覧を読み込み中...',
   listEmpty: 'まだページがありません。上のフォームからアップロードしてください。',
   listLoadFailed: '一覧の取得に失敗しました',
   listReload: '再読み込み',

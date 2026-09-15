@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
 import { createRootRoute, HeadContent, Scripts } from '@tanstack/react-router';
+import { QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthGate } from '~/auth/AuthGate';
 import { AuthProvider } from '~/auth/auth-context';
 import { NotFoundPage } from '~/components/NotFoundPage';
 import { TooltipProvider } from '~/components/Tooltip';
 import { UtilityMenu } from '~/components/UtilityMenu';
+import { queryClient } from '~/lib/query-client';
 import appCss from '~/styles/app.css?url';
 
 export const Route = createRootRoute({
@@ -31,14 +33,16 @@ function RootDocument({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <AuthProvider>
-          <TooltipProvider>
-            <AuthGate>
-              <UtilityMenu />
-              <main className="main">{children}</main>
-            </AuthGate>
-          </TooltipProvider>
-        </AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TooltipProvider>
+              <AuthGate>
+                <UtilityMenu />
+                <main className="main">{children}</main>
+              </AuthGate>
+            </TooltipProvider>
+          </AuthProvider>
+        </QueryClientProvider>
         <Scripts />
       </body>
     </html>

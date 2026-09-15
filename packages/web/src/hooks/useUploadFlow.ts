@@ -150,14 +150,20 @@ function validationMessage(errors: readonly { code: string; message: string }[])
 }
 
 export interface UploadFlowOptions {
-  /** 既存 slug の確認と、差し替えで引き継ぐメタデータの取得元 */
-  pages: readonly ListedPage[];
+  /**
+   * 既存 slug の確認と、差し替えで引き継ぐメタデータの取得元。
+   * まだ一覧が無い（undefined）ときは、submit のたびに api.find で 1 件だけ S3 から読む
+   */
+  pages: readonly ListedPage[] | undefined;
   slug: string;
   retention: Retention;
   /** 公開後の新しい slug や、空欄のときに入れ直した slug をフォームへ返す */
   onSlugChange: (slug: string) => void;
-  /** アップロード結果を一覧の行として渡す。S3 を読み直さず、この内容で一覧の該当行を差し替える */
-  onUploaded: (page: ListedPage) => void;
+  /**
+   * アップロード結果を一覧の行として渡す。S3 を読み直さず、この内容で一覧の該当行を差し替える。
+   * 今回新しく外部公開した場合だけ第2引数が true になる
+   */
+  onUploaded: (page: ListedPage, openShare: boolean) => void;
 }
 
 export interface UploadFlow {
@@ -198,9 +204,16 @@ export function useUploadFlow({
     files: UploadFileEntry[],
     targetSlug: string,
     existing: ListedPage | null,
-    share: PageShare | undefined,
+    proposedShare: PageShare | undefined,
   ): Promise<void> {
     dispatch({ type: 'start', slug: targetSlug, total: files.length });
+
+    // 既存ページが既に外部共有中なら、提案された share は使わず既存を引き継ぐ
+    // （pageMetadataFromListed が existing.share を運ぶので、ここでは undefined を渡せば足りる）。
+    // 「今回新しく外部公開したか」も、提案した share が実際に使われたかどうかで決める
+    const alreadyShared = existing?.share != null;
+    const shareForUpload = alreadyShared ? undefined : proposedShare;
+    const openShare = !alreadyShared && proposedShare !== undefined;
 
     try {
       const result = await api.upload({
@@ -208,13 +221,13 @@ export function useUploadFlow({
         files,
         retention,
         existing: existing ? pageMetadataFromListed(existing) : null,
-        share,
+        share: shareForUpload,
         onProgress: (completed, total) => dispatch({ type: 'progress', completed, total }),
       });
 
       onSlugChange(generateRandomSlug());
       dispatch({ type: 'succeeded', slug: result.slug, viewUrl: result.viewUrl });
-      onUploaded(result);
+      onUploaded(result, openShare);
     } catch (error) {
       dispatch({ type: 'failed', message: userMessage(error) });
     }
@@ -263,8 +276,10 @@ export function useUploadFlow({
       return;
     }
 
-    // 既存かどうかは一覧から分かる。S3 へメタデータを読みに行く必要はない
-    const existing = pages.find((page) => page.slug === targetSlug);
+    // 既存かどうかは一覧があればそこから分かる。無ければ 1 件だけ S3 から読む
+    const existing = pages
+      ? (pages.find((page) => page.slug === targetSlug) ?? null)
+      : await api.find(targetSlug);
     if (existing) {
       dispatch({ type: 'confirm', files: collected.files, slug: targetSlug, existing, share });
       return;
