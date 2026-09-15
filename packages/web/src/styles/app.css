@@ -49,6 +49,13 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* radix のスクロールロックはスクロールバー幅を body の余白で補うが、scrollbar-gutter: stable と
+   二重になり本文が左右にずれるので打ち消す */
+html body[data-scroll-locked] {
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+
 html,
 body {
   margin: 0;
