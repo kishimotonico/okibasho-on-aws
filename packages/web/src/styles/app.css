@@ -1263,7 +1263,10 @@ button.text-link,
   border-radius: 8px;
   font-size: 0.8125rem;
   line-height: 1.4;
-  box-shadow: var(--shadow-overlay);
+  /* box-shadow は本体の矩形にしか掛からず、矩形からはみ出す矢印の手前で影が
+     途切れて段差に見えてしまう。box-shadow ではなく filter: drop-shadow にして、
+     本体＋矢印（子要素）をまとめた描画結果のシルエットに影を落とす */
+  filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--text) 10%, transparent));
   z-index: 40;
   animation: ui-overlay-in 120ms ease-out;
 }
@@ -1274,19 +1277,25 @@ button.text-link,
   height: 8px;
   margin-left: -4px;
   background: var(--raised);
-  border: 1px solid var(--line);
   transform: rotate(45deg);
   z-index: -1;
 }
 
+/* 矢印の border は、本体からはみ出して見える2辺だけに付ける。本体側を向く2辺には
+   border を付けないことで、本体の矩形の border と矢印の border が重なって
+   継ぎ目の線に見えることを防ぐ（Radix の Arrow を使わない代わりの手当て） */
 .ui-tooltip[data-side='top'] .ui-tooltip__arrow {
   left: 50%;
-  bottom: -5px;
+  bottom: -4px;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
 }
 
 .ui-tooltip[data-side='bottom'] .ui-tooltip__arrow {
   left: 50%;
-  top: -5px;
+  top: -4px;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
 }
 
 /* ---------- UtilityMenu（右上の固定メニュー） ---------- */
