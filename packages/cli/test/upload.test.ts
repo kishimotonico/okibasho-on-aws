@@ -2,14 +2,12 @@ import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { isPageMetadata, metadataObjectKey, pageObjectKey } from '@okibasho/core';
 import { ConfigError } from '../src/config.js';
 import { runUpload } from '../src/commands/upload.js';
 import { collectFiles } from '../src/collect-files.js';
-import { metadataObjectKey, pageObjectKey } from '../src/page/s3-keys.js';
-import { isPageMetadata } from '../src/page/metadata.js';
 import { resolveSlug } from '../src/resolve-slug.js';
 import { TokenRefreshError } from '../src/token-refresh.js';
-import { uploadPage } from '../src/upload-client.js';
 import { FakeS3Store, makeIdToken, TEST_CONFIG, TEST_EMAIL } from './fake-s3.js';
 
 async function createHtmlDir(name = 'my-page'): Promise<string> {
@@ -28,7 +26,6 @@ function defaultUploadDeps(store: FakeS3Store) {
     readFile,
     resolveSlug,
     createS3Client: () => store.asClient(),
-    uploadPage,
   };
 }
 
@@ -84,8 +81,6 @@ describe('runUpload', () => {
     store.objects.set(metadataKey, {
       body: Buffer.from(
         JSON.stringify({
-          slug: 'q3-report',
-          owner: TEST_EMAIL,
           createdAt: '2026-01-01T00:00:00.000Z',
           expiresAt: '2026-01-31T00:00:00.000Z',
         }),
@@ -123,8 +118,6 @@ describe('runUpload', () => {
     store.objects.set(metadataKey, {
       body: Buffer.from(
         JSON.stringify({
-          slug: 'already-permanent',
-          owner: TEST_EMAIL,
           createdAt: '2026-01-01T00:00:00.000Z',
           expiresAt: null,
         }),
@@ -147,14 +140,12 @@ describe('runUpload', () => {
     const metadataKey = metadataObjectKey(TEST_EMAIL, 'shared-page');
     const share = {
       id: 'abcdefghijklmnopqrstuv',
-      basic: { username: 'guest', salt: 'saltsaltsaltsaltsaltsa', hash: 'a'.repeat(64) },
-      allowedCidrs: ['203.0.113.0/24'],
+      password: 'k7mq-3xwp-9rtd-h2vn',
+      allowedIps: ['203.0.113.5'],
     };
     store.objects.set(metadataKey, {
       body: Buffer.from(
         JSON.stringify({
-          slug: 'shared-page',
-          owner: TEST_EMAIL,
           createdAt: '2026-01-01T00:00:00.000Z',
           expiresAt: '2026-01-31T00:00:00.000Z',
           share,

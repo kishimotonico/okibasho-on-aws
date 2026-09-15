@@ -1,17 +1,22 @@
-import { isValidSlug, type PageShare } from '@cli/page';
+import {
+  isValidSlug,
+  retentionChangeExpiresAt,
+  type PageShare,
+  type Retention,
+} from '@okibasho/core';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { startTransition, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
+import { useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
 
 import { loadAuthSession } from '~/auth/user-manager';
-import { computeExpiresAt, listPages, type ListedPage, type Retention } from '~/api/pages';
 import { Composer, type ComposerSignal } from '~/components/Composer';
 import { PagesList } from '~/components/PagesList';
 import { ShareDialog } from '~/components/ShareDialog';
 import { getWebConfig } from '~/config/env';
 import { usePagesApi, userMessage } from '~/hooks/usePagesApi';
+import { listPages, type ListedPage } from '~/lib/listed-page';
 import { messages } from '~/lib/messages';
 import { PAGE_HIGHLIGHT_MS, sortPagesByCreatedAt } from '~/lib/page-list-highlight';
-import { getPagesS3Client } from '~/lib/s3-client';
+import { getPageStore } from '~/lib/s3-client';
 
 export const Route = createFileRoute('/')({
   validateSearch: (search: Record<string, unknown>): { slug?: string } => ({
@@ -41,8 +46,7 @@ async function loadPages(): Promise<ListedPage[]> {
   }
 
   const config = getWebConfig();
-  const client = getPagesS3Client(config, session.idToken);
-  const pages = await listPages(client, config.pagesBucket, session.email, config.pagesBaseUrl);
+  const pages = await listPages(getPageStore(config, session), session.email, config.pagesBaseUrl);
   return sortPagesByCreatedAt(pages);
 }
 
@@ -74,9 +78,16 @@ function PagesLoadError() {
 }
 
 type PagesAction =
-  { type: 'remove'; slug: string } | { type: 'retention'; slug: string; retention: Retention };
+  | { type: 'remove'; slug: string }
+  | { type: 'retention'; slug: string; retention: Retention }
+  /** 書き込み成功後、その内容で一覧の該当行を差し替える（無ければ足す） */
+  | { type: 'upsert'; page: ListedPage };
 
-/** 通信の結果を待たずに一覧へ反映する。expiresAt は S3 側と同じ計算で出す */
+/**
+ * 一覧への反映。'remove' / 'retention' は通信の結果を待たずに使う楽観更新で、
+ * expiresAt は S3 側と同じ計算で出す。'upsert' は通信が成功したあと、
+ * 書き込んだ内容で該当行を差し替える（S3 を読み直さない）
+ */
 function applyPagesAction(pages: readonly ListedPage[], action: PagesAction): ListedPage[] {
   switch (action.type) {
     case 'remove':
@@ -87,10 +98,17 @@ function applyPagesAction(pages: readonly ListedPage[], action: PagesAction): Li
           ? {
               ...page,
               retention: action.retention,
-              expiresAt: computeExpiresAt(action.retention, page.createdAt),
+              expiresAt: retentionChangeExpiresAt(action.retention),
             }
           : page,
       );
+    case 'upsert': {
+      const exists = pages.some((page) => page.slug === action.page.slug);
+      const next = exists
+        ? pages.map((page) => (page.slug === action.page.slug ? action.page : page))
+        : [...pages, action.page];
+      return sortPagesByCreatedAt(next);
+    }
   }
 }
 
@@ -100,13 +118,21 @@ function nextSignal(current: ComposerSignal, slug: string): ComposerSignal {
 }
 
 function HomePage() {
-  const router = useRouter();
   const api = usePagesApi();
   const loadedPages = Route.useLoaderData();
   const { slug: initialSlug } = Route.useSearch();
   const uploadSectionRef = useRef<HTMLDivElement>(null);
 
-  const [pages, applyOptimistic] = useOptimistic(loadedPages, applyPagesAction);
+  // 一覧の本体は route のローカル state で持つ。loader は初期表示と手動再読み込み
+  // （PagesLoadError の「再読み込み」）のときだけ走るので、loader が再実行されたら
+  // ここへ同期する。それ以外の書き込み（削除・保存期間変更・共有変更・アップロード）は
+  // 一覧全体を取り直さず、書き込んだ内容でこの state の該当行だけを直接差し替える
+  const [basePages, setBasePages] = useState(loadedPages);
+  useEffect(() => {
+    setBasePages(loadedPages);
+  }, [loadedPages]);
+
+  const [pages, applyOptimistic] = useOptimistic(basePages, applyPagesAction);
   const [isMutating, startMutation] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
   const [composerSeed, setComposerSeed] = useState<ComposerSignal>(null);
@@ -114,10 +140,6 @@ function HomePage() {
   const [highlight, setHighlight] = useState<ComposerSignal>(null);
   // ShareDialog の開閉は一覧・成功結果ブロックのどちらから開いても同じ経路になるよう、ここで一元管理する
   const [shareSlug, setShareSlug] = useState<string | null>(null);
-  // Composer で今回新しく外部公開したときだけ入る。値があれば ShareDialog を完了画面から開く
-  const [shareIssuedCredentials, setShareIssuedCredentials] = useState<
-    { username: string; password: string } | null | undefined
-  >(undefined);
   // pages から都度探すことで、保存後に一覧が更新されるとダイアログの表示（共有URLなど）も追随する
   const sharePage = shareSlug ? (pages.find((page) => page.slug === shareSlug) ?? null) : null;
 
@@ -133,20 +155,23 @@ function HomePage() {
   }, [highlight, highlightVisible]);
 
   /**
-   * 先に画面へ反映し、通信が終わったら loader を呼び直す。
-   * useOptimistic の仮の状態はトランジションが終わるまで残るので、
-   * invalidate を待って本物の一覧と入れ替える。
+   * 先に画面へ反映し、通信が終わったら結果で一覧の本体（basePages）を直す。
+   * useOptimistic の仮の状態はトランジションが終わると basePages に戻るので、
+   * run が返す「書き込んだ内容」を先に basePages へ入れておくことで一覧を取り直さずに済む。
+   * run が何も返さない（削除など）場合は、楽観更新と同じ action を basePages にも適用する。
    */
-  const mutate = (action: PagesAction, run: () => Promise<void>) => {
+  const mutate = (action: PagesAction, run: () => Promise<ListedPage | void>) => {
     startMutation(async () => {
       applyOptimistic(action);
       setActionError(null);
       try {
-        await run();
+        const result = await run();
+        setBasePages((current) =>
+          applyPagesAction(current, result ? { type: 'upsert', page: result } : action),
+        );
       } catch (error) {
         setActionError(userMessage(error));
       }
-      await router.invalidate();
     });
   };
 
@@ -168,28 +193,20 @@ function HomePage() {
 
   /**
    * 外部共有の保存/再発行/停止。ShareDialog がエラーを自前で表示するので、
-   * 一覧の楽観更新（useOptimistic）は使わず、保存が終わった本物の一覧に入れ替えてからダイアログへ返す。
-   * これで発行直後もダイアログの共有URL表示がすぐに一覧の内容と一致する。
+   * 一覧の楽観更新（useOptimistic）は使わない。保存できた内容で一覧の該当行を直接差し替え、
+   * ダイアログはその一覧から自分の対象ページを引き直す（一覧を取り直さなくても表示が食い違わない）。
    */
   const handleShareChange = async (page: ListedPage, share: PageShare | null) => {
-    await api.updateShare(page.slug, share);
-    await router.invalidate();
+    const updated = await api.updateShare(page.slug, share);
+    setBasePages((current) => applyPagesAction(current, { type: 'upsert', page: updated }));
   };
 
-  const handleUploaded = (
-    slug: string,
-    sharedCredentials?: { username: string; password: string } | null,
-  ) => {
-    setHighlight((current) => nextSignal(current, slug));
-    startTransition(async () => {
-      // 今回新しく外部公開した場合は、一覧が新しい share を含むまで待ってから
-      // ShareDialog を完了画面のまま開く（一覧の表示とダイアログを食い違わせない）
-      await router.invalidate();
-      if (sharedCredentials !== undefined) {
-        setShareIssuedCredentials(sharedCredentials);
-        setShareSlug(slug);
-      }
-    });
+  const handleUploaded = (page: ListedPage, openShare?: boolean) => {
+    setHighlight((current) => nextSignal(current, page.slug));
+    setBasePages((current) => applyPagesAction(current, { type: 'upsert', page }));
+    if (openShare) {
+      setShareSlug(page.slug);
+    }
   };
 
   const handleReupload = (slug: string) => {
@@ -198,7 +215,6 @@ function HomePage() {
   };
 
   const handleShare = (slug: string) => {
-    setShareIssuedCredentials(undefined);
     setShareSlug(slug);
   };
 
@@ -236,13 +252,11 @@ function HomePage() {
           onOpenChange={(open) => {
             if (!open) {
               setShareSlug(null);
-              setShareIssuedCredentials(undefined);
             }
           }}
           page={sharePage}
           pagesBaseUrl={api.urlOrigin}
           onSave={(share) => handleShareChange(sharePage, share)}
-          openIssuedCredentials={shareIssuedCredentials}
         />
       ) : null}
     </div>

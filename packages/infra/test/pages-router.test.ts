@@ -129,13 +129,6 @@ describe('pages-router', () => {
     });
   });
 
-  it('.metadata.json は配信せず 404 を返す', () => {
-    const result = handler(makeEvent(`/p/${USER}/${SLUG}/.metadata.json`));
-    expect(result).toMatchObject({
-      statusCode: 404,
-    });
-  });
-
   it('%2f は 404 を返す', () => {
     const result = handler(makeEvent(`/p/${USER}/${SLUG}%2fassets/`));
     expect(result).toMatchObject({

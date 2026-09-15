@@ -1,5 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import type { S3Client } from '@aws-sdk/client-s3';
+import {
+  buildViewUrl,
+  contentTypeFromPath,
+  createPageStore,
+  MAX_FILE_COUNT,
+  MAX_FILE_SIZE,
+  MAX_PAGE_SIZE,
+  type Retention,
+} from '@okibasho/core';
 import { ConfigError, resolveConfig, type ResolvedConfig } from '../config.js';
 import {
   collectFiles,
@@ -8,15 +17,9 @@ import {
   type CollectedFile,
 } from '../collect-files.js';
 import { emailFromIdToken } from '../id-token.js';
-import {
-  contentTypeFromPath,
-  MAX_FILE_COUNT,
-  MAX_FILE_SIZE,
-  MAX_PAGE_SIZE,
-} from '../page/index.js';
 import { InvalidSlugError, resolveSlug } from '../resolve-slug.js';
+import { createS3Client } from '../s3-client.js';
 import { ensureIdToken, TokenRefreshError } from '../token-refresh.js';
-import { createS3Client, uploadPage } from '../upload-client.js';
 
 export interface UploadCommandOptions {
   name?: string;
@@ -31,7 +34,6 @@ export interface UploadDeps {
   readFile: typeof readFile;
   resolveSlug: typeof resolveSlug;
   createS3Client: (config: ResolvedConfig, idToken: string) => S3Client;
-  uploadPage: typeof uploadPage;
 }
 
 export const defaultUploadDeps: UploadDeps = {
@@ -41,7 +43,6 @@ export const defaultUploadDeps: UploadDeps = {
   readFile,
   resolveSlug,
   createS3Client,
-  uploadPage,
 };
 
 export interface UploadResult {
@@ -99,13 +100,13 @@ function validateUploadFiles(files: CollectedFile[]): string[] {
   return errors;
 }
 
-function printDryRun(files: CollectedFile[], slug: string, permanent: boolean): void {
+function printDryRun(files: CollectedFile[], slug: string, retention: Retention): void {
   console.log(`Dry run: ${files.length} file(s) would be uploaded`);
   for (const file of files) {
     console.log(`  ${file.path} (${contentTypeFromPath(file.path)})`);
   }
   console.log(`slug: ${slug}`);
-  console.log(`permanent: ${permanent}`);
+  console.log(`permanent: ${retention === 'permanent'}`);
 }
 
 export async function runUpload(
@@ -147,10 +148,10 @@ export async function runUpload(
     return { exitCode: 1 };
   }
 
-  const permanent = options.permanent === true;
+  const retention: Retention = options.permanent ? 'permanent' : 'temporary';
 
   if (options.dryRun) {
-    printDryRun(collected.files, slug, permanent);
+    printDryRun(collected.files, slug, retention);
     return { exitCode: 0 };
   }
 
@@ -174,20 +175,20 @@ export async function runUpload(
     collected.files.map(async (file) => ({
       path: file.path,
       body: await deps.readFile(file.absolutePath),
-      contentType: contentTypeFromPath(file.path),
     })),
   );
 
   try {
-    const s3 = deps.createS3Client(config, idToken);
-    console.log(`Uploading ${files.length} files...`);
-    const result = await deps.uploadPage(s3, config.bucket, config.pagesBaseUrl, {
+    const store = createPageStore({
+      s3: deps.createS3Client(config, idToken),
+      bucket: config.bucket,
       email,
-      slug,
-      files,
-      permanent,
     });
-    console.log(result.viewUrl);
+    console.log(`Uploading ${files.length} files...`);
+    // 差し替えのとき作成日時・保存期限・共有設定を引き継ぐため、先に既存の metadata を読む
+    const existing = await store.getMetadata(slug);
+    await store.upload(slug, files, { retention, existing });
+    console.log(buildViewUrl(config.pagesBaseUrl, email, slug));
     return { exitCode: 0 };
   } catch (err) {
     console.error(formatUserMessage(err));

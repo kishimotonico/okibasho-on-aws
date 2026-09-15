@@ -1,7 +1,6 @@
-import { generateRandomSlug, isValidSlug, type PageShare } from '@cli/page';
+import { generateRandomSlug, isValidSlug, type PageShare, type Retention } from '@okibasho/core';
 import { useReducer } from 'react';
 
-import { pageMetadataFromListed, type ListedPage, type Retention } from '~/api/pages';
 import { usePagesApi, userMessage } from '~/hooks/usePagesApi';
 import {
   collectUploadFilesFromFileList,
@@ -9,6 +8,7 @@ import {
   type CollectUploadFilesResult,
   type UploadFileEntry,
 } from '~/lib/collect-upload-files';
+import { pageMetadataFromListed, type ListedPage } from '~/lib/listed-page';
 import { messages } from '~/lib/messages';
 import { collectFilesFromDataTransfer } from '~/lib/read-data-transfer';
 import { validateUploadFiles } from '~/lib/validate-upload';
@@ -156,7 +156,8 @@ export interface UploadFlowOptions {
   retention: Retention;
   /** 公開後の新しい slug や、空欄のときに入れ直した slug をフォームへ返す */
   onSlugChange: (slug: string) => void;
-  onUploaded: (slug: string) => void;
+  /** アップロード結果を一覧の行として渡す。S3 を読み直さず、この内容で一覧の該当行を差し替える */
+  onUploaded: (page: ListedPage) => void;
 }
 
 export interface UploadFlow {
@@ -213,7 +214,7 @@ export function useUploadFlow({
 
       onSlugChange(generateRandomSlug());
       dispatch({ type: 'succeeded', slug: result.slug, viewUrl: result.viewUrl });
-      onUploaded(result.slug);
+      onUploaded(result);
     } catch (error) {
       dispatch({ type: 'failed', message: userMessage(error) });
     }

@@ -1,6 +1,8 @@
 import { S3Client } from '@aws-sdk/client-s3';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
+import { createPageStore, type PageStore } from '@okibasho/core';
 
+import type { AuthSession } from '~/auth/user-manager';
 import type { WebConfig } from '~/config/env';
 
 export function cognitoLoginKey(config: WebConfig): string {
@@ -20,6 +22,15 @@ export function getPagesS3Client(config: WebConfig, idToken: string): S3Client {
     cached = { idToken, client: createPagesS3Client(config, idToken) };
   }
   return cached.client;
+}
+
+/** ログイン中のユーザーのページに対する S3 操作 */
+export function getPageStore(config: WebConfig, session: AuthSession): PageStore {
+  return createPageStore({
+    s3: getPagesS3Client(config, session.idToken),
+    bucket: config.pagesBucket,
+    email: session.email,
+  });
 }
 
 export function createPagesS3Client(config: WebConfig, idToken: string): S3Client {

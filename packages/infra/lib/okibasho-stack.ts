@@ -3,8 +3,8 @@ import type { Construct } from 'constructs';
 import { AppDelivery } from './constructs/app-delivery.js';
 import { Auth } from './constructs/auth.js';
 import { PagesDelivery } from './constructs/pages-delivery.js';
+import { PageMaintenance } from './constructs/page-maintenance.js';
 import { PagesStorage } from './constructs/pages-storage.js';
-import { ShareProjection } from './constructs/share-projection.js';
 import type { DomainsConfig } from './config.js';
 
 export interface OkibashoStackProps extends StackProps {
@@ -19,8 +19,9 @@ export interface OkibashoStackProps extends StackProps {
  *   - S3 (private, Public Access Block)
  *   - CloudFront x2 (app / pages) + OAC
  *   - Cognito User Pool + Identity Pool (Web/CLI の 2 App Client)
- *   - CloudFront KeyValueStore + share projector Lambda（外部共有(/s/*)のエッジ投影。ShareProjection）
- *   - EventBridge Rule（15分ごとの安全網）+ S3通知（.metadata.jsonの作成・削除で即時起動）
+ *   - CloudFront KeyValueStore + PageMaintenance Lambda（外部共有(/s/*)のエッジ投影に加え、
+ *     期限切れページの削除も担う。別のcleanup Lambdaは作らない）
+ *   - EventBridge Rule（1時間ごとの安全網 + cleanup）+ S3通知（metadataの作成・削除で即時起動）
  *   - Route 53 / ACM（domains 設定時のみ）
  */
 export class OkibashoStack extends Stack {
@@ -28,13 +29,13 @@ export class OkibashoStack extends Stack {
     super(scope, id, props);
 
     const pagesStorage = new PagesStorage(this, 'PagesStorage');
-    const shareProjection = new ShareProjection(this, 'ShareProjection', {
+    const pageMaintenance = new PageMaintenance(this, 'PageMaintenance', {
       pagesBucket: pagesStorage.bucket,
     });
     const pagesDelivery = new PagesDelivery(this, 'PagesDelivery', {
       bucket: pagesStorage.bucket,
       emailDomain: props.emailDomain,
-      shareKeyValueStore: shareProjection.keyValueStore,
+      shareKeyValueStore: pageMaintenance.keyValueStore,
     });
     const appDelivery = new AppDelivery(this, 'AppDelivery');
 

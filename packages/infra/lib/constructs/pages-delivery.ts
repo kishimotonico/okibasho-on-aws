@@ -54,7 +54,7 @@ export class PagesDelivery extends Construct {
         filePath: join(dirname(fileURLToPath(import.meta.url)), '../functions/share-router.js'),
       }),
       runtime: FunctionRuntime.JS_2_0,
-      comment: 'share: /s/<share-id>/... をKVSで検証しS3キーへrewrite',
+      comment: 'share: /s/<tag><share-id>/... をKVSで検証しS3キーへrewrite',
       keyValueStore: props.shareKeyValueStore,
     });
 
@@ -102,7 +102,7 @@ export class PagesDelivery extends Construct {
       comment: 'pages配信',
       priceClass: PriceClass.PRICE_CLASS_200,
       geoRestriction: GeoRestriction.allowlist('JP'),
-      // IPv4 CIDRでのIP制限(share-router.js)を確実に効かせるためIPv6は無効化する
+      // IPv4完全一致でのIP制限(share-router.js)を確実に効かせるためIPv6は無効化する
       enableIpv6: false,
       defaultBehavior: {
         origin,

@@ -1,11 +1,12 @@
+import type { Retention } from '@okibasho/core';
 import { EllipsisVertical, Globe, GlobeLock, SquareArrowOutUpRight } from 'lucide-react';
 import { useRef } from 'react';
 
-import type { ListedPage, Retention } from '~/api/pages';
 import { CopyButton } from '~/components/CopyButton';
 import { Menu, MenuItem } from '~/components/Menu';
 import { Tooltip } from '~/components/Tooltip';
 import { getExpirationStatus } from '~/lib/expiration-status';
+import type { ListedPage } from '~/lib/listed-page';
 import { messages } from '~/lib/messages';
 
 interface PageRowProps {
@@ -35,9 +36,6 @@ export function PageRow({
   const reuploadSelectedRef = useRef(false);
 
   const expiration = getExpirationStatus(page.expiresAt);
-  const isProtected = Boolean(page.share?.basic) || Boolean(page.share?.allowedCidrs?.length);
-  const shareTooltip = isProtected ? messages.shareActiveProtected : messages.shareActiveOpen;
-  const ShareIcon = isProtected ? GlobeLock : Globe;
   const rowClass = [
     'page-row',
     expiration.kind === 'expired' ? 'page-row--expired' : '',
@@ -52,19 +50,36 @@ export function PageRow({
         <div className="page-row__title">
           <h3>{page.slug}</h3>
           {page.share ? (
-            <Tooltip label={shareTooltip}>
+            <Tooltip
+              label={page.share.password ? messages.shareActive : messages.shareActiveNoPassword}
+            >
               <button
                 type="button"
                 className="page-row__share-button"
-                aria-label={shareTooltip}
+                aria-label={
+                  page.share.password ? messages.shareActive : messages.shareActiveNoPassword
+                }
                 onClick={() => onShare(page)}
               >
-                <ShareIcon size={13} strokeWidth={1.75} aria-hidden />
+                {page.share.password ? (
+                  <GlobeLock size={13} strokeWidth={1.75} aria-hidden />
+                ) : (
+                  <Globe size={13} strokeWidth={1.75} aria-hidden />
+                )}
               </button>
             </Tooltip>
           ) : null}
         </div>
-        <p className="page-row__url">{page.viewUrl}</p>
+        <p className="page-row__url" title={page.viewUrl}>
+          {/*
+           * 長い URL は先頭側を省略し、slug 側（末尾）を見せる。UrlField と同じ扱い:
+           * 外側を direction: rtl にし、中身は dir="ltr" + unicode-bidi: isolate で
+           * 独立した LTR ランにして文字順と末尾の `/` がずれないようにする
+           */}
+          <span className="page-row__url-text" dir="ltr">
+            {page.viewUrl}
+          </span>
+        </p>
         <p
           className={
             expiration.kind === 'expired'

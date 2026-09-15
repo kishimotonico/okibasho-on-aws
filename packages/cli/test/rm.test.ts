@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { metadataObjectKey, pageObjectKey } from '@okibasho/core';
 import { runRm } from '../src/commands/rm.js';
-import { metadataObjectKey, pageObjectKey } from '../src/page/s3-keys.js';
-import { removePage } from '../src/upload-client.js';
 import { FakeS3Store, makeIdToken, TEST_CONFIG, TEST_EMAIL } from './fake-s3.js';
 
 describe('runRm', () => {
@@ -20,7 +19,6 @@ describe('runRm', () => {
       resolveConfig: async () => TEST_CONFIG,
       ensureIdToken: async () => makeIdToken(TEST_EMAIL),
       createS3Client: () => store.asClient(),
-      removePage,
     });
 
     expect(result.exitCode).toBe(0);
@@ -37,7 +35,6 @@ describe('runRm', () => {
       resolveConfig: async () => TEST_CONFIG,
       ensureIdToken: async () => makeIdToken(TEST_EMAIL),
       createS3Client: () => store.asClient(),
-      removePage,
     });
 
     expect(result.exitCode).toBe(0);
@@ -52,7 +49,6 @@ describe('runRm', () => {
       resolveConfig: async () => TEST_CONFIG,
       ensureIdToken: async () => makeIdToken(TEST_EMAIL),
       createS3Client: () => store.asClient(),
-      removePage,
     });
 
     expect(result.exitCode).toBe(1);

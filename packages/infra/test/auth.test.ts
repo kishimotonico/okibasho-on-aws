@@ -128,7 +128,11 @@ describe('Auth', () => {
       Effect: 'Allow',
       Action: ['s3:PutObject', 's3:GetObject', 's3:DeleteObject'],
     });
-    const resourceJoin = readWrite?.Resource as { 'Fn::Join'?: [string, unknown[]] } | undefined;
-    expect(resourceJoin?.['Fn::Join']?.[1]?.[1]).toBe('/pages/${aws:PrincipalTag/email}/*');
+    const resources = readWrite?.Resource as Array<{ 'Fn::Join'?: [string, unknown[]] }>;
+    const resourceSuffixes = resources.map((resource) => resource['Fn::Join']?.[1]?.[1]);
+    expect(resourceSuffixes).toEqual([
+      '/pages/${aws:PrincipalTag/email}/*',
+      '/meta/${aws:PrincipalTag/email}/*',
+    ]);
   });
 });

@@ -4,9 +4,9 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ListedPage } from '~/api/pages';
 import { PagesList } from '~/components/PagesList';
 import { TooltipProvider } from '~/components/Tooltip';
+import type { ListedPage } from '~/lib/listed-page';
 
 function page(slug: string, overrides: Partial<ListedPage> = {}): ListedPage {
   return {
@@ -16,6 +16,7 @@ function page(slug: string, overrides: Partial<ListedPage> = {}): ListedPage {
     expiresAt: '2027-01-01T00:00:00.000Z',
     retention: 'temporary',
     viewUrl: `https://pages.example.com/p/tanaka/${slug}/`,
+    shareTag: 'a'.repeat(11),
     ...overrides,
   };
 }
@@ -175,26 +176,6 @@ describe('PagesList', () => {
     );
   });
 
-  it('30日に戻すで即期限切れになるとき警告文を出す', async () => {
-    const user = userEvent.setup();
-    renderList({
-      pages: [
-        page('old-perm', {
-          retention: 'permanent',
-          expiresAt: null,
-          createdAt: '2026-01-01T00:00:00.000Z',
-        }),
-      ],
-    });
-
-    await user.click(within(rowOf('old-perm')).getByRole('button', { name: 'old-permの操作' }));
-    await user.click(screen.getByRole('menuitem', { name: '30日に戻す' }));
-
-    expect(screen.getByRole('alertdialog')).toHaveTextContent(
-      '30日保存に戻すと、作成から30日以上経過しているため即座に期限切れになります。続行しますか？',
-    );
-  });
-
   it('ページがなければ案内を出す', () => {
     renderList({ pages: [] });
 
@@ -203,40 +184,35 @@ describe('PagesList', () => {
     ).toBeInTheDocument();
   });
 
-  it('外部共有中のページだけ、slug の横に地球儀のボタンを表示する（保護なしは Globe）', () => {
-    renderList({
-      pages: [page('alpha'), page('beta', { share: { id: 'a'.repeat(22) } })],
-    });
-
-    expect(
-      within(rowOf('beta')).getByRole('button', { name: /^外部共有中・誰でも閲覧可/ }),
-    ).toBeInTheDocument();
-    expect(within(rowOf('alpha')).queryByRole('button', { name: /^外部共有中/ })).toBeNull();
-  });
-
-  it('パスワードや IP 制限がある共有は、区別できるよう別のアイコン（GlobeLock）のボタンにする', () => {
+  it('外部共有中のページだけ、slug の横に地球儀のボタンを表示する', () => {
     renderList({
       pages: [
-        page('gamma', {
-          share: {
-            id: 'a'.repeat(22),
-            basic: { username: 'guest', salt: 'b'.repeat(22), hash: 'c'.repeat(64) },
-          },
-        }),
+        page('alpha'),
+        page('beta', { share: { id: 'a'.repeat(22), password: 'k7mq-3xwp-9rtd-h2vn' } }),
       ],
     });
 
+    expect(within(rowOf('beta')).getByRole('button', { name: '外部共有中' })).toBeInTheDocument();
+    expect(within(rowOf('alpha')).queryByRole('button', { name: '外部共有中' })).toBeNull();
+  });
+
+  it('パスワード無しの外部共有はGlobeアイコン・別文言のボタンになる', () => {
+    renderList({
+      pages: [page('gamma', { share: { id: 'a'.repeat(22) } })],
+    });
+
     expect(
-      within(rowOf('gamma')).getByRole('button', {
-        name: /^外部共有中・パスワード \/ IP 制限あり/,
-      }),
+      within(rowOf('gamma')).getByRole('button', { name: '外部共有中（パスワードなし）' }),
     ).toBeInTheDocument();
   });
 
   it('slug 横の地球儀ボタンを押すと、その行の onShare が呼ばれる（ShareDialog を開く）', async () => {
     const user = userEvent.setup();
     const { onShare } = renderList({
-      pages: [page('alpha'), page('beta', { share: { id: 'a'.repeat(22) } })],
+      pages: [
+        page('alpha'),
+        page('beta', { share: { id: 'a'.repeat(22), password: 'k7mq-3xwp-9rtd-h2vn' } }),
+      ],
     });
 
     await user.click(within(rowOf('beta')).getByRole('button', { name: /^外部共有中/ }));

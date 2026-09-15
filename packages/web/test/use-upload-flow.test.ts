@@ -3,8 +3,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ListedPage } from '~/api/pages';
 import { useUploadFlow, type UploadFlowOptions } from '~/hooks/useUploadFlow';
+import type { ListedPage } from '~/lib/listed-page';
 
 const upload = vi.fn();
 
@@ -31,6 +31,7 @@ function listedPage(slug: string): ListedPage {
     expiresAt: null,
     retention: 'permanent',
     viewUrl: `https://pages.example.com/p/tanaka/${slug}/`,
+    shareTag: 'a'.repeat(11),
   };
 }
 
@@ -79,7 +80,10 @@ describe('useUploadFlow', () => {
     expect(upload).toHaveBeenCalledWith(
       expect.objectContaining({ slug: 'my-page', retention: 'temporary', existing: null }),
     );
-    expect(onUploaded).toHaveBeenCalledWith('my-page');
+    expect(onUploaded).toHaveBeenCalledWith({
+      slug: 'my-page',
+      viewUrl: 'https://pages.example.com/p/tanaka/my-page/',
+    });
     expect(result.current.bubble).toEqual({
       kind: 'success',
       message: '公開しました',
@@ -102,7 +106,7 @@ describe('useUploadFlow', () => {
     // 差し替えでは作成日時と保存期限を一覧の行から引き継ぐ
     expect(upload).toHaveBeenCalledWith(
       expect.objectContaining({
-        existing: expect.objectContaining({ slug: 'my-page', expiresAt: null }),
+        existing: expect.objectContaining({ expiresAt: null }),
       }),
     );
   });

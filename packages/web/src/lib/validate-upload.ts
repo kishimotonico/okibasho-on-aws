@@ -1,4 +1,4 @@
-import { MAX_FILE_COUNT, MAX_FILE_SIZE, MAX_PAGE_SIZE, validateUploadPath } from '@cli/page';
+import { MAX_FILE_COUNT, MAX_FILE_SIZE, MAX_PAGE_SIZE, validateUploadPath } from '@okibasho/core';
 
 import { messages } from '~/lib/messages';
 

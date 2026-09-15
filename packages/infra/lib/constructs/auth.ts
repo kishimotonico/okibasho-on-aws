@@ -186,7 +186,7 @@ export class Auth extends Construct {
         resources: [props.pagesBucket.bucketArn],
         conditions: {
           StringLike: {
-            's3:prefix': ['pages/${aws:PrincipalTag/email}/*'],
+            's3:prefix': ['pages/${aws:PrincipalTag/email}/*', 'meta/${aws:PrincipalTag/email}/*'],
           },
         },
       }),
@@ -196,7 +196,10 @@ export class Auth extends Construct {
         sid: 'ReadWriteOwnPages',
         effect: Effect.ALLOW,
         actions: ['s3:PutObject', 's3:GetObject', 's3:DeleteObject'],
-        resources: [props.pagesBucket.arnForObjects('pages/${aws:PrincipalTag/email}/*')],
+        resources: [
+          props.pagesBucket.arnForObjects('pages/${aws:PrincipalTag/email}/*'),
+          props.pagesBucket.arnForObjects('meta/${aws:PrincipalTag/email}/*'),
+        ],
       }),
     );
 

@@ -1,10 +1,10 @@
+import type { Retention } from '@okibasho/core';
 import { useState } from 'react';
 
-import type { ListedPage, Retention } from '~/api/pages';
 import { ConfirmAlertDialog } from '~/components/AlertDialog';
 import { PageRow } from '~/components/PageRow';
+import type { ListedPage } from '~/lib/listed-page';
 import { messages } from '~/lib/messages';
-import { shouldWarnImmediateExpiryOnTemporary } from '~/lib/retention-warning';
 
 type ConfirmState =
   | { kind: 'delete'; page: ListedPage }
@@ -64,14 +64,11 @@ export function PagesList({
       };
     }
 
-    const immediateExpiry = shouldWarnImmediateExpiryOnTemporary(state.page.createdAt);
     return {
       title: messages.retentionDialogTitle,
-      description: immediateExpiry
-        ? messages.retentionDialogImmediateExpiry
-        : messages.retentionDialogDescription,
+      description: messages.retentionDialogDescription,
       confirmLabel: messages.toTemporary,
-      danger: immediateExpiry,
+      danger: false,
       onConfirm: () => {
         setConfirm(null);
         onRetentionChange(state.page, state.nextRetention);

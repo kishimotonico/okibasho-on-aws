@@ -1,22 +1,20 @@
 import type { S3Client } from '@aws-sdk/client-s3';
+import { createPageStore, isValidSlug } from '@okibasho/core';
 import { ConfigError, resolveConfig, type ResolvedConfig } from '../config.js';
 import { emailFromIdToken } from '../id-token.js';
-import { isValidSlug } from '../page/slug.js';
+import { createS3Client } from '../s3-client.js';
 import { ensureIdToken, TokenRefreshError } from '../token-refresh.js';
-import { createS3Client, removePage } from '../upload-client.js';
 
 export interface RmDeps {
   resolveConfig: typeof resolveConfig;
   ensureIdToken: typeof ensureIdToken;
   createS3Client: (config: ResolvedConfig, idToken: string) => S3Client;
-  removePage: typeof removePage;
 }
 
 export const defaultRmDeps: RmDeps = {
   resolveConfig,
   ensureIdToken,
   createS3Client,
-  removePage,
 };
 
 export interface RmResult {
@@ -64,8 +62,12 @@ export async function runRm(slug: string, deps: RmDeps = defaultRmDeps): Promise
   }
 
   try {
-    const s3 = deps.createS3Client(config, idToken);
-    await deps.removePage(s3, config.bucket, email, slug);
+    const store = createPageStore({
+      s3: deps.createS3Client(config, idToken),
+      bucket: config.bucket,
+      email,
+    });
+    await store.remove(slug);
     console.log(`削除しました: ${slug}`);
     return { exitCode: 0 };
   } catch (err) {

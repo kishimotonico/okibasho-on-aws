@@ -1,4 +1,4 @@
-import type { Retention } from '~/api/pages';
+import type { Retention } from '@okibasho/core';
 import { messages } from '~/lib/messages';
 
 interface RetentionToggleProps {

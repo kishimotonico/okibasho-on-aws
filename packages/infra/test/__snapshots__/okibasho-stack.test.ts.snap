@@ -511,6 +511,7 @@ function handler(event) {
                 "StringLike": {
                   "s3:prefix": [
                     "pages/\${aws:PrincipalTag/email}/*",
+                    "meta/\${aws:PrincipalTag/email}/*",
                   ],
                 },
               },
@@ -530,20 +531,36 @@ function handler(event) {
                 "s3:DeleteObject",
               ],
               "Effect": "Allow",
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "PagesStorageBucketDFEB6C7C",
-                        "Arn",
-                      ],
-                    },
-                    "/pages/\${aws:PrincipalTag/email}/*",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/pages/\${aws:PrincipalTag/email}/*",
+                    ],
                   ],
-                ],
-              },
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/meta/\${aws:PrincipalTag/email}/*",
+                    ],
+                  ],
+                },
+              ],
               "Sid": "ReadWriteOwnPages",
             },
           ],
@@ -1273,6 +1290,237 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Role",
     },
+    "PageMaintenanceMaintenanceFunction6D21CD03": {
+      "DependsOn": [
+        "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F",
+        "PageMaintenanceMaintenanceFunctionServiceRole249912DC",
+      ],
+      "Properties": {
+        "Architectures": [
+          "arm64",
+        ],
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "<asset-hash>.zip",
+        },
+        "Description": "page maintenance: meta/配下のmetadataのshareフィールドをCloudFront KVSへ投影し、期限切れページの削除も行う",
+        "Environment": {
+          "Variables": {
+            "KVS_ARN": {
+              "Fn::GetAtt": [
+                "PageMaintenanceShareKeyValueStoreAB6806D3",
+                "Arn",
+              ],
+            },
+            "PAGES_BUCKET": {
+              "Ref": "PagesStorageBucketDFEB6C7C",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "MemorySize": 1024,
+        "ReservedConcurrentExecutions": 1,
+        "Role": {
+          "Fn::GetAtt": [
+            "PageMaintenanceMaintenanceFunctionServiceRole249912DC",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 60,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "PageMaintenanceMaintenanceFunctionEventInvokeConfig2ADCBD5E": {
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PageMaintenanceMaintenanceFunction6D21CD03",
+        },
+        "MaximumEventAgeInSeconds": 300,
+        "MaximumRetryAttempts": 1,
+        "Qualifier": "$LATEST",
+      },
+      "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "PageMaintenanceMaintenanceFunctionServiceRole249912DC": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:GetObject",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "PagesStorageBucketDFEB6C7C",
+                        "Arn",
+                      ],
+                    },
+                    "/meta/*",
+                  ],
+                ],
+              },
+            },
+            {
+              "Action": "s3:DeleteObject",
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/pages/*",
+                    ],
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesStorageBucketDFEB6C7C",
+                          "Arn",
+                        ],
+                      },
+                      "/meta/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": "s3:ListBucket",
+              "Condition": {
+                "StringLike": {
+                  "s3:prefix": [
+                    "meta/*",
+                    "pages/*",
+                  ],
+                },
+              },
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "PagesStorageBucketDFEB6C7C",
+                  "Arn",
+                ],
+              },
+            },
+            {
+              "Action": [
+                "cloudfront-keyvaluestore:DescribeKeyValueStore",
+                "cloudfront-keyvaluestore:ListKeys",
+                "cloudfront-keyvaluestore:UpdateKeys",
+                "cloudfront-keyvaluestore:GetKey",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "PageMaintenanceShareKeyValueStoreAB6806D3",
+                  "Arn",
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F",
+        "Roles": [
+          {
+            "Ref": "PageMaintenanceMaintenanceFunctionServiceRole249912DC",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "PageMaintenanceScheduleRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E3826B2363514": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PageMaintenanceMaintenanceFunction6D21CD03",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "PageMaintenanceScheduleRuleFAEEC66D",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "PageMaintenanceScheduleRuleFAEEC66D": {
+      "Properties": {
+        "Description": "安全網 + cleanup(期限切れ削除・KVS全件突き合わせ)を1時間毎に実行",
+        "ScheduleExpression": "rate(1 hour)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceShareKeyValueStoreAB6806D3": {
+      "Properties": {
+        "Comment": "/s/<tag><share-id>/ -> pages S3キーの投影(正本はmeta/配下のmetadataのshareフィールド)",
+        "Name": "OkibashoPageMaintenanceShareKeyValueStore1FDA5F9B",
+      },
+      "Type": "AWS::CloudFront::KeyValueStore",
+    },
     "PagesDeliveryCachePolicy7BBA6710": {
       "Properties": {
         "CachePolicyConfig": {
@@ -1516,12 +1764,6 @@ function handler(event) {
     };
   }
 
-  var lastSlash = rest.lastIndexOf('/');
-  var lastSegment = rest.substring(lastSlash + 1);
-  if (lastSegment === '.metadata.json') {
-    return notFound();
-  }
-
   if (rest.endsWith('/')) {
     rest += 'index.html';
   }
@@ -1580,10 +1822,9 @@ function buildQueryString(querystring) {
     "PagesDeliveryShareRouterFunction7B8418B9": {
       "Properties": {
         "AutoPublish": true,
-        "FunctionCode": "import crypto from 'crypto';
-import cf from 'cloudfront';
+        "FunctionCode": "import cf from 'cloudfront';
 
-// このKVSはPagesDeliveryが/s/*ビヘイビアに関連付ける。値はshare projectorが投影する
+// このKVSはPagesDeliveryが/s/*ビヘイビアに関連付ける。値はPageMaintenance Lambdaが投影する
 var kvsHandle = cf.kvs();
 
 var ERROR_BODY = 'Not Found';
@@ -1633,41 +1874,38 @@ async function handler(event) {
     }
   }
 
-  var lastSlash = uri.lastIndexOf('/');
-  var lastSegment = uri.substring(lastSlash + 1);
-  if (lastSegment === '.metadata.json') {
+  // id形式(tag11文字+share-id22文字の33文字)・KVS参照
+  if (!/^[A-Za-z0-9_-]{33}$/.test(id)) {
     return notFound();
   }
 
-  // id形式・KVS参照
-  if (!/^[A-Za-z0-9_-]{22}$/.test(id)) {
-    return notFound();
-  }
+  var tag = id.slice(0, 11);
+  var shareId = id.slice(11);
 
   var entry;
   try {
-    var raw = await kvsHandle.get(id);
+    var raw = await kvsHandle.get(tag);
     entry = JSON.parse(raw);
   } catch (e) {
     return notFound();
   }
 
-  if (!entry || typeof entry.p !== 'string') {
+  if (!entry || typeof entry.p !== 'string' || entry.id !== shareId) {
     return notFound();
   }
 
-  // IP制限
-  if (Array.isArray(entry.c) && entry.c.length > 0) {
+  // IP制限。完全一致リストにclientIpが無ければ弾く
+  if (Array.isArray(entry.ips) && entry.ips.length > 0) {
     var clientIp = event.viewer.ip;
-    if (!ipAllowed(clientIp, entry.c)) {
+    if (entry.ips.indexOf(clientIp) === -1) {
       return forbidden();
     }
   }
 
-  // Basic認証
+  // Basic認証。パスワードは付けたときだけentry.bがあり、その場合だけentry.bとの文字列比較で判定する
   if (typeof entry.b === 'string') {
     var authHeader = request.headers.authorization && request.headers.authorization.value;
-    if (!basicAuthOk(authHeader, entry.b)) {
+    if (authHeader !== 'Basic ' + entry.b) {
       return unauthorized();
     }
   }
@@ -1681,110 +1919,6 @@ async function handler(event) {
   request.uri = '/' + prefix + rest;
   delete request.headers.authorization;
   return request;
-}
-
-function ipAllowed(ip, cidrs) {
-  var ipInt = ipv4ToUint32(ip);
-  if (ipInt === null) {
-    return false;
-  }
-  for (var i = 0; i < cidrs.length; i++) {
-    if (ipInCidr(ipInt, cidrs[i])) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/** "a.b.c.d" を符号なし32bit整数に変換する。不正な形式ならnull */
-function ipv4ToUint32(ip) {
-  if (typeof ip !== 'string') {
-    return null;
-  }
-  var octets = ip.split('.');
-  if (octets.length !== 4) {
-    return null;
-  }
-  var n = 0;
-  for (var i = 0; i < 4; i++) {
-    if (!/^\\d{1,3}$/.test(octets[i])) {
-      return null;
-    }
-    var value = Number(octets[i]);
-    if (value > 255) {
-      return null;
-    }
-    n = n * 256 + value;
-  }
-  return n >>> 0;
-}
-
-/** IPv4 CIDR判定。prefixは0〜32を想定し、0は無条件一致として特別扱いする(左シフト32は仕様上0シフト相当になるため) */
-function ipInCidr(ipInt, cidr) {
-  var slash = cidr.lastIndexOf('/');
-  if (slash === -1) {
-    return false;
-  }
-  var baseInt = ipv4ToUint32(cidr.slice(0, slash));
-  var prefix = Number(cidr.slice(slash + 1));
-  if (baseInt === null || !(prefix >= 0 && prefix <= 32) || !Number.isInteger(prefix)) {
-    return false;
-  }
-  if (prefix === 0) {
-    return true;
-  }
-  var mask = (0xffffffff << (32 - prefix)) >>> 0;
-  return (ipInt & mask) >>> 0 === (baseInt & mask) >>> 0;
-}
-
-function basicAuthOk(authHeaderValue, bField) {
-  if (typeof authHeaderValue !== 'string') {
-    return false;
-  }
-  var prefix = 'Basic ';
-  if (authHeaderValue.slice(0, prefix.length) !== prefix) {
-    return false;
-  }
-
-  var decoded;
-  try {
-    decoded = Buffer.from(authHeaderValue.slice(prefix.length), 'base64').toString('utf-8');
-  } catch (e) {
-    return false;
-  }
-
-  var colon = decoded.indexOf(':');
-  if (colon === -1) {
-    return false;
-  }
-  var username = decoded.slice(0, colon);
-  var password = decoded.slice(colon + 1);
-
-  var sep = bField.indexOf(':');
-  if (sep === -1) {
-    return false;
-  }
-  var salt = bField.slice(0, sep);
-  var expectedHash = bField.slice(sep + 1);
-
-  var actualHash = crypto
-    .createHash('sha256')
-    .update(salt + ':' + username + ':' + password)
-    .digest('hex');
-
-  return constantTimeEquals(actualHash, expectedHash);
-}
-
-/** タイミング攻撃を避けるための定数時間比較 */
-function constantTimeEquals(a, b) {
-  if (a.length !== b.length) {
-    return false;
-  }
-  var diff = 0;
-  for (var i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
 }
 
 function notFound() {
@@ -1836,12 +1970,12 @@ function buildQueryString(querystring) {
 }
 ",
         "FunctionConfig": {
-          "Comment": "share: /s/<share-id>/... をKVSで検証しS3キーへrewrite",
+          "Comment": "share: /s/<tag><share-id>/... をKVSで検証しS3キーへrewrite",
           "KeyValueStoreAssociations": [
             {
               "KeyValueStoreARN": {
                 "Fn::GetAtt": [
-                  "ShareProjectionShareKeyValueStore1933799C",
+                  "PageMaintenanceShareKeyValueStoreAB6806D3",
                   "Arn",
                 ],
               },
@@ -1863,12 +1997,12 @@ function buildQueryString(querystring) {
       },
       "Type": "AWS::CloudFront::Function",
     },
-    "PagesStorageBucketAllowBucketNotificationsToOkibashoShareProjectionProjectorFunction0978B34C9F766793": {
+    "PagesStorageBucketAllowBucketNotificationsToOkibashoPageMaintenanceMaintenanceFunctionDC5E382603F84E21": {
       "Properties": {
         "Action": "lambda:InvokeFunction",
         "FunctionName": {
           "Fn::GetAtt": [
-            "ShareProjectionProjectorFunction873BDA55",
+            "PageMaintenanceMaintenanceFunction6D21CD03",
             "Arn",
           ],
         },
@@ -1952,7 +2086,7 @@ function buildQueryString(querystring) {
     },
     "PagesStorageBucketNotifications556F6CD5": {
       "DependsOn": [
-        "PagesStorageBucketAllowBucketNotificationsToOkibashoShareProjectionProjectorFunction0978B34C9F766793",
+        "PagesStorageBucketAllowBucketNotificationsToOkibashoPageMaintenanceMaintenanceFunctionDC5E382603F84E21",
         "PagesStorageBucketNotificationsHandlerPolicyF43DDC22",
         "PagesStorageBucketPolicy0CFFCC9C",
       ],
@@ -1972,18 +2106,18 @@ function buildQueryString(querystring) {
                   "FilterRules": [
                     {
                       "Name": "suffix",
-                      "Value": ".metadata.json",
+                      "Value": ".json",
                     },
                     {
                       "Name": "prefix",
-                      "Value": "pages/",
+                      "Value": "meta/",
                     },
                   ],
                 },
               },
               "LambdaFunctionArn": {
                 "Fn::GetAtt": [
-                  "ShareProjectionProjectorFunction873BDA55",
+                  "PageMaintenanceMaintenanceFunction6D21CD03",
                   "Arn",
                 ],
               },
@@ -1997,18 +2131,18 @@ function buildQueryString(querystring) {
                   "FilterRules": [
                     {
                       "Name": "suffix",
-                      "Value": ".metadata.json",
+                      "Value": ".json",
                     },
                     {
                       "Name": "prefix",
-                      "Value": "pages/",
+                      "Value": "meta/",
                     },
                   ],
                 },
               },
               "LambdaFunctionArn": {
                 "Fn::GetAtt": [
-                  "ShareProjectionProjectorFunction873BDA55",
+                  "PageMaintenanceMaintenanceFunction6D21CD03",
                   "Arn",
                 ],
               },
@@ -2156,28 +2290,6 @@ function buildQueryString(querystring) {
               "Sid": "DenyCloudFrontListOutsidePagesPrefix",
             },
             {
-              "Action": "s3:GetObject",
-              "Effect": "Deny",
-              "Principal": {
-                "Service": "cloudfront.amazonaws.com",
-              },
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "PagesStorageBucketDFEB6C7C",
-                        "Arn",
-                      ],
-                    },
-                    "/pages/*/.metadata.json",
-                  ],
-                ],
-              },
-              "Sid": "DenyCloudFrontGetMetadata",
-            },
-            {
               "Action": [
                 "s3:PutObject*",
                 "s3:DeleteObject*",
@@ -2308,201 +2420,6 @@ function buildQueryString(querystring) {
       },
       "Type": "Custom::CDKBucketDeployment",
       "UpdateReplacePolicy": "Delete",
-    },
-    "ShareProjectionProjectorFunction873BDA55": {
-      "DependsOn": [
-        "ShareProjectionProjectorFunctionServiceRoleDefaultPolicy6B9FBAA5",
-        "ShareProjectionProjectorFunctionServiceRoleBC8C3B11",
-      ],
-      "Properties": {
-        "Architectures": [
-          "arm64",
-        ],
-        "Code": {
-          "S3Bucket": {
-            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
-          },
-          "S3Key": "<asset-hash>.zip",
-        },
-        "Description": "share projector: .metadata.jsonのshareフィールドをCloudFront KVSへ投影する",
-        "Environment": {
-          "Variables": {
-            "KVS_ARN": {
-              "Fn::GetAtt": [
-                "ShareProjectionShareKeyValueStore1933799C",
-                "Arn",
-              ],
-            },
-            "PAGES_BUCKET": {
-              "Ref": "PagesStorageBucketDFEB6C7C",
-            },
-          },
-        },
-        "Handler": "index.handler",
-        "MemorySize": 256,
-        "ReservedConcurrentExecutions": 1,
-        "Role": {
-          "Fn::GetAtt": [
-            "ShareProjectionProjectorFunctionServiceRoleBC8C3B11",
-            "Arn",
-          ],
-        },
-        "Runtime": "nodejs22.x",
-        "Timeout": 60,
-      },
-      "Type": "AWS::Lambda::Function",
-    },
-    "ShareProjectionProjectorFunctionEventInvokeConfigC65417B8": {
-      "Properties": {
-        "FunctionName": {
-          "Ref": "ShareProjectionProjectorFunction873BDA55",
-        },
-        "MaximumEventAgeInSeconds": 300,
-        "MaximumRetryAttempts": 1,
-        "Qualifier": "$LATEST",
-      },
-      "Type": "AWS::Lambda::EventInvokeConfig",
-    },
-    "ShareProjectionProjectorFunctionServiceRoleBC8C3B11": {
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Statement": [
-            {
-              "Action": "sts:AssumeRole",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "lambda.amazonaws.com",
-              },
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-        "ManagedPolicyArns": [
-          {
-            "Fn::Join": [
-              "",
-              [
-                "arn:",
-                {
-                  "Ref": "AWS::Partition",
-                },
-                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-              ],
-            ],
-          },
-        ],
-      },
-      "Type": "AWS::IAM::Role",
-    },
-    "ShareProjectionProjectorFunctionServiceRoleDefaultPolicy6B9FBAA5": {
-      "Properties": {
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Action": "s3:GetObject",
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "PagesStorageBucketDFEB6C7C",
-                        "Arn",
-                      ],
-                    },
-                    "/pages/*/.metadata.json",
-                  ],
-                ],
-              },
-            },
-            {
-              "Action": "s3:ListBucket",
-              "Condition": {
-                "StringLike": {
-                  "s3:prefix": [
-                    "pages/*",
-                  ],
-                },
-              },
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "PagesStorageBucketDFEB6C7C",
-                  "Arn",
-                ],
-              },
-            },
-            {
-              "Action": [
-                "cloudfront-keyvaluestore:DescribeKeyValueStore",
-                "cloudfront-keyvaluestore:ListKeys",
-                "cloudfront-keyvaluestore:UpdateKeys",
-              ],
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "ShareProjectionShareKeyValueStore1933799C",
-                  "Arn",
-                ],
-              },
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-        "PolicyName": "ShareProjectionProjectorFunctionServiceRoleDefaultPolicy6B9FBAA5",
-        "Roles": [
-          {
-            "Ref": "ShareProjectionProjectorFunctionServiceRoleBC8C3B11",
-          },
-        ],
-      },
-      "Type": "AWS::IAM::Policy",
-    },
-    "ShareProjectionSafetyNetRule18DB1459": {
-      "Properties": {
-        "Description": "S3イベントの取りこぼしを拾う安全網(15分毎)",
-        "ScheduleExpression": "rate(15 minutes)",
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::GetAtt": [
-                "ShareProjectionProjectorFunction873BDA55",
-                "Arn",
-              ],
-            },
-            "Id": "Target0",
-          },
-        ],
-      },
-      "Type": "AWS::Events::Rule",
-    },
-    "ShareProjectionSafetyNetRuleAllowEventRuleOkibashoShareProjectionProjectorFunction0978B34C4490DF9F": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "ShareProjectionProjectorFunction873BDA55",
-            "Arn",
-          ],
-        },
-        "Principal": "events.amazonaws.com",
-        "SourceArn": {
-          "Fn::GetAtt": [
-            "ShareProjectionSafetyNetRule18DB1459",
-            "Arn",
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "ShareProjectionShareKeyValueStore1933799C": {
-      "Properties": {
-        "Comment": "/s/<share-id>/ -> pages S3キーの投影(正本は.metadata.jsonのshareフィールド)",
-        "Name": "OkibashoShareProjectionShareKeyValueStore19382CBF",
-      },
-      "Type": "AWS::CloudFront::KeyValueStore",
     },
   },
   "Rules": {

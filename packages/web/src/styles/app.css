@@ -122,14 +122,6 @@ textarea::placeholder {
   font-size: 0.8125rem;
 }
 
-.checkbox-field label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -669,9 +661,15 @@ button.text-link,
 .share-visibility-panel__inner {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.35rem;
   min-height: 0;
   overflow: hidden;
+}
+
+/* Composer の展開パネル内では、パネル自体の gap がまとまりを作るので
+   share-password-toggle 側の上マージンは重ねない（一つの設定に見せる） */
+.share-password-toggle.share-password-toggle--tight {
+  margin-top: 0;
 }
 
 .seg {
@@ -981,9 +979,18 @@ button.text-link,
 
 .page-row__url {
   margin: 0.15rem 0 0;
+  overflow: hidden;
   color: var(--muted);
   font-size: 0.75rem;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* 長い URL は先頭側を省略し、slug 側（末尾）を見せる。UrlField と同じ扱い */
+  direction: rtl;
+  text-align: left;
+}
+
+.page-row__url-text {
+  unicode-bidi: isolate;
 }
 
 .page-row__meta {
@@ -1131,40 +1138,9 @@ button.text-link,
   margin-right: auto;
 }
 
-.share-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  margin-top: 0.9rem;
-}
-
-.share-form__group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  /* チェックボックスの文字の開始位置（入力 + gap 分）に合わせて段下げる */
-  margin-left: 1.5rem;
-  padding-left: 0.75rem;
-  border-left: 1px solid var(--line);
-}
-
-.share-form__row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.share-form__field {
-  flex: 1 1 10rem;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-/* 生成済みパスワードは19文字＋アイコン2つ分、ユーザー名より広めにとる */
-.share-form__field--password {
-  flex: 1.6 1 14rem;
+/* 取り消せない「共有を停止」は、隣の「作り直す」から視覚的に離す */
+.ui-dialog__actions-secondary .text-link--danger {
+  margin-left: 0.75rem;
 }
 
 .share-form__field-label {
@@ -1174,110 +1150,55 @@ button.text-link,
   font-size: 0.8125rem;
 }
 
-/* ---------- 発行済み Basic の読み取り表示・変更モード（.share-form__group の中） ----------
- * 「変更」「取り消す」は常に同じ位置（グループ右上）に置き、切り替えても場所が動かない。
- * 読み取り表示と入力欄はどちらも share-form__group の左端・幅をそのまま使う。
- */
+/* ---------- ShareDialog / Composer のパスワード付け外しトグル ---------- */
 
-.share-form__basic-toggle {
+.share-password-toggle {
   display: flex;
-  justify-content: flex-end;
-}
-
-.share-form__basic-display {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.share-form__basic-value {
-  margin: 0;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
   font-size: 0.875rem;
+  cursor: pointer;
 }
 
-.share-form__basic-value--mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: 0.05em;
+.share-password-toggle input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--text);
+  cursor: pointer;
 }
 
-/* ---------- 生成済みパスワード欄（.url-display と同系統。再生成・コピーの icon button を内側に置く） ---------- */
+/* ---------- ShareDialog のユーザー名・パスワード表示（常時表示。ハッシュ化も一時表示もしない） ---------- */
 
-.share-form__password-input {
-  display: flex;
-  align-items: stretch;
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--raised);
-}
-
-.share-form__password-input:focus-within {
-  outline: 2px solid var(--text);
-  outline-offset: 2px;
-}
-
-.share-form__password-input input[type='text'] {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  /* .url-display__link と同じ font-size にして、内側の icon-button（固定高さ）と枠の高さを揃える */
-  font-size: 0.875rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
-.share-form__password-input input[type='text']:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
-.share-form__password-input .icon-button {
-  flex: 0 0 auto;
-  border-radius: 0;
-}
-
-.share-form__password-input .icon-button:last-child {
-  border-radius: 0 5px 5px 0;
-}
-
-/* ---------- ShareDialog の完了画面（発行・保存が成功すると入れ替わる） ---------- */
-
-.share-complete {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-top: 0.9rem;
-  /* フッター（.ui-dialog__actions）との間を、通常の設定フォーム（.share-form の gap）と揃える */
-  margin-bottom: 0.9rem;
-}
-
-.share-complete__credentials {
+.share-credentials {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  margin-top: 0.4rem;
+  margin-top: 0.6rem;
+  margin-left: 1.5rem;
+  padding-left: 0.75rem;
+  /* チェックボックスの下にぶら下がる形にし、罫線だけで控えめにグルーピングする */
+  border-left: 1px solid var(--line);
 }
 
-.share-complete__field {
+.share-credentials__field {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
 }
 
-.share-complete__value {
+.share-credentials__value {
   margin: 0;
   font-size: 0.875rem;
   overflow-wrap: anywhere;
 }
 
-.share-complete__value--mono {
+.share-credentials__value--mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.05em;
 }
 
-.share-complete__password {
+.share-credentials__password {
   display: flex;
   align-items: center;
   gap: 0.15rem;

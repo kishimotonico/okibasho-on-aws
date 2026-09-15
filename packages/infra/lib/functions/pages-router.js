@@ -50,12 +50,6 @@ function handler(event) {
     };
   }
 
-  var lastSlash = rest.lastIndexOf('/');
-  var lastSegment = rest.substring(lastSlash + 1);
-  if (lastSegment === '.metadata.json') {
-    return notFound();
-  }
-
   if (rest.endsWith('/')) {
     rest += 'index.html';
   }

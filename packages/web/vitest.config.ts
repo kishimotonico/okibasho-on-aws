@@ -9,7 +9,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '~': path.resolve(rootDir, 'src'),
-      '@cli/page': path.resolve(rootDir, '../cli/src/page/index.ts'),
     },
     tsconfigPaths: true,
   },
