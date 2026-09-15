@@ -151,6 +151,15 @@ export function Composer({
   const { state, bubble } = flow;
   const success = state.kind === 'success' ? state : null;
   const busy = state.kind === 'uploading';
+  // 成功状態の箱をクリック/Enter・Spaceで開いたときの「次のファイルを置く」。
+  // 「次のファイルを置く」ボタン（UploadResult）は廃止し、箱自体の操作になった
+  const resetToInitial = () => {
+    setSlug(generateRandomSlug());
+    setRetention(DEFAULT_RETENTION);
+    setVisibility(DEFAULT_VISIBILITY);
+    setWithPassword(false);
+    flow.reset();
+  };
   // 差し替え確認中だけ、どの slug を上書きするのかを danger 系の枠で示す。
   // アップロード中（新規も差し替えも）まで強調すると、新規 slug でも
   // 「この名前が問題」という誤った合図になるため付けない
@@ -191,6 +200,7 @@ export function Composer({
                   fileInputRef.current?.click();
                 }
               }}
+              onOpened={resetToInitial}
             />
           </BoxBubble>
           <p className="composer-brand">okibasho</p>
@@ -202,13 +212,6 @@ export function Composer({
               deleting={deleting}
               onDelete={() => onDelete(success.slug)}
               onShare={() => onShare(success.slug)}
-              onAnother={() => {
-                setSlug(generateRandomSlug());
-                setRetention(DEFAULT_RETENTION);
-                setVisibility(DEFAULT_VISIBILITY);
-                setWithPassword(false);
-                flow.reset();
-              }}
             />
           ) : (
             <>

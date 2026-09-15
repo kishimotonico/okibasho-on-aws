@@ -12,20 +12,16 @@ interface UploadResultProps {
   /** 削除の実行中。ページを消すのは route の仕事なので、状態も上から受ける */
   deleting: boolean;
   onDelete: () => void;
-  onAnother: () => void;
   /** 「外部共有…」。今アップロードしたページの ShareDialog を開く（route 側で一元管理） */
   onShare: () => void;
 }
 
-/** 公開できたあとに箱の下へ残るブロック。URL とコピー、外部共有、削除、次のファイルを置く */
-export function UploadResult({
-  slug,
-  viewUrl,
-  deleting,
-  onDelete,
-  onAnother,
-  onShare,
-}: UploadResultProps) {
+/**
+ * 公開できたあとに箱の下へ残るブロック。URL とコピー、外部共有、削除。
+ * 「次のファイルを置く」は箱自体の操作になったため、ここにはボタンを持たない
+ * （UploadBoxIcon の success クリック → onOpened → Composer がフォームを初期化する）。
+ */
+export function UploadResult({ slug, viewUrl, deleting, onDelete, onShare }: UploadResultProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
 
@@ -69,13 +65,6 @@ export function UploadResult({
           </button>
         </Tooltip>
       </div>
-      <button
-        type="button"
-        className="button button--ghost upload-result__another"
-        onClick={onAnother}
-      >
-        {messages.uploadAnother}
-      </button>
     </div>
   );
 }

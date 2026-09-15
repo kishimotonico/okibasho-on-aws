@@ -466,8 +466,8 @@ button.text-link,
   padding-top: 0.15rem;
 }
 
-/* 削除アイコンボタン（2.25rem 角）と高さを揃える。同じ ghost だが「次のファイルを置く」より
-   小さく控えめに見えるよう、padding とフォントサイズを絞る */
+/* 削除アイコンボタン（2.25rem 角）と高さを揃える。同じ ghost だが控えめに見えるよう、
+   padding とフォントサイズを絞る */
 .upload-result__share {
   gap: 0.4rem;
   height: 2.25rem;
@@ -487,11 +487,6 @@ button.text-link,
   justify-content: center;
   gap: 0.5rem;
   margin-top: 0.65rem;
-}
-
-.upload-result__another {
-  display: flex;
-  margin: 0.85rem auto 0;
 }
 
 /* ---------- SlugField（公開URL。固定部分 + slug 入力） ---------- */
@@ -719,6 +714,12 @@ button.text-link,
   width: 100%;
   height: 100%;
   overflow: visible;
+}
+
+/* success 状態の箱は「次のファイルを置く」の操作。role="button" として押せる見た目にする */
+.upload-box-icon--openable {
+  cursor: pointer;
+  border-radius: 12px;
 }
 
 .upload-box-icon [data-role='outline'],

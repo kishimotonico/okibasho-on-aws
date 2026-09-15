@@ -141,7 +141,7 @@ components:
 
 単一カラム、中央寄せ、最大幅 45rem（720px）。ヘッダー帯はない。ログアウトは右上の小さなユーティリティメニュー。メインは上下 1.75rem / 4rem の余白。狭い画面ではメニューと重ならないよう上余白を足す。
 
-縦の流れ: composer（箱と案内 → ファイルを選ぶ · フォルダを選ぶ → 公開URL → 保存期間）→ アップロード済みページ。成功中は箱の下に結果ブロックと「次のファイルを置く」だけを表示し、案内・slug・保存期間・ファイル選択リンクは隠す。
+縦の流れ: composer（箱と案内 → ファイルを選ぶ · フォルダを選ぶ → 公開URL → 保存期間）→ アップロード済みページ。成功中は箱の下に結果ブロックだけを表示し、案内・slug・保存期間・ファイル選択リンクは隠す（「次のファイルを置く」の専用ボタンは持たず、成功状態の箱自体がその操作になる）。
 
 40rem 以下では公開URLのホスト部分を非表示にし、`/ユーザー名/` と slug 入力を1行に収める。保存期間セグメントは全幅。一覧行は情報と操作を縦に積む。
 
@@ -213,11 +213,11 @@ components:
 
 ### Success result
 
-- **When:** アップロード成功。「次のファイルを置く」を押すまで残す。モーダル・トーストは使わない。連続アップロードはしない（成功中はドロップ・ファイル選択・ドラッグ演出を受け付けない）
+- **When:** アップロード成功。箱をクリック（または Enter/Space）して開くまで残す。モーダル・トーストは使わない。連続アップロードはしない（成功中はドロップ・ファイル選択・ドラッグ演出を受け付けない）
 - **Placement:** 箱の直下（案内文・slug 入力・保存期間・ファイル選択リンクはすべて隠す）
-- **Content:** `UrlField`（URL とコピーが一体の表示部品。詳細は後述）、その下の操作列に「外部共有…」（`text-link`。削除アイコンと並べる、控えめな副次操作）と Trash（一覧と同じ `ConfirmAlertDialog`）
+- **Content:** `UrlField`（URL とコピーが一体の表示部品。詳細は後述）、その下の操作列に「外部共有…」（`text-link`。削除アイコンと並べる、控えめな副次操作）と Trash（一覧と同じ `ConfirmAlertDialog`）。ボタン「次のファイルを置く」は持たない（廃止。下記参照）
 - **箱の吹き出し:** アップロード成功時、箱から `success` 種別の吹き出し（emerald 系。「公開しました」）を出す。挙動は Box bubble の `info` と同じ（6 秒自動消去・クリックで閉じる）
-- **次のファイルを置く:** 結果の下に第二階層の見た目のボタン（`button--ghost`。エメラルドではない）。押すとフォームを初期状態（乱数 slug・30日・案内文・選択リンク）に戻し、箱も idle に戻す
+- **次のファイルを置く（箱そのものが導線）:** 専用の `button--ghost`（`upload-result__another`）は廃止した。成功状態の箱自体が「次のファイルを置く」の操作になる。箱にマウスを乗せると蓋が少し開きかけ（`closed` を 1 から 0.9 前後へ戻す）、`Tooltip` で「次のファイルを置く」を出す。箱は `role="button"` / `aria-label="次のファイルを置く"` / `tabIndex=0` / `cursor: pointer` を持ち、クリックまたは Enter/Space で箱がヨー回転（`spinMs` 900ms）しながら蓋が開く（成功アニメーションの逆再生: `closed` が 1→0、紙が戻って現れ、床の円の塗りと `--emerald` の線が元に戻る）。終わったらフォーム を初期状態（乱数 slug・30日・内部のみ・パスワード無し・`flow.reset()`）に戻す。reduced-motion では回転・演出なしで即時にフォームへ戻る。uploading 中の箱クリックは無効、開くアニメーション中の二度押しは無視する。詳細は下記 Box icon 参照
 - **外部共有…:** クリックすると、今アップロードしたページの `ShareDialog` を開く。開閉は route（`routes/index.tsx`）が一元管理し、一覧の kebab から開いた場合と同じ経路・同じ一覧反映（書き込んだ内容で該当行を差し替え）を使う。すでに外部共有中のページを再アップロードしたときも同じボタンで今の設定を開ける
 - **外部公開を今回新しく選んだとき:** 結果ブロックの表示に加えて、`ShareDialog` を自動で開く（アップロード結果の metadata に share を含めて一覧へ差し込んでから開くので、開いた瞬間から一覧と一致し、発行済みの表示で始まる。パスワードを付けていれば共有URL・ユーザー名・パスワードが、付けていなければ共有URLだけがすでに見える）。閉じるのは通常どおり右上の×だけ
 - **Delete:** AlertDialog で確認してから削除。消したページの slug がフォームに残っていれば乱数に戻す。そのページの成功結果が出ていれば初期状態（フォーム表示）に戻す。一覧から消したときも同じ
@@ -270,10 +270,14 @@ components:
 
 ### Box icon
 
-- **Role:** ブランドマーク、ドロップのアフォーダンス、状態フィードバック（idle / hover / drag / uploading / success / error）
+- **Role:** ブランドマーク、ドロップのアフォーダンス、状態フィードバック（idle / hover / drag / uploading / success / error）。成功後は「次のファイルを置く」の操作でもある
 - **Motion:** チューナーの幾何を rAF 1本で描く。目標に収束し時間駆動がなければループを止める
 - **Error:** idle 形状へ戻る + 短いシェイクと `--danger` のフラッシュ。reduced-motion では色だけ
-- **Click:** idle / hover ではクリックで回転し、ファイル選択ダイアログを開く。uploading 中は開かない。reduced-motion では回転を省略
+- **Click（idle / hover）:** クリックで回転し、ファイル選択ダイアログを開く。uploading 中は開かない。reduced-motion では回転を省略
+- **成功時の蓋の色（DECISION 2.5 からの意図的な変更）:** DECISION 2.5 は「フラップの塗りと蓋のアクセント輪郭（lid）が `--emerald-soft` に染まる」までを success の完了形として定義しているが、今回はこの緑の蓋を採用しない。閉じた蓋のフラップは常に `--well`（白）のままにし、`lidOp` / `lid` ノードの概念自体を実装から外した（`BoxIconAnim` に `lidOp` は無い）。アップロード完了は床の円の緑（線 `--emerald` ＋ `rFill` の `--emerald-soft` 塗り）だけで伝える。理由: ホバーで蓋が開きかけたとき、閉じた蓋の緑とその下に見え始める開口部の陰影が重なって見た目が崩れていたため（ユーザー確認済み）
+- **success 状態のホバー（新規。DECISION 未定義）:** 箱にマウスを乗せると蓋が少し開きかける。`closed` の目標値を 1 から `SUCCESS_HOVER_CLOSED`（0.9）へ指数補間で戻す（`upload-box-icon.ts` の `stepBoxIconAnim`。success のシーケンスが終わった後、`elapsedMs >= SUCCESS_SEQUENCE_MS` のときだけ hovering を見る）。ホバーを外すと 1 へ戻る。reduced-motion では動かさない
+- **success 状態のクリック（新規。DECISION 未定義）:** 「次のファイルを置く」の操作。クリックまたは Enter/Space で、箱がヨー回転（`spinMs` 900ms）しながら success の完了形を逆再生する（`closed` が 1→0 でフラップが開く、紙が `sFloat` の高さへ戻って現れる、床の円の塗りと `--emerald` の線が元に戻る。純粋関数 `openingTarget(params, u)` が u∈[0,1] に対する目標値を返す）。終わったら `onOpened` を呼び、呼び出し側（Composer）がフォームを初期状態に戻す。reduced-motion では演出なしで即時に `onOpened` を呼ぶ。uploading 中のクリックは無効、開くアニメーション中の二度押しは無視する（`openingT0` で管理し、進行中の再クリックを無視）
+- **アクセシビリティ:** success 状態の箱は `role="button"` / `aria-label="次のファイルを置く"` / `tabIndex=0` を持ち、既存の `Tooltip` コンポーネントで同じラベルを hover / focus-visible に出す。idle / hover / drag / uploading / error では非対話の装飾（`aria-hidden`）のまま
 - **Favicon:** idle の静的 SVG。CSS 変数は使わずライトパレットの実色を焼き込む
 
 ### Buttons
@@ -310,7 +314,10 @@ components/Composer.tsx フォームの骨組み。useUploadFlow と useWindowFi
   RetentionToggle.tsx    30日 / 無期限
   VisibilityToggle.tsx   内部のみ / 外部にも公開。対象 slug が共有中なら固定表示になる
   PickLinks.tsx          ファイルを選ぶ · フォルダを選ぶ（隠し input を内包）
-  UploadResult.tsx       UrlField・「外部共有…」・削除（確認ダイアログ）・次のファイルを置く
+  UploadResult.tsx       UrlField・「外部共有…」・削除（確認ダイアログ）。
+                         「次のファイルを置く」は箱自体の操作になったためボタンは持たない
+  UploadBoxIcon.tsx      箱アイコン。success 状態では「次のファイルを置く」の
+                         role="button" にもなる（onOpened で開くアニメーション完了を通知）
   DragOverlay.tsx        ウィンドウ全体のドラッグ強調
 components/PagesList.tsx 一覧。表示専用（確認ダイアログ・コピー失敗の表示だけ持つ。ShareDialog の開閉は route へ委譲）
   PageRow.tsx             一覧の1行。表示とコールバック。共有中は控えめな icon button（パスワード有り GlobeLock / 無し Globe）を出し、押すと ShareDialog を開く
@@ -363,7 +370,7 @@ lib/to-user-message.ts     エラーを画面向けの日本語にする
 - **Do** フォーカスを墨 2px リングで示す
 - **Do** 一覧をフラットな行にし、直接操作は開くとコピー、ほかは kebab にまとめる
 - **Do** 日本語敬体で、フォルダ・公開URL・アップロード済みページの用語に揃える
-- **Do** 成功中はフォームを隠して結果ブロックだけを見せ、「次のファイルを置く」で明示的に戻す
+- **Do** 成功中はフォームを隠して結果ブロックだけを見せ、成功状態の箱を「次のファイルを置く」の操作にして明示的に戻す
 
 ### Don't:
 

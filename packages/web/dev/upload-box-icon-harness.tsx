@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import { BoxBubble, type BoxBubbleKind } from '~/components/BoxBubble';
+import { TooltipProvider } from '~/components/Tooltip';
 import { UploadBoxIcon, type UploadBoxIconHandle } from '~/components/UploadBoxIcon';
 import type { BoxIconMotion, BoxIconPhase } from '~/lib/upload-box-icon';
 
@@ -31,91 +32,96 @@ export function UploadBoxIconHarness() {
   const [bubbleKind, setBubbleKind] = useState<(typeof BUBBLE_KINDS)[number]>('success');
 
   return (
-    <main className="harness">
-      <h1>箱アイコン ハーネス</h1>
-      <p className="harness__note">
-        Vite の serve 専用。本番 dist には含まれない。AuthGate は通らない。
-      </p>
-      <div className="harness__stage">
-        <BoxBubble
-          kind={bubbleKind === 'closed' ? 'success' : bubbleKind}
-          open={bubbleKind !== 'closed'}
-          message={BUBBLE_MESSAGES[bubbleKind === 'closed' ? 'success' : bubbleKind]}
-          onClose={() => setBubbleKind('closed')}
-          onReplace={() => setBubbleKind('closed')}
-          onCancel={() => setBubbleKind('closed')}
-        >
-          <UploadBoxIcon
-            ref={iconRef}
-            phase={phaseOf(motion)}
-            dragging={motion === 'drag'}
-            forceHover={motion === 'hover'}
-            reducedMotion={reducedMotion}
-            size={size}
-          />
-        </BoxBubble>
-      </div>
-      <fieldset>
-        <legend>吹き出し</legend>
-        <div className="harness__row">
-          {BUBBLE_KINDS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={bubbleKind === value}
-              onClick={() => setBubbleKind(value)}
-            >
-              {value}
-            </button>
-          ))}
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend>状態</legend>
-        <div className="harness__row">
-          {MOTIONS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={motion === value}
-              onClick={() => setMotion(value)}
-            >
-              {value}
-            </button>
-          ))}
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend>サイズ</legend>
-        <div className="harness__row">
-          {SIZES.map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={size === value}
-              onClick={() => setSize(value)}
-            >
-              {value}px
-            </button>
-          ))}
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend>操作</legend>
-        <div className="harness__row">
-          <button type="button" onClick={() => iconRef.current?.spin()}>
-            クリック回転
-          </button>
-          <label>
-            <input
-              type="checkbox"
-              checked={reducedMotion}
-              onChange={(event) => setReducedMotion(event.target.checked)}
+    <TooltipProvider>
+      <main className="harness">
+        <h1>箱アイコン ハーネス</h1>
+        <p className="harness__note">
+          Vite の serve 専用。本番 dist には含まれない。AuthGate は通らない。
+          「success」にしてから箱にマウスを乗せると蓋が少し開きかけ（ホバー）、クリックまたは
+          Enter/Space で箱がヨー回転しながら開いて idle に戻る（次のファイルを置く相当）。
+        </p>
+        <div className="harness__stage">
+          <BoxBubble
+            kind={bubbleKind === 'closed' ? 'success' : bubbleKind}
+            open={bubbleKind !== 'closed'}
+            message={BUBBLE_MESSAGES[bubbleKind === 'closed' ? 'success' : bubbleKind]}
+            onClose={() => setBubbleKind('closed')}
+            onReplace={() => setBubbleKind('closed')}
+            onCancel={() => setBubbleKind('closed')}
+          >
+            <UploadBoxIcon
+              ref={iconRef}
+              phase={phaseOf(motion)}
+              dragging={motion === 'drag'}
+              forceHover={motion === 'hover'}
+              reducedMotion={reducedMotion}
+              size={size}
+              onOpened={() => setMotion('idle')}
             />
-            reduced-motion
-          </label>
+          </BoxBubble>
         </div>
-      </fieldset>
-    </main>
+        <fieldset>
+          <legend>吹き出し</legend>
+          <div className="harness__row">
+            {BUBBLE_KINDS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={bubbleKind === value}
+                onClick={() => setBubbleKind(value)}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>状態</legend>
+          <div className="harness__row">
+            {MOTIONS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={motion === value}
+                onClick={() => setMotion(value)}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>サイズ</legend>
+          <div className="harness__row">
+            {SIZES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={size === value}
+                onClick={() => setSize(value)}
+              >
+                {value}px
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>操作</legend>
+          <div className="harness__row">
+            <button type="button" onClick={() => iconRef.current?.spin()}>
+              クリック回転
+            </button>
+            <label>
+              <input
+                type="checkbox"
+                checked={reducedMotion}
+                onChange={(event) => setReducedMotion(event.target.checked)}
+              />
+              reduced-motion
+            </label>
+          </div>
+        </fieldset>
+      </main>
+    </TooltipProvider>
   );
 }

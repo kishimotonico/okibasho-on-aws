@@ -262,7 +262,23 @@ describe('Composer', () => {
     await screen.findByRole('button', { name: '次のファイルを置く' });
   });
 
-  it('成功後は結果だけが残り、次のファイルを置くでフォームに戻る', async () => {
+  it('成功後は結果だけが残り、箱（次のファイルを置く）でフォームに戻る', async () => {
+    // 箱の「開く」演出は reduced-motion では即時。ここではフォームに戻る結果だけを
+    // 確認したいので、900ms の rAF アニメーションを待たずに済むよう reduced-motion を模す
+    const matchMediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query.includes('reduced-motion'),
+          media: query,
+          onchange: null,
+          addListener() {},
+          removeListener() {},
+          addEventListener() {},
+          removeEventListener() {},
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    );
+
     const user = userEvent.setup();
     upload.mockResolvedValue(uploaded('1111111111'));
     renderComposer();
@@ -275,11 +291,15 @@ describe('Composer', () => {
       ).toBeInTheDocument(),
     );
     expect(screen.queryByRole('textbox', { name: /公開URL/ })).toBeNull();
+    // 「次のファイルを置く」の専用ボタンは廃止。成功状態の箱自体がその操作になる
+    expect(screen.queryByRole('button', { name: 'ファイルを選ぶ' })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: '次のファイルを置く' }));
 
     expect(slugInput()).toHaveValue('2222222222');
     expect(screen.getByRole('button', { name: 'ファイルを選ぶ' })).toBeInTheDocument();
+
+    matchMediaSpy.mockRestore();
   });
 
   it('成功結果は UrlField（リンク+コピー）と「外部共有…」を持つ', async () => {
