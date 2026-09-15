@@ -105,6 +105,8 @@ export const messages = {
   publicUrlLabel: '公開URL',
   publicUrlAriaLabel: (urlOrigin: string, userPath: string, value: string) =>
     userPath ? `公開URL ${urlOrigin}${userPath}${value}` : '公開URL',
+  /** slug が既存ページと一致しているときの小さなラベルと、新規アップロードに戻す × */
+  resetToNewUpload: '新規アップロードにする',
 
   /** 保存期間 */
   retentionLabel: '保存期間',

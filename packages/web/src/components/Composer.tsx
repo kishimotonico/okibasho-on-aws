@@ -162,6 +162,14 @@ export function Composer({
     setWithPassword(false);
     flow.reset();
   };
+  // slug 入力の「再アップロード」ラベルの × 。既存ページの slug から離れて完全に新規の
+  // アップロードへ切り替える操作なので、公開範囲・パスワードも含めて「次のファイルを置く」
+  // と同じ初期状態に戻す（乱数 slug のまま外部公開設定だけ残ると、うっかり別ページの設定を
+  // 引き継いでしまうため）。そのうえで入力へフォーカスし、そのまま打ち直せるようにする
+  const resetSlugToNewUpload = () => {
+    resetToInitial();
+    slugInputRef.current?.focus();
+  };
   // 差し替え確認中だけ、どの slug を上書きするのかを danger 系の枠で示す。
   // アップロード中（新規も差し替えも）まで強調すると、新規 slug でも
   // 「この名前が問題」という誤った合図になるため付けない
@@ -253,6 +261,8 @@ export function Composer({
               hintable={state.kind === 'idle' && bubble === null}
               urlOrigin={api.urlOrigin}
               userPath={api.userPath}
+              isReupload={Boolean(existingPageForSlug)}
+              onResetToNew={resetSlugToNewUpload}
             />
             <UploadOptions
               retention={retention}

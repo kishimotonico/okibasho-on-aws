@@ -1,4 +1,5 @@
 import { isValidSlug } from '@okibasho/core';
+import { X } from 'lucide-react';
 import {
   useRef,
   useState,
@@ -25,6 +26,14 @@ interface SlugFieldProps {
   hintable: boolean;
   urlOrigin: string;
   userPath: string;
+  /**
+   * slug が既存ページの slug と一致しているか（一覧の「再アップロード」で入った場合も、
+   * 手入力で一致した場合も）。true の間、入力の右端に「再アップロード」の小さなラベルと
+   * 新規アップロードに戻す × を出す
+   */
+  isReupload: boolean;
+  /** ×。slug を乱数に戻し、入力へフォーカスする */
+  onResetToNew: () => void;
 }
 
 /**
@@ -41,6 +50,8 @@ export function SlugField({
   hintable,
   urlOrigin,
   userPath,
+  isReupload,
+  onResetToNew,
 }: SlugFieldProps) {
   const [tooltipOpen, setTooltipOpen] = useState(false);
   /** フォーカス直後の mouseup を1回だけ打ち消して、クリックで全選択が解けないようにする */
@@ -105,6 +116,21 @@ export function SlugField({
             aria-label={ariaLabel}
           />
         </Tooltip>
+        {isReupload && !disabled ? (
+          <div className="url-input__reupload">
+            <span className="url-input__reupload-label">{messages.reupload}</span>
+            <Tooltip label={messages.resetToNewUpload}>
+              <button
+                type="button"
+                className="url-input__reupload-clear"
+                aria-label={messages.resetToNewUpload}
+                onClick={onResetToNew}
+              >
+                <X size={13} strokeWidth={1.75} aria-hidden />
+              </button>
+            </Tooltip>
+          </div>
+        ) : null}
       </div>
     </div>
   );
