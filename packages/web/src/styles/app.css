@@ -534,11 +534,6 @@ button.text-link,
   background: var(--raised);
 }
 
-.url-input:focus-within {
-  outline: 2px solid var(--text);
-  outline-offset: 2px;
-}
-
 .url-input__prefix {
   display: flex;
   flex: 0 0 auto;
@@ -588,14 +583,71 @@ button.text-link,
   min-width: 0;
   padding: 0.5rem 0.65rem;
   border: none;
+  /* 一体枠の中の位置（固定部分 prefix・再アップロードの adornment の有無）に応じて、
+     枠の外周に触れる側だけ内側の角丸（6px 罫の内側なので5px）に揃える。
+     両方に挟まれているときは全周フラット */
   border-radius: 0;
   font-size: 0.875rem;
   line-height: 1.5;
 }
 
+.url-input input[type='text']:first-child:last-child {
+  border-radius: 5px;
+}
+
+.url-input input[type='text']:first-child:not(:last-child) {
+  border-radius: 5px 0 0 5px;
+}
+
+.url-input input[type='text']:last-child:not(:first-child) {
+  border-radius: 0 5px 5px 0;
+}
+
+/*
+ * フォーカスの墨リングは、編集できる slug 入力の内側だけに出す（固定部分は囲わない）。
+ * outline ではなく inset の box-shadow にすることで、一体枠からはみ出さず、
+ * 角丸は上の border-radius にそのまま追随する
+ */
 .url-input input[type='text']:focus-visible {
   outline: none;
-  box-shadow: none;
+  box-shadow: inset 0 0 0 2px var(--text);
+}
+
+/* ---------- 再アップロードの adornment（slug が既存ページと一致しているときの右端の表示） ---------- */
+
+.url-input__reupload {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.35rem 0 0.15rem;
+  border-radius: 0 5px 5px 0;
+}
+
+.url-input__reupload-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.url-input__reupload-clear {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.url-input__reupload-clear:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 /* ---------- UrlField（URL とコピーを一体にした表示。ShareDialog の共有URLで使う） ---------- */

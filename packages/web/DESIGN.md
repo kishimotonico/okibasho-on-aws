@@ -193,10 +193,12 @@ components:
 - **Structure:** ホスト + `/ユーザー名/` + slug 入力を一体表示。狭い画面（40rem 以下）ではホストを非表示にし、`/ユーザー名/` と slug を1行にする
 - **Initial slug:** 初期表示から `generateRandomSlug`（小文字英数字 10 文字）を入れる。必要ならその場で編集する
 - **Edit:** 一体の枠。フォーカスで全選択（フォーカス直後 1 回だけ `mouseup` を打ち消し、クリックで選択が解除されないようにする）。Esc でフォーカス時の値へ戻す。入力中バリデーション。Tooltip「クリックして名前を付け直せる」（紙地・矢印、入力の中央上）
+- **Focus:** 墨 2px の枠は編集できる slug 入力の内側だけに出す（`box-shadow: inset` で入力自身に付け、outline は使わない）。ホスト・`/ユーザー名/` の固定部分は囲わない。入力の角丸は、隣に固定部分や再アップロードの表示があるかどうかで一体枠の内側の角丸（5px）に自動で揃う
 - **Invalid slug:** 「使えるのは小文字の英数字と - _ だけ」。不正な間は吹き出しを消さない
 - **Empty:** 空欄で進めようとすると新しい slug を入れ直してから続行する（送信ボタンによる省略自動生成ではない）
-- **Overwrite highlight:** 上書き確認中は slug 枠を danger 系で強調（`url-input--overwrite`：枠・背景・prefix を `--danger-soft` 寄り）
-- **Reupload:** 一覧の kebab「再アップロード」は成功状態からでもフォームへ戻し、slug を入れて入力へフォーカスし、フォームまでスクロールするだけ。保存期間は常に表示する。既存 slug への差し替えは吹き出し確認。slug を変えれば別ページとして扱う
+- **Overwrite highlight:** 上書き確認中は slug 枠を danger 系で強調（`url-input--overwrite`：枠・背景・prefix を `--danger-soft` 寄り）。フォーカスの墨リングとは独立で、両方が同時に出ても崩れない
+- **Reupload indicator:** slug が一覧の既存ページの slug と一致している間（一覧の「再アップロード」で入った場合も、手入力で一致した場合も）、一体枠の右端・入力の内側に muted な小さいラベル「再アップロード」（0.75rem。エメラルドや danger は使わない）と、新規アップロードに戻す × の icon button（aria-label・Tooltip とも「新規アップロードにする」）を出す。× を押すと slug を `generateRandomSlug()` に戻し、保存期間・公開範囲・パスワードも「次のファイルを置く」と同じ初期状態にまとめて戻してから、入力へフォーカスする（乱数 slug だけ変えて外部公開設定が別ページのものとして残ると誤って公開してしまうため）。busy（アップロード中）の間は出さない
+- **Reupload（一覧からの遷移）:** 一覧の kebab「再アップロード」は成功状態からでもフォームへ戻し、slug を入れて入力へフォーカスし、フォームまでスクロールするだけ。保存期間は常に表示する。既存 slug への差し替えは吹き出し確認。slug を変えれば別ページとして扱う（そのときは上の Reupload indicator も自然に消える）
 
 ### UploadOptions（保存期間・公開範囲・パスワードのチップ列）
 
@@ -367,7 +369,7 @@ lib/to-user-message.ts     エラーを画面向けの日本語にする
 - 静的チェック: `pnpm --filter @okibasho/web typecheck` / `pnpm --filter @okibasho/web test` / `pnpm format:check` / `pnpm --filter @okibasho/web build`
 - 実機確認はブラウザ自動操作（agent-browser など）で行い、幅 1280 と 375（`innerWidth` を実際に 375 にする）の両方を撮る
 - 箱アイコン単体は `/dev/upload-box-icon` のハーネスで確認できる（dev サーバーのみ、build には含まれない）
-- UploadOptions のチップ列・PasswordToggle・ShareDialog は `/dev/options` のハーネスで props だけで描画して確認できる（Composer 本体は Cognito ログインが必要で開けないため。dev サーバーのみ）
+- UploadOptions のチップ列・PasswordToggle・ShareDialog・SlugField・PagesList/PageRow（一覧）は `/dev/options` のハーネスで props だけで描画して確認できる（Composer 本体は Cognito ログインが必要で開けないため。dev サーバーのみ）
 - 本番未公開のため防衛的なテストは書かない。テストは仕様変更で意味を失ったものを消しつつ、見た目と操作の確認は実機で行う
 
 ## Do's and Don'ts
