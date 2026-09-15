@@ -490,11 +490,17 @@ button.text-link,
   font-weight: 600;
 }
 
-/* 外部共有ボタンと高さ・角丸・罫線をそろえ、1行の中で一体に見えるようにする */
+/* 外部共有ボタンと高さ・角丸・罫線・地色をそろえ、1行の中で一体に見えるようにする。
+   icon-button 既定の透明地のままだと、罫線だけが浮いた別枠に見えてしまう */
 .upload-result__delete {
   flex-shrink: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
+  background: var(--bg);
+}
+
+.upload-result__delete:hover {
+  background: var(--raised);
 }
 
 .upload-result__actions {
