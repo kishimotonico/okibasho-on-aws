@@ -58,19 +58,14 @@ type PagesAction =
 /**
  * クエリキャッシュへの反映。'remove' / 'retention' は通信の結果を待たずに使う楽観更新で、
  * expiresAt は S3 側と同じ計算で出す。'upsert' は通信が成功したあと、
- * 書き込んだ内容で該当行を差し替える（S3 を読み直さない）。
- * キャッシュがまだ無い（undefined）ときも、そこから新しい一覧を組み立てられるようにする
+ * 書き込んだ内容で該当行を差し替える（S3 を読み直さない）
  */
-function applyPagesAction(
-  pages: readonly ListedPage[] | undefined,
-  action: PagesAction,
-): ListedPage[] {
-  const current = pages ?? [];
+function applyPagesAction(pages: readonly ListedPage[], action: PagesAction): ListedPage[] {
   switch (action.type) {
     case 'remove':
-      return current.filter((page) => page.slug !== action.slug);
+      return pages.filter((page) => page.slug !== action.slug);
     case 'retention':
-      return current.map((page) =>
+      return pages.map((page) =>
         page.slug === action.slug
           ? {
               ...page,
@@ -80,10 +75,10 @@ function applyPagesAction(
           : page,
       );
     case 'upsert': {
-      const exists = current.some((page) => page.slug === action.page.slug);
+      const exists = pages.some((page) => page.slug === action.page.slug);
       const next = exists
-        ? current.map((page) => (page.slug === action.page.slug ? action.page : page))
-        : [...current, action.page];
+        ? pages.map((page) => (page.slug === action.page.slug ? action.page : page))
+        : [...pages, action.page];
       return sortPagesByCreatedAt(next);
     }
   }
@@ -153,24 +148,52 @@ function HomePage() {
 
   const queryKey = pagesQueryKey(email);
 
-  /** クエリキャッシュを直接差し替える */
-  function setPages(update: (current: readonly ListedPage[] | undefined) => ListedPage[]) {
-    queryClient.setQueryData<ListedPage[]>(queryKey, update);
+  /**
+   * 書き込みが成功したあと、その内容で一覧の該当行を差し替える。
+   * キャッシュがまだ無い（一覧が読み込まれる前）ときは、無いところへ新しい一覧を
+   * 作ってしまうと直後に in-flight の一覧取得（初回 fetch やフォーカス再取得）の結果で
+   * 上書きされて消える恐れがあるので setQueryData せず、取得を取り直すだけにする
+   */
+  function upsertPage(page: ListedPage) {
+    if (queryClient.getQueryData<ListedPage[]>(queryKey) === undefined) {
+      void queryClient.invalidateQueries({ queryKey });
+      return;
+    }
+    queryClient.setQueryData<ListedPage[]>(queryKey, (current) =>
+      applyPagesAction(current ?? [], { type: 'upsert', page }),
+    );
   }
 
   /**
    * 先にキャッシュへ反映し、失敗したら元に戻して actionError を出す
    * （TanStack Query の楽観更新の定石）。成功したら書き込んだ内容で該当行を差し替える。
+   * キャッシュがまだ無いときは upsertPage と同じ理由で楽観更新をせず、成功後に取り直す。
+   * キャッシュがあるときも、in-flight の取得（フォーカス再取得など）が楽観更新を
+   * 古い結果で上書きしないよう、書き換える前に cancelQueries で止める
    */
   function mutate(action: PagesAction, run: () => Promise<ListedPage | void>) {
-    const previous = queryClient.getQueryData<ListedPage[]>(queryKey);
     startMutation(async () => {
-      setPages((current) => applyPagesAction(current, action));
       setActionError(null);
+
+      if (queryClient.getQueryData<ListedPage[]>(queryKey) === undefined) {
+        try {
+          await run();
+          void queryClient.invalidateQueries({ queryKey });
+        } catch (error) {
+          setActionError(userMessage(error));
+        }
+        return;
+      }
+
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<ListedPage[]>(queryKey) ?? [];
+      queryClient.setQueryData<ListedPage[]>(queryKey, applyPagesAction(previous, action));
       try {
         const result = await run();
         if (result) {
-          setPages((current) => applyPagesAction(current, { type: 'upsert', page: result }));
+          queryClient.setQueryData<ListedPage[]>(queryKey, (current) =>
+            applyPagesAction(current ?? previous, { type: 'upsert', page: result }),
+          );
         }
       } catch (error) {
         queryClient.setQueryData(queryKey, previous);
@@ -202,12 +225,12 @@ function HomePage() {
    */
   const handleShareChange = async (page: ListedPage, share: PageShare | null) => {
     const updated = await api.updateShare(page.slug, share);
-    setPages((current) => applyPagesAction(current, { type: 'upsert', page: updated }));
+    upsertPage(updated);
   };
 
   const handleUploaded = (page: ListedPage, openShare: boolean) => {
     setHighlight((current) => nextSignal(current, page.slug));
-    setPages((current) => applyPagesAction(current, { type: 'upsert', page }));
+    upsertPage(page);
     if (openShare) {
       setShareSlug(page.slug);
       setJustIssuedSlug(page.slug);
