@@ -279,6 +279,8 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
               </DialogPrimitive.Description>
 
               {error ? <p className="message message--error">{error}</p> : null}
+              {/* 共有停止の直後はこちらの分岐に切り替わるので、停止の注意書きもここで出す */}
+              {notice ? <p className="field-hint">{noticeMessage(notice)}</p> : null}
 
               <div className="ui-dialog__actions">
                 <button
