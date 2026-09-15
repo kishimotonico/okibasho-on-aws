@@ -1,6 +1,6 @@
 # アーキテクチャ
 
-本書が設計の正本である。決定済みの設計だけを書く。検討中の論点は [open-questions.md](open-questions.md) に、設計に至る背景は文末の「検討の経緯」にある。
+本書が設計の正本である。決定済みの設計だけを書く。設計に至る背景は文末の「検討の経緯」にある。
 
 ## 全体構成
 
@@ -628,4 +628,3 @@ ALB は S3 をターゲットにできず、Lambda ターゲット経由だと�
 ## 検討の経緯
 
 - [decision-adpot-iam-direct.md](decision-adpot-iam-direct.md) — 旧設計（静的 SPA + API Gateway + JWT Authorizer + presigned PUT）を破棄し、Identity Pool の一時クレデンシャルで S3 を直接操作する現設計を採用した判断
-- [notes-optional-metadata.md](notes-optional-metadata.md) — S3 直置きと `.metadata.json` 任意化の検討メモ（未採用）
