@@ -198,18 +198,23 @@ components:
 - **Overwrite highlight:** 上書き確認中は slug 枠を danger 系で強調（`url-input--overwrite`：枠・背景・prefix を `--danger-soft` 寄り）
 - **Reupload:** 一覧の kebab「再アップロード」は成功状態からでもフォームへ戻し、slug を入れて入力へフォーカスし、フォームまでスクロールするだけ。保存期間は常に表示する。既存 slug への差し替えは吹き出し確認。slug を変えれば別ページとして扱う
 
-### 保存期間
+### UploadOptions（保存期間・公開範囲・パスワードのチップ列）
 
-- **Label:** 保存期間（visually-hidden 可）
-- **Control:** ウェル内の 30日 / 無期限セグメント。デフォルトは 30日。選択は薄い墨
+- **Role:** 公開URL（slug 入力）の直下に、保存期間・公開範囲・（外部かつ未ロック時のみ）パスワードのチップを横一列に並べる（`components/UploadOptions.tsx`）。チップは「もう設定済みの値」に見える閉じた表示で、押すとポップオーバーから選ぶ
+- **保存期間チップ:** lucide `Clock` + 現在値（30日 / 無期限）+ `ChevronDown`。押すと radix-ui `DropdownMenu`（`RadioGroup` / `RadioItem`）のポップオーバーで選ぶ。デフォルトは 30日
+- **公開範囲チップ:** 内部のみは `Users`、外部にも公開は `Globe` + 現在値 + `ChevronDown`。同じ `DropdownMenu` の `RadioGroup` で選ぶ。デフォルトは内部のみ
+- **ポップオーバーの位置:** `align="start"` + 小さめの `sideOffset` で、チップの左端・直下にぴったり揃える（チップの中央や右にずれない）。選択中の項目は `DropdownMenu.ItemIndicator` の `Check` で示す
+- **パスワードチップ:** 公開範囲が「外部にも公開」かつ未ロックのときだけ出す。共通部品 `components/PasswordToggle.tsx`（後述）を使う。オンにしたときだけ `generateSharePassword` で自動生成したパスワードを付ける（ユーザー名は `guest` 固定）。あとで一覧の共有ダイアログから確認・付け外しできる
+- **外部共有中のページへの差し替え:** 対象 slug が既に外部共有中なら、公開範囲チップは選択肢を出さず `Globe` + 「外部共有中」の disabled チップに固定し、Tooltip で「設定はそのまま」を補う。パスワードチップは出さない。差し替えても既存の共有URL・パスワードを維持する
+- **リセット:** 箱をクリックしてフォームを初期状態に戻すと内部のみ・パスワードなしに戻る。一覧の「再アップロード」（seed）では保存期間と同様にリセットしない
+- **375px 幅:** セグメントのように全幅化せず `flex-wrap` で折り返すだけなので、縦の伸びが小さい
 
-### 公開範囲（Composer）
+### PasswordToggle（パスワードのオン/オフ）
 
-- **Label:** 公開範囲（visually-hidden 可）
-- **Control:** 保存期間の直下、同じ seg の見た目で「内部のみ / 外部にも公開」。デフォルトは内部のみ
-- **展開:** 「外部にも公開」を選ぶと、直下に案内文が `grid-template-rows: 0fr → 1fr` でにゅっと開く（Box bubble と同じく reduced-motion では `transition: none` で即時）。外部共有URLを自動で発行する旨の一文と、「パスワードを付ける」のチェックボックス（既定はオフ）を表示する。オンにしたときだけ `generateSharePassword` で自動生成したパスワードを付ける（ユーザー名は `guest` 固定）。あとで一覧の共有ダイアログから確認・付け外しできる
-- **外部共有中のページへの差し替え:** 対象 slug が既に外部共有中なら、この seg は選択肢を出さず「外部共有中（設定はそのまま）」に固定された1つのボタン（disabled）になる。展開パネルも開かない。差し替えても既存の共有URL・パスワードを維持する
-- **リセット:** 「次のファイルを置く」で内部のみに戻す。一覧の「再アップロード」（seed）では保存期間と同様にリセットしない
+- **Role:** パスワード保護のオン/オフを、文字とアイコンの両方で示す共通トグル（`components/PasswordToggle.tsx`）。UploadOptions のパスワードチップと ShareDialog の両方から使う（フォームとダイアログでアイコン・見た目を共通化する）
+- **オフ:** lucide `LockOpen` + 「パスワードなし」。罫線だけの控えめなチップ、muted 文字
+- **オン:** lucide `Lock` + 「パスワードあり」。セグメントの選択と同じ薄い墨の塗り（`color-mix(in srgb, var(--text) 8%, var(--well))`）+ 墨文字 + 600。エメラルドは使わない
+- **A11y:** `aria-pressed` のトグルボタン
 
 ### Success result
 
@@ -236,12 +241,15 @@ components:
 ### ShareDialog（外部共有）
 
 - **Role:** 外部の人に渡す別URL（`/s/<tag><share-id>/`）の発行・作り直し・停止。一覧の kebab、または成功結果ブロックの「外部共有…」から開く（開閉は route が一元管理）。内部URL（`/p/`）はそのまま使えることを最初の説明文で伝える
-- **Shape:** Radix Dialog を AlertDialog と同じトークンで装飾（`ui-dialog`）。確認が要る操作（作り直す・停止）は入れ子で AlertDialog（`ui-alert`）を重ねる。z-index は `ui-dialog` を `ui-alert` より低くし、確認ダイアログが必ず最前面に来るようにする
+- **Shape:** Radix Dialog を AlertDialog と同じトークンで装飾（`ui-dialog`）。パディングはゆったり（`1.3rem 1.4rem 1.4rem`）。確認が要る操作（作り直す・停止）は入れ子で AlertDialog（`ui-alert`）を重ねる。z-index は `ui-dialog` を `ui-alert` より低くし、確認ダイアログが必ず最前面に来るようにする
 - **Close:** ヘッダー右上に lucide `X` の icon button（aria-label・Tooltip とも「閉じる」）。フッターにテキストの「閉じる」は置かない。Esc・外側クリックでも閉じる（Radix の既定）
-- **未発行:** 説明文だけを表示し、主ボタンは「共有URLを発行」。入力欄は持たない。この時点ではパスワードは付けない（秘匿URLだけで発行する）
-- **発行済み:** タイトル直下に `UrlField`（URL とコピーを一体にした表示部品。詳細は後述）。保存期間があればその下に「保存期限（日付）を過ぎると共有も終わります」を field-hint で出す。続けて「パスワードを付ける」のチェックボックスを置く。オフのままなら field-hint で秘匿URLだけでも保護になる旨を短く添える。オンにした瞬間にシステムがパスワードを自動生成して保存し、ユーザー名（`guest` 固定）とパスワードを常に平文（等幅フォント）で読み取り表示する（パスワードには個別コピーの icon button を添える）。オフに戻すとパスワードを外して保存し、資格情報の表示も消える。「最初の1回だけ表示」の完了画面は持たない。フッターには「作り直す」「共有を停止」（`text-link` / `text-link--danger`）と、パスワードを付けているときだけ右に「まとめてコピー」（`CopyButton` labeled variant。`URL: .. / ユーザー名: .. / パスワード: ..` の3行テキスト）を置く。付けていないときは URL 単体のコピーで足りるため出さない
+- **未発行:** 説明文は「外部向けの別URLを発行します（内部URLはそのまま）。」の一文に短縮。主ボタンは「共有URLを発行」。入力欄は持たない。この時点ではパスワードは付けない（秘匿URLだけで発行する）
+- **発行済み:** タイトル直下に `UrlField`（URL とコピーを一体にした表示部品。詳細は後述）。保存期限があればその直下に小さな meta 行（lucide `Clock` 12px + 「2026/10/15 21:00 まで」。無期限のときは出さない）。「保存期限（日付）を過ぎると共有も終わります」のような長い文は出さない
+- **パスワードのオン/オフ:** チェックボックスをやめ、`components/PasswordToggle.tsx`（UploadOptions と共通部品）を使う。オフのままなら秘匿URLだけでも保護になる旨のヒント文は出さない（チップの「パスワードなし」表示自体が状態を伝える）
+- **オンのときの表示:** `--bg` 地・角丸 8px の `password-panel` ブロックの中に、オンにした瞬間にシステムが自動生成したパスワードとユーザー名（`guest` 固定）を常に平文（等幅フォント）で読み取り表示する。ユーザー名・パスワードそれぞれに個別コピーの icon button を添える（IP制限の名残だった `share-credentials` 系のクラス名は `password-panel*` に作り直した）。オフに戻すとパスワードを外して保存し、表示も消える。「最初の1回だけ表示」の完了画面は持たない
+- **フッター:** 「作り直す」「共有を停止」（`text-link` / `text-link--danger`）と、パスワードを付けているときだけ右に「まとめてコピー」（`CopyButton` labeled variant。`URL: .. / ユーザー名: .. / パスワード: ..` の3行テキスト）を置く。付けていないときは URL 単体のコピーで足りるため出さない
 - **作り直す:** 新しい share-id を発行する操作。パスワードを付けている場合はパスワードも同時に作り直す（付けていなければ付けないまま）。確認ダイアログを経て実行し、成功すると新しい URL（・パスワード）がそのまま表示に反映される
-- **反映遅延:** 発行・作り直し・停止・パスワードの付け外しのあとは field-hint で「反映まで少し時間がかかる」系の案内を出す
+- **反映遅延:** 発行・作り直し・停止のあとはフッター直上に控えめな muted の1行「反映まで少し時間がかかります。」を出す（エメラルドの帯にはしない）
 - **一覧への反映:** 保存が終わったら、書き込んだ内容（API の戻り値）で一覧の該当行を直接差し替える（一覧全体は取り直さない）。ShareDialog はその一覧から自分の対象ページを引き直す（保存直後でも共有URL・パスワードの表示が一覧と食い違わない）
 - **パスワードの扱い:** パスワードは任意で、秘匿URL（share-id）だけでも共有として成立する上での追加の保護という位置付け。metadata は所有者本人しか読めない IAM 境界の内側にあるため、付けたパスワードはハッシュ化・salt を行わず平文で保存する。ダイアログはその平文をいつでも読み取り表示・コピーでき、閉じても再表示できなくなることはない
 
@@ -311,8 +319,10 @@ components/Composer.tsx フォームの骨組み。useUploadFlow と useWindowFi
                          state を持つ。外部なら id を自動生成し、パスワードを付ける場合だけ
                          あわせて自動生成する（既定はオフ）
   SlugField.tsx          公開URL。全選択・Esc・ツールチップの開閉を内包
-  RetentionToggle.tsx    30日 / 無期限
-  VisibilityToggle.tsx   内部のみ / 外部にも公開。対象 slug が共有中なら固定表示になる
+  UploadOptions.tsx      保存期間・公開範囲・（外部かつ未ロック時のみ）パスワードのチップ列。
+                         保存期間・公開範囲はチップ+DropdownMenu の RadioGroup、パスワードは
+                         PasswordToggle
+  PasswordToggle.tsx     パスワードのオン/オフ共通トグル（UploadOptions と ShareDialog で共通）
   PickLinks.tsx          ファイルを選ぶ · フォルダを選ぶ（隠し input を内包）
   UploadResult.tsx       UrlField・「外部共有…」・削除（確認ダイアログ）。
                          「次のファイルを置く」は箱自体の操作になったためボタンは持たない
@@ -321,7 +331,8 @@ components/Composer.tsx フォームの骨組み。useUploadFlow と useWindowFi
   DragOverlay.tsx        ウィンドウ全体のドラッグ強調
 components/PagesList.tsx 一覧。表示専用（確認ダイアログ・コピー失敗の表示だけ持つ。ShareDialog の開閉は route へ委譲）
   PageRow.tsx             一覧の1行。表示とコールバック。共有中は控えめな icon button（パスワード有り GlobeLock / 無し Globe）を出し、押すと ShareDialog を開く
-components/ShareDialog.tsx 外部共有の発行・作り直し・停止、パスワードの付け外し（Radix Dialog）。確認は AlertDialog に委譲。
+components/ShareDialog.tsx 外部共有の発行・作り直し・停止、パスワードの付け外し（Radix Dialog）。
+                            パスワードのオン/オフは PasswordToggle。確認は AlertDialog に委譲。
                             パスワードを付けているときだけユーザー名・パスワードを読み取り表示する
                             （「最初の1回だけ表示」の完了画面は持たない）
 components/UrlField.tsx     URL とコピーを一体にした表示部品（ShareDialog / UploadResult で使う）
@@ -353,6 +364,7 @@ lib/to-user-message.ts     エラーを画面向けの日本語にする
 - 静的チェック: `pnpm --filter @okibasho/web typecheck` / `pnpm --filter @okibasho/web test` / `pnpm format:check` / `pnpm --filter @okibasho/web build`
 - 実機確認はブラウザ自動操作（agent-browser など）で行い、幅 1280 と 375（`innerWidth` を実際に 375 にする）の両方を撮る
 - 箱アイコン単体は `/dev/upload-box-icon` のハーネスで確認できる（dev サーバーのみ、build には含まれない）
+- UploadOptions のチップ列・PasswordToggle・ShareDialog は `/dev/options` のハーネスで props だけで描画して確認できる（Composer 本体は Cognito ログインが必要で開けないため。dev サーバーのみ）
 - 本番未公開のため防衛的なテストは書かない。テストは仕様変更で意味を失ったものを消しつつ、見た目と操作の確認は実機で行う
 
 ## Do's and Don'ts

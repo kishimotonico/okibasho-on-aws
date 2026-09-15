@@ -66,7 +66,10 @@ describe('ShareDialog', () => {
     const shareUrl = `${pagesBaseUrl}/s/${SHARE_TAG}${'a'.repeat(22)}/`;
     expect(screen.getByRole('link', { name: shareUrl })).toHaveAttribute('href', shareUrl);
     expect(screen.queryByText('guest')).not.toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'パスワードを付ける' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'パスワードなし' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
     expect(screen.queryByRole('button', { name: 'まとめてコピー' })).not.toBeInTheDocument();
   });
 
@@ -87,7 +90,7 @@ describe('ShareDialog', () => {
       onSave,
     });
 
-    await user.click(screen.getByRole('checkbox', { name: 'パスワードを付ける' }));
+    await user.click(screen.getByRole('button', { name: 'パスワードなし' }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     const share = onSave.mock.calls[0]?.[0];
@@ -116,7 +119,10 @@ describe('ShareDialog', () => {
     expect(screen.getByRole('link', { name: shareUrl })).toHaveAttribute('href', shareUrl);
     expect(screen.getByText('guest')).toBeInTheDocument();
     expect(screen.getByText('k7mq-3xwp-9rtd-h2vn')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'パスワードを付ける' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'パスワードあり' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
     await user.click(screen.getByRole('button', { name: 'URLをコピー' }));
     expect(await screen.findByRole('button', { name: 'コピーしました' })).toBeInTheDocument();
@@ -124,7 +130,7 @@ describe('ShareDialog', () => {
     await user.click(screen.getByRole('button', { name: 'パスワードをコピー' }));
     expect(await screen.findAllByRole('button', { name: 'コピーしました' })).toHaveLength(2);
 
-    await user.click(screen.getByRole('checkbox', { name: 'パスワードを付ける' }));
+    await user.click(screen.getByRole('button', { name: 'パスワードあり' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledWith({ id: 'a'.repeat(22) }));
   });
 
@@ -168,7 +174,7 @@ describe('ShareDialog', () => {
       onSave: vi.fn().mockResolvedValue(undefined),
     });
 
-    expect(screen.getByText(/を過ぎると共有も終わります/)).toBeInTheDocument();
+    expect(screen.getByText(/まで$/)).toBeInTheDocument();
   });
 
   it('共有中: 「共有を停止」を確認すると null が保存関数へ渡る', async () => {
@@ -195,7 +201,7 @@ describe('ShareDialog', () => {
 
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(null));
     expect(
-      await screen.findByText('無効になるまで少し時間がかかることがあります。'),
+      await screen.findByText('共有を停止しました。反映まで少し時間がかかります。'),
     ).toBeInTheDocument();
   });
 
@@ -225,7 +231,7 @@ describe('ShareDialog', () => {
     expect(share.id).not.toBe('a'.repeat(22));
     expect(share.password).not.toBe('k7mq-3xwp-9rtd-h2vn');
     expect(
-      await screen.findByText('新しいURLに切り替わるまで少し時間がかかることがあります。'),
+      await screen.findByText('新しいURLに切り替わりました。反映まで少し時間がかかります。'),
     ).toBeInTheDocument();
   });
 
