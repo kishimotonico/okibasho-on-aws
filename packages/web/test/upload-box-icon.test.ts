@@ -369,7 +369,7 @@ describe('stepBoxIconAnim', () => {
     reducedMotion: false,
   } as const;
 
-  it('収束係数はチューナーと同じ 1 - 0.001^(16/260)', () => {
+  it('収束係数は 1 - 0.001^(16/260)', () => {
     expect(ANIM_CONVERGE_K).toBe(1 - Math.pow(0.001, 16 / 260));
   });
 

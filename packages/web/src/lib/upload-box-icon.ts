@@ -1,7 +1,6 @@
 /**
- * 等角の開いた箱アイコンの幾何。
- * 一次ソースは docs/icon-ideas/tuner-open-box.html の proj / rot / build / target / IDLE。
- * SC=16 のまま移植し、奥行きソート・側面の可視判定・線幅・陰影は簡略化しない。
+ * 等角の開いた箱アイコンの幾何と状態ごとのアニメーション。
+ * 奥行きソート・側面の可視判定・線幅・陰影を毎フレーム計算する。
  */
 
 export type Vec2 = readonly [number, number];
@@ -61,7 +60,7 @@ export type BoxIconMotion = 'idle' | 'hover' | 'drag' | 'uploading' | 'success' 
 /** Composer の phase。hover / drag はコンポーネント内部と dragging から導出する。 */
 export type BoxIconPhase = 'idle' | 'uploading' | 'success' | 'error';
 
-/** チューナー render() の指数補間。`k = 1 - 0.001^(16/260)`、約 0.26s で収束。 */
+/** 目標値への指数補間の係数。`k = 1 - 0.001^(16/260)`、約 0.26s で収束 */
 export const ANIM_CONVERGE_K = 1 - Math.pow(0.001, 16 / 260);
 
 const INTERP_KEYS = [
@@ -146,7 +145,7 @@ export type BoxIconScene = {
   pts: Vec2[];
 };
 
-/** チューナー DEF の確定値。底面の辺 = 1。 */
+/** 幾何の決定値。底面の辺 = 1 */
 export const BOX_ICON_PARAMS: BoxIconParams = {
   h: 0.9,
   shade: 0.45,
@@ -282,7 +281,7 @@ export const SUCCESS_HOVER_CLOSED_OUTER = 0.82;
 
 /**
  * 各状態の目標値。t は状態に入ってからの経過ミリ秒。
- * error はチューナー未定義のため IDLE へ戻す。
+ * error は idle の形へ戻す。
  */
 export function target(p: BoxIconParams, state: BoxIconMotion, t: number): BoxIconAnim {
   const g = idleAnim(p);
@@ -320,7 +319,7 @@ export function target(p: BoxIconParams, state: BoxIconMotion, t: number): BoxIc
 }
 
 /**
- * DECISION 2章の effective。phase が uploading/success/error ならそれが勝ち、
+ * phase が uploading/success/error ならそれが勝ち、
  * それ以外は dragging → hover → idle。
  */
 export function effectiveMotion(
@@ -384,7 +383,7 @@ export type StepBoxIconAnimInput = {
 };
 
 /**
- * チューナー render() 1フレーム分。
+ * 1フレーム分の更新。
  * uploading / success、および hover の sheetZ は目標値を直接代入。それ以外は指数補間。
  * spin は easeInOut で 0→360。reduced-motion ではポーズへ即時切替、spin は 0。
  * success のシーケンスが終わったあとだけ、hovering に応じて closedOuter を

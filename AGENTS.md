@@ -5,6 +5,6 @@
 
 ## 管理UI（packages/web）の開発
 
-最初に読む順番: `packages/web/PRODUCT.md` → `packages/web/DESIGN.md` → `docs/icon-ideas/DECISION.md`（箱アイコンの一次仕様。`docs/icon-ideas` 配下は編集しない）→ README.md のコマンド。
+最初に読む順番: `packages/web/PRODUCT.md` → `packages/web/DESIGN.md` → README.md のコマンド。
 
 - テスト方針: 本番未公開のため防衛的なテストは書かない。見た目と操作は実機で確認する

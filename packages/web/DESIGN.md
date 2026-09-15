@@ -283,7 +283,7 @@ components:
 ### Box icon
 
 - **Role:** ブランドマーク、ドロップのアフォーダンス、状態フィードバック（idle / hover / drag / uploading / success / error）。成功後は「次のファイルを置く」の操作でもある
-- **Motion:** チューナーの幾何を rAF 1本で描く。目標に収束し時間駆動がなければループを止める
+- **Motion:** 幾何を rAF 1本で描く。目標に収束し時間駆動がなければループを止める
 - **Error:** idle 形状へ戻る + 短いシェイクと `--danger` のフラッシュ。reduced-motion では色だけ
 - **Click（idle / hover）:** クリックで回転し、ファイル選択ダイアログを開く。uploading 中は開かない。reduced-motion では回転を省略
 - **成功時の蓋の色:** 閉じた蓋のフラップは常に `--well`（白）のまま。アップロード完了は床の円の緑（線 `--emerald` ＋ `rFill` の `--emerald-soft` 塗り）だけで伝える
@@ -309,7 +309,7 @@ components:
 
 ## 依存と構成
 
-UI 部品は radix-ui（DropdownMenu / Tooltip / AlertDialog）を DESIGN のトークンで包んで使う。アイコンは lucide-react。slug 生成と検証、メタデータ型、S3 に対するページ操作（PageStore）は `@okibasho/core` を web から参照する。箱アイコン（`UploadBoxIcon.tsx` / `upload-box-icon.ts`）はチューナーの幾何をそのまま移植したものなので、ライブラリで置き換えない。
+UI 部品は radix-ui（DropdownMenu / Tooltip / AlertDialog）を DESIGN のトークンで包んで使う。アイコンは lucide-react。slug 生成と検証、メタデータ型、S3 に対するページ操作（PageStore）は `@okibasho/core` を web から参照する。箱アイコン（`UploadBoxIcon.tsx` / `upload-box-icon.ts`）は自前の幾何なので、ライブラリで置き換えない。幾何の決定値と状態ごとの目標値はコード（`BOX_ICON_PARAMS` / `target`）が正。
 
 ### ファイル構成
 
