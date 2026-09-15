@@ -110,12 +110,6 @@ textarea::placeholder {
   color: var(--muted);
 }
 
-.field-error {
-  margin: 0.3rem 0 0;
-  color: var(--danger);
-  font-size: 0.8125rem;
-}
-
 .field-hint {
   margin: 0.3rem 0 0;
   color: var(--muted);
