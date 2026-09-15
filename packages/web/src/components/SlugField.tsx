@@ -123,7 +123,7 @@ export function SlugField({
               <button
                 type="button"
                 className="url-input__reupload-clear"
-                aria-label={messages.resetToNewUpload}
+                aria-label={messages.resetToNewUploadAriaLabel}
                 onClick={onResetToNew}
               >
                 <X size={13} strokeWidth={1.75} aria-hidden />

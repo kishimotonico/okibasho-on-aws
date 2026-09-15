@@ -44,6 +44,11 @@
   box-sizing: border-box;
 }
 
+html {
+  /* 一覧が伸びて縦スクロールバーが出る/出ないで中央寄せの本文とメニューの位置がずれるのを防ぐ */
+  scrollbar-gutter: stable;
+}
+
 html,
 body {
   margin: 0;
@@ -399,6 +404,9 @@ button.text-link,
   margin: 0;
   font-size: 1.05rem;
   font-weight: 700;
+  /* コピーしたい需要がなく、ページ地のダブルクリック（イースターエッグ）が
+     近くの単語選択に広がる副作用の芽をここでも一つ減らしておく */
+  user-select: none;
 }
 
 .composer-lead {
@@ -769,9 +777,16 @@ button.text-link,
 
 .upload-box-icon {
   --upload-box-icon-size: 96px;
+  /* 見た目（svg）は --upload-box-icon-size のまま一回り小さく、当たり判定だけ
+     周囲に広げる。padding で div（クリック/ホバー/フォーカスの対象）を広げつつ、
+     同じ幅の負の margin で打ち消してレイアウト上の占有幅は変えない */
+  --upload-box-icon-hit-pad: 8px;
   display: inline-block;
+  box-sizing: content-box;
   width: var(--upload-box-icon-size);
   height: var(--upload-box-icon-size);
+  padding: var(--upload-box-icon-hit-pad);
+  margin: calc(var(--upload-box-icon-hit-pad) * -1);
   line-height: 0;
   color: var(--text);
   user-select: none;
@@ -782,6 +797,17 @@ button.text-link,
   width: 100%;
   height: 100%;
   overflow: visible;
+  /*
+   * applyScene/svgEl は毎フレーム既存ノードを parent.appendChild(existing) で
+   * 付け直す（DOM から外れて再挿入される）。hover 中（紙が浮遊して毎フレーム
+   * 再描画される）に svg の子要素で mousedown → mouseup すると、その間に
+   * mousedown の target だった path が付け直されたり別の要素に置き換わったり
+   * して、ブラウザが click を発火しないことがある。svg 側をヒットテストから
+   * 外し、mousedown/mouseup の target を常に .upload-box-icon の div に
+   * 固定することで click を安定させる（クリック/ホバー/ドラッグ/フォーカスの
+   * 判定は div 側にあるので、この不透過化で機能は失わない）
+   */
+  pointer-events: none;
 }
 
 /* success 状態の箱は「次のファイルを置く」の操作。role="button" として押せる見た目にする */
@@ -1479,6 +1505,13 @@ button.text-link,
 
   .url-input__user {
     padding-left: 0.65rem;
+  }
+
+  /* 375px 幅だと「再アップロード」の文字ラベルだけで slug 入力の見える幅が数文字に
+     減ってしまう（例: 「ui-check-b」が「ui-c」までしか見えない）ため、× の icon
+     button だけ残してラベルは隠す。aria-label 側で再アップロード中であることを補う */
+  .url-input__reupload-label {
+    display: none;
   }
 
   .upload-result__row {

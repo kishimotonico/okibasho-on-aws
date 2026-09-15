@@ -290,6 +290,7 @@ components:
 - **success 状態のホバー（新規。DECISION 未定義）:** 箱にマウスを乗せると、一番外側のフラップ2枚（`PAIR_B` の `br`/`fl`。閉じたとき上に重なって合わせ目を作る組）だけが少し開きかける。この2枚専用の `closedOuter` の目標値を 1 から `SUCCESS_HOVER_CLOSED_OUTER`（0.82）へ指数補間で戻す（`upload-box-icon.ts` の `stepBoxIconAnim`。success のシーケンスが終わった後、`elapsedMs >= SUCCESS_SEQUENCE_MS` のときだけ hovering を見る）。内側2枚（`bl`/`fr`）の `closed` は 1 のまま動かさない——4枚とも開くとフラップ同士が貫通して見えたため、外側2枚だけにした（ユーザー確認済み）。ホバーを外すと `closedOuter` も 1 へ戻る。reduced-motion では動かさない
 - **success 状態のクリック（新規。DECISION 未定義）:** 「次のファイルを置く」の操作。クリックまたは Enter/Space で、箱がヨー回転（`spinMs` 900ms）しながら success の完了形を逆再生する（`closed` が 1→0 でフラップが開く、紙が `sFloat` の高さへ戻って現れる、床の円の塗りと `--emerald` の線が元に戻る。純粋関数 `openingTarget(params, u)` が u∈[0,1] に対する目標値を返す）。終わったら `onOpened` を呼び、呼び出し側（Composer）がフォームを初期状態に戻す。reduced-motion では演出なしで即時に `onOpened` を呼ぶ。uploading 中のクリックは無効、開くアニメーション中の二度押しは無視する（`openingT0` で管理し、進行中の再クリックを無視）
 - **アクセシビリティ:** success 状態の箱は `role="button"` / `aria-label="次のファイルを置く"` / `tabIndex=0` を持ち、既存の `Tooltip` コンポーネントで同じラベルを hover / focus-visible に出す。idle / hover / drag / uploading / error では非対話の装飾（`aria-hidden`）のまま
+- **イースターエッグ（未予告）:** 何もないページ地をダブルクリックすると箱が `spin()` で1回転する（ファイル選択は開かない。uploading 中や reduced-motion では既存の `spin()` のガードでそのまま何も起きない）
 - **Favicon:** idle の静的 SVG。CSS 変数は使わずライトパレットの実色を焼き込む
 
 ### Buttons

@@ -447,8 +447,14 @@ export function boxIconAnimNeedsFrames(input: StepBoxIconAnimInput): boolean {
     if (motion === 'success' && elapsedMs < SUCCESS_SEQUENCE_MS) {
       return true;
     }
-    const spinElapsed = nowMs - spinStartedAt;
-    if (spinElapsed >= 0 && spinElapsed < params.spinMs) {
+    // click 直後、マウント時に一度だけ予約された rAF がまだ発火していないと
+    // ensureRunning() は「既に予約済み」として新しい frame を積まない（そのまま
+    // 既存の予約に乗る）。その古い予約の rAF タイムスタンプ（このフレームの
+    // nowMs）は、直前に performance.now() で取った spinStartedAt よりわずかに
+    // 早いことがあり、素の引き算だと負になって「回転中ではない」と誤判定して
+    // しまう（回転が1フレームも進まず終わるバグ）。0 未満は 0 として扱う
+    const spinElapsed = Math.max(0, nowMs - spinStartedAt);
+    if (spinElapsed < params.spinMs) {
       return true;
     }
   }

@@ -107,6 +107,11 @@ export const messages = {
     userPath ? `公開URL ${urlOrigin}${userPath}${value}` : '公開URL',
   /** slug が既存ページと一致しているときの小さなラベルと、新規アップロードに戻す × */
   resetToNewUpload: '新規アップロードにする',
+  /**
+   * × の aria-label。40rem 以下では隣の「再アップロード」ラベルを CSS で隠すため、
+   * ボタン単体でも状況が伝わるよう「再アップロード中」を明示する
+   */
+  resetToNewUploadAriaLabel: '再アップロード中です。新規アップロードにする',
 
   /** 保存期間 */
   retentionLabel: '保存期間',
