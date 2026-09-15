@@ -22,11 +22,17 @@ export interface ListedPage {
    */
   shareTag: string;
   share?: PageShare;
+  /**
+   * 一覧取得時に ListObjectsV2 で見えた metadata の ETag。次回の一覧取得で差分の材料にする。
+   * 書き込み直後に作る行（アップロード・保存期間変更・共有設定変更）には無い
+   */
+  etag?: string;
 }
 
 /**
- * 書き込んだ metadata と slug から一覧の行を組み立てる。
- * アップロード・保存期間変更・共有設定変更の直後に、S3 を読み直さず一覧の該当行を差し替えるために使う。
+ * metadata と slug から一覧の行を組み立てる。
+ * 書き込み（アップロード・保存期間変更・共有設定変更）の直後に、S3 を読み直さず一覧の該当行を
+ * 差し替える用途と、一覧取得（PageStore.list の結果）を行に変換する用途の両方で使う。
  * shareTag（computeShareTag）は WebCrypto を使うため非同期
  */
 export async function listedPageFromMetadata(
@@ -34,6 +40,7 @@ export async function listedPageFromMetadata(
   slug: string,
   metadata: PageMetadata,
   pagesBaseUrl: string,
+  etag?: string,
 ): Promise<ListedPage> {
   const shareTag = await computeShareTag(email, slug);
   return {
@@ -45,6 +52,7 @@ export async function listedPageFromMetadata(
     viewUrl: buildViewUrl(pagesBaseUrl, email, slug),
     shareTag,
     ...(metadata.share ? { share: metadata.share } : {}),
+    ...(etag ? { etag } : {}),
   };
 }
 
@@ -60,13 +68,24 @@ export function pageMetadataFromListed(page: ListedPage): PageMetadata {
   };
 }
 
+/**
+ * previous（前回取得した一覧）を渡すと、PageStore.list の差分取得に使う。
+ * etag を持つ行だけが差分の材料になる（書き込み直後に作った行は次回まるごと取り直される）
+ */
 export async function listPages(
   store: PageStore,
   email: string,
   pagesBaseUrl: string,
+  previous?: readonly ListedPage[],
 ): Promise<ListedPage[]> {
-  const pages = await store.list();
+  const previousStored = (previous ?? []).flatMap((page) =>
+    page.etag ? [{ slug: page.slug, etag: page.etag, metadata: pageMetadataFromListed(page) }] : [],
+  );
+
+  const pages = await store.list(previousStored);
   return Promise.all(
-    pages.map(({ slug, metadata }) => listedPageFromMetadata(email, slug, metadata, pagesBaseUrl)),
+    pages.map(({ slug, metadata, etag }) =>
+      listedPageFromMetadata(email, slug, metadata, pagesBaseUrl, etag),
+    ),
   );
 }

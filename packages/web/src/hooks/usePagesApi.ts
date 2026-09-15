@@ -43,8 +43,11 @@ export interface UploadInput {
 }
 
 export interface PagesApi {
-  /** 一覧（ListedPage[]、作成日時の新しい順） */
-  list: () => Promise<ListedPage[]>;
+  /**
+   * 一覧（ListedPage[]、作成日時の新しい順）。
+   * previous を渡すと、前回の結果を差分取得（ETag が同じ slug は取り直さない）の材料にする
+   */
+  list: (previous?: readonly ListedPage[]) => Promise<ListedPage[]>;
   /** 1 件だけ metadata を読んで一覧の行にする。無ければ null */
   find: (slug: string) => Promise<ListedPage | null>;
   /** 書き込んだ内容から一覧の行を組み立てて返す。呼び出し側はこれで一覧の該当行を差し替えられる */
@@ -103,10 +106,10 @@ export function createPagesApi(config: WebConfig, session: AuthSession | null): 
 
     viewUrl: (slug) => (session ? buildViewUrl(config.pagesBaseUrl, session.email, slug) : ''),
 
-    list: () =>
+    list: (previous) =>
       run(messages.listLoadFailed, async () => {
         const { store, email } = target();
-        const pages = await listPages(store, email, config.pagesBaseUrl);
+        const pages = await listPages(store, email, config.pagesBaseUrl, previous);
         return sortPagesByCreatedAt(pages);
       }),
 

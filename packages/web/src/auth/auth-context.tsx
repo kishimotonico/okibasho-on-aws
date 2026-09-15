@@ -16,6 +16,7 @@ import {
   sessionFromUser,
   type AuthSession,
 } from '~/auth/user-manager';
+import { clearPersistedPages } from '~/lib/query-persistence';
 
 export interface AuthState {
   isLoading: boolean;
@@ -90,6 +91,7 @@ function ClientAuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     // Cognitoは標準のRP-Initiated Logoutに対応していないため、
     // ローカルの状態を消してから独自形式の /logout へ自分で飛ばす
+    await clearPersistedPages();
     await userManager.removeUser();
     window.location.assign(getLogoutUrl());
   }, [userManager]);

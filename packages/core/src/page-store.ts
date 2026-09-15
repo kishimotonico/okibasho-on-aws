@@ -36,6 +36,8 @@ export interface PageFile {
 export interface StoredPage {
   slug: string;
   metadata: PageMetadata;
+  /** ListObjectsV2 で見えた metadata オブジェクトの ETag。差分取得の比較に使う */
+  etag: string;
 }
 
 export interface UploadPageOptions extends UploadMetadataInput {
@@ -50,7 +52,11 @@ export interface UploadPageOptions extends UploadMetadataInput {
 
 /** 1 ユーザーのページに対する S3 操作。書き込んだ metadata を返すので、呼び出し側は S3 を読み直さなくてよい */
 export interface PageStore {
-  list(): Promise<StoredPage[]>;
+  /**
+   * previous を渡すと、ListObjectsV2 の ETag が前回と同じ slug は metadata の GetObject を省き、
+   * 前回の結果を使い回す。変わったもの・新規のものだけ取り直す。省略時は全件 GetObject する
+   */
+  list(previous?: readonly StoredPage[]): Promise<StoredPage[]>;
   getMetadata(slug: string): Promise<PageMetadata | null>;
   /** ページ成果物の並列 Put、今回含まれないオブジェクトの差分削除、metadata の書き込みを行う */
   upload(
@@ -75,7 +81,12 @@ const UPLOAD_CONCURRENCY = 4;
 
 export function createPageStore({ s3, bucket, email }: PageStoreTarget): PageStore {
   async function listKeys(prefix: string): Promise<string[]> {
-    const keys: string[] = [];
+    return (await listEntries(prefix)).map((entry) => entry.key);
+  }
+
+  /** ListObjectsV2 のページングをまとめ、キーと ETag を返す */
+  async function listEntries(prefix: string): Promise<Array<{ key: string; etag: string }>> {
+    const entries: Array<{ key: string; etag: string }> = [];
     let continuationToken: string | undefined;
 
     do {
@@ -87,14 +98,14 @@ export function createPageStore({ s3, bucket, email }: PageStoreTarget): PageSto
         }),
       );
       for (const item of response.Contents ?? []) {
-        if (item.Key) {
-          keys.push(item.Key);
+        if (item.Key && item.ETag) {
+          entries.push({ key: item.Key, etag: item.ETag });
         }
       }
       continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
     } while (continuationToken);
 
-    return keys;
+    return entries;
   }
 
   /** 1 ページのファイル数は MAX_FILE_COUNT（200）以下なので、DeleteObjects の 1000 件上限で分けない */
@@ -194,18 +205,23 @@ export function createPageStore({ s3, bucket, email }: PageStoreTarget): PageSto
   }
 
   return {
-    async list() {
-      const metadataKeys = await listKeys(metaOwnerPrefix(email));
+    async list(previous) {
+      const entries = await listEntries(metaOwnerPrefix(email));
+      const previousBySlug = new Map((previous ?? []).map((page) => [page.slug, page]));
 
-      // metadata の Get は直列だと件数分待たされるので並列にする
+      // metadata の Get は直列だと件数分待たされるので並列にする。ETag が前回と同じなら Get を省く
       const pages = await Promise.all(
-        metadataKeys.map(async (key): Promise<StoredPage | null> => {
+        entries.map(async ({ key, etag }): Promise<StoredPage | null> => {
           const slug = slugFromMetadataKey(email, key);
           if (!slug) {
             return null;
           }
+          const cached = previousBySlug.get(slug);
+          if (cached && cached.etag === etag) {
+            return cached;
+          }
           const metadata = await getMetadata(slug);
-          return metadata ? { slug, metadata } : null;
+          return metadata ? { slug, metadata, etag } : null;
         }),
       );
 

@@ -143,11 +143,51 @@ describe('createPageStore', () => {
 
   it('一覧は meta/ のキーから slug を取り、壊れた metadata を除く', async () => {
     const { fake, store } = setup();
+    const alphaKey = metadataObjectKey(email, 'alpha');
     const alpha = { createdAt: '2026-08-01T00:00:00.000Z', expiresAt: null };
-    fake.putJson(metadataObjectKey(email, 'alpha'), alpha);
+    fake.putJson(alphaKey, alpha);
     fake.objects.set(metadataObjectKey(email, 'broken'), { body: Buffer.from('{') });
 
-    expect(await store.list()).toEqual([{ slug: 'alpha', metadata: alpha }]);
+    expect(await store.list()).toEqual([
+      { slug: 'alpha', metadata: alpha, etag: fake.etagOf(alphaKey) },
+    ]);
+  });
+
+  it('list に前回の結果を渡すと、ETag が同じ slug は GetObject を省いて使い回す', async () => {
+    const { fake, store } = setup();
+    const alphaKey = metadataObjectKey(email, 'alpha');
+    const betaKey = metadataObjectKey(email, 'beta');
+    fake.putJson(alphaKey, { createdAt: '2026-08-01T00:00:00.000Z', expiresAt: null });
+    fake.putJson(betaKey, { createdAt: '2026-08-02T00:00:00.000Z', expiresAt: null });
+
+    const first = await store.list();
+    expect(fake.getObjectCount).toBe(2);
+
+    const betaUpdated = {
+      createdAt: '2026-08-02T00:00:00.000Z',
+      expiresAt: computeExpiresAt('temporary', now),
+    };
+    fake.putJson(betaKey, betaUpdated);
+
+    const second = await store.list(first);
+
+    // 変わっていない alpha は Get されないので、増えるのは beta の 1 回だけ
+    expect(fake.getObjectCount).toBe(3);
+    expect(second.find((page) => page.slug === 'alpha')).toEqual(
+      first.find((page) => page.slug === 'alpha'),
+    );
+    expect(second.find((page) => page.slug === 'beta')?.metadata).toEqual(betaUpdated);
+  });
+
+  it('list の差分取得は S3 から消えた slug を結果から落とす', async () => {
+    const { fake, store } = setup();
+    const alphaKey = metadataObjectKey(email, 'alpha');
+    fake.putJson(alphaKey, { createdAt: '2026-08-01T00:00:00.000Z', expiresAt: null });
+    const first = await store.list();
+
+    fake.objects.delete(alphaKey);
+
+    expect(await store.list(first)).toEqual([]);
   });
 
   it('削除は成果物と metadata をまとめて消す', async () => {

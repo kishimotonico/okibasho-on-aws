@@ -19,6 +19,7 @@ import type { ListedPage } from '~/lib/listed-page';
 import { PAGE_HIGHLIGHT_MS, sortPagesByCreatedAt } from '~/lib/page-list-highlight';
 import { pagesListQueryOptions, pagesQueryKey } from '~/lib/pages-queries';
 import { queryClient } from '~/lib/query-client';
+import { pagesRestored } from '~/lib/query-persistence';
 
 export const Route = createFileRoute('/')({
   validateSearch: (search: Record<string, unknown>): { slug?: string } => ({
@@ -30,7 +31,10 @@ export const Route = createFileRoute('/')({
 
 /**
  * 一覧は loader では await しない。prefetch を始めるだけにして、
- * Composer はすぐ表示し、一覧セクションだけが後から追いつく
+ * Composer はすぐ表示し、一覧セクションだけが後から追いつく。
+ * localStorage からの復元（pagesRestored）だけは待つ。待たずに prefetchQuery すると
+ * 前回の一覧（ETag 差分取得の材料）が間に合わず、復元後の結果を毎回捨てて
+ * 全件取り直すことになる
  */
 async function prefetchPages(): Promise<void> {
   if (import.meta.env.SSR) {
@@ -43,6 +47,8 @@ async function prefetchPages(): Promise<void> {
     // 未ログインなら AuthGate がログインへ送るため、ここでは何もしなくてよい
     return;
   }
+
+  await pagesRestored;
 
   const config = getWebConfig();
   const api = createPagesApi(config, session);
