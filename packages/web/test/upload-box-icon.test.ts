@@ -9,7 +9,7 @@ import {
   C30,
   S30,
   SC,
-  SUCCESS_HOVER_CLOSED,
+  SUCCESS_HOVER_CLOSED_OUTER,
   SUCCESS_SEQUENCE_MS,
   bakePaint,
   boxIconAnimNeedsFrames,
@@ -117,7 +117,7 @@ describe('idle のフラップ', () => {
 
 describe('closed=1 のフラップ', () => {
   it('長さが 0.5、角度が 0 になる', () => {
-    const scene = build(P, { ...idleAnim(P), closed: 1 });
+    const scene = build(P, { ...idleAnim(P), closed: 1, closedOuter: 1 });
     for (const node of flapsOf(scene)) {
       expect(node.len).toBe(0.5);
       expect(node.angDeg).toBe(0);
@@ -125,14 +125,17 @@ describe('closed=1 のフラップ', () => {
   });
 
   it('fLen / bLen が違っても閉じると 0.5 に揃う', () => {
-    const scene = build({ ...P, fLen: 0.2, bLen: 0.3 }, { ...idleAnim(P), closed: 1 });
+    const scene = build(
+      { ...P, fLen: 0.2, bLen: 0.3 },
+      { ...idleAnim(P), closed: 1, closedOuter: 1 },
+    );
     for (const node of flapsOf(scene)) {
       expect(node.len).toBe(0.5);
     }
   });
 
   it('先端辺の線幅は wIn になる', () => {
-    const scene = build(P, { ...idleAnim(P), closed: 1 });
+    const scene = build(P, { ...idleAnim(P), closed: 1, closedOuter: 1 });
     expect(flap(scene, 'fr').edges[1].strokeWidth).toBe(P.wIn);
   });
 });
@@ -158,7 +161,7 @@ describe('depth sort', () => {
   });
 
   it('closed=1 では br/fl が bl/fr の上に来る', () => {
-    const scene = build(P, { ...idleAnim(P), closed: 1, sheetOp: 0 });
+    const scene = build(P, { ...idleAnim(P), closed: 1, closedOuter: 1, sheetOp: 0 });
     const br = flap(scene, 'br');
     const fl = flap(scene, 'fl');
     const bl = flap(scene, 'bl');
@@ -318,7 +321,7 @@ describe('色トークンと viewBox', () => {
 
     // DECISION 2.5 の「蓋が薄緑になる」は採用しない。success で closed=1 になっても
     // フラップの塗りは --well のまま（BoxIconAnim / SortedNode に lid/lidOp は存在しない）
-    const closed = build(P, { ...idleAnim(P), closed: 1, ringFill: 1, ringT: 1 });
+    const closed = build(P, { ...idleAnim(P), closed: 1, closedOuter: 1, ringFill: 1, ringT: 1 });
     expect(flap(closed, 'fr').fill).toBe('var(--well)');
     expect(closed.ring?.fill).toBe('var(--emerald-soft)');
   });
@@ -421,8 +424,15 @@ describe('stepBoxIconAnim', () => {
     expect(ok.ringFill).toBe(gOk.ringFill);
   });
 
-  it('success 完了後、hovering なら closed を SUCCESS_HOVER_CLOSED へ、そうでなければ 1 へ寄せる', () => {
-    const settled = { ...idleAnim(P), closed: 1, ringT: 1, ringFill: 1, sheetOp: 0 };
+  it('success 完了後、hovering なら closedOuter だけを SUCCESS_HOVER_CLOSED_OUTER へ、そうでなければ 1 へ寄せる（closed は 1 で固定）', () => {
+    const settled = {
+      ...idleAnim(P),
+      closed: 1,
+      closedOuter: 1,
+      ringT: 1,
+      ringFill: 1,
+      sheetOp: 0,
+    };
 
     const hovered = stepBoxIconAnim({
       ...base,
@@ -431,16 +441,24 @@ describe('stepBoxIconAnim', () => {
       elapsedMs: SUCCESS_SEQUENCE_MS,
       hovering: true,
     });
-    expect(hovered.closed).toBeCloseTo(lerp(1, SUCCESS_HOVER_CLOSED, ANIM_CONVERGE_K), 10);
+    expect(hovered.closed).toBe(1);
+    expect(hovered.closedOuter).toBeCloseTo(
+      lerp(1, SUCCESS_HOVER_CLOSED_OUTER, ANIM_CONVERGE_K),
+      10,
+    );
 
     const notHovered = stepBoxIconAnim({
       ...base,
-      cur: { ...settled, closed: SUCCESS_HOVER_CLOSED },
+      cur: { ...settled, closedOuter: SUCCESS_HOVER_CLOSED_OUTER },
       motion: 'success',
       elapsedMs: SUCCESS_SEQUENCE_MS,
       hovering: false,
     });
-    expect(notHovered.closed).toBeCloseTo(lerp(SUCCESS_HOVER_CLOSED, 1, ANIM_CONVERGE_K), 10);
+    expect(notHovered.closed).toBe(1);
+    expect(notHovered.closedOuter).toBeCloseTo(
+      lerp(SUCCESS_HOVER_CLOSED_OUTER, 1, ANIM_CONVERGE_K),
+      10,
+    );
   });
 
   it('success のシーケンス中（elapsedMs < SUCCESS_SEQUENCE_MS）は hovering を無視する', () => {
