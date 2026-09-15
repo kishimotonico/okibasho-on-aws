@@ -54,7 +54,7 @@ export const messages = {
   /** 外部共有ダイアログ */
   shareDialogTitleNew: '外部共有',
   shareDialogTitleEdit: '外部共有の設定',
-  shareDialogDescriptionNew: '外部向けの別URLを発行します（内部URLはそのまま）。',
+  shareDialogDescriptionNew: '外部向けの別URLを発行します。内部URLはそのまま使えます。',
   shareUrlLabel: '共有URL',
   shareExpiresMeta: (dateLabel: string) => `${dateLabel} まで`,
   shareUsernameLabel: 'ユーザー名',
@@ -72,12 +72,12 @@ export const messages = {
   shareCopyFailed: 'URL のコピーに失敗しました',
   shareRecreateDialogTitle: 'URLを作り直す',
   shareRecreateDialogDescription:
-    '古いURLは使えなくなります（パスワードを付けている場合はそれも作り直します）。続行しますか？',
+    '古いURLは使えなくなります。パスワードを付けている場合は、それも同時に作り直します。続行しますか？',
   shareStopDialogTitle: '外部共有を停止する',
   shareStopDialogDescription: '共有URLは使えなくなります。続行しますか？',
   shareStopFailed: '共有停止に失敗しました',
-  shareNoticeRecreate: '新しいURLに切り替わりました。反映まで少し時間がかかります。',
-  shareNoticeStop: '共有を停止しました。反映まで少し時間がかかります。',
+  shareNoticeRecreate: '開けるようになるまで数秒かかることがあります。',
+  shareNoticeStop: '無効になるまで数秒かかることがあります。',
   shareClose: '閉じる',
   shareCopyAll: 'まとめてコピー',
   shareCopyAllText: (url: string, username: string, password: string) =>

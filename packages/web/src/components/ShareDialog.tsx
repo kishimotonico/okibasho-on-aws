@@ -32,14 +32,16 @@ interface ShareDialogProps {
   /** 公開URLのホスト部分（末尾スラッシュなし）。usePagesApi().urlOrigin */
   pagesBaseUrl: string;
   onSave: (share: PageShare | null) => Promise<void>;
+  /** アップロード直後の自動オープンなど、開いた時点で発行直後だと分かっているとき true */
+  justIssued?: boolean;
 }
 
 type ConfirmKind = 'recreate' | 'stop' | null;
-type Notice = 'recreate' | 'stop' | null;
+type Notice = 'issued' | 'stop' | null;
 
 function noticeMessage(notice: Notice): string | null {
   switch (notice) {
-    case 'recreate':
+    case 'issued':
       return messages.shareNoticeRecreate;
     case 'stop':
       return messages.shareNoticeStop;
@@ -59,7 +61,14 @@ function buildShareUrl(pagesBaseUrl: string, shareTag: string, id: string): stri
  * 任意の上乗せ。付けるときだけシステムが自動生成した平文パスワードを、ユーザー名
  * （guest固定）とあわせていつでも読み取り・コピーできる
  */
-export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: ShareDialogProps) {
+export function ShareDialog({
+  open,
+  onOpenChange,
+  page,
+  pagesBaseUrl,
+  onSave,
+  justIssued,
+}: ShareDialogProps) {
   const existingShare = page.share ?? null;
   const hasPassword = Boolean(existingShare?.password);
 
@@ -72,7 +81,9 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
     if (!open) {
       return;
     }
-    setNotice(null);
+    // アップロード直後の自動オープンで、開いた時点ですでに発行済みのときは
+    // 「共有URLを発行」を押した直後と同じ注意を最初から出す
+    setNotice(justIssued && existingShare ? 'issued' : null);
     setConfirmAction(null);
     setError(null);
     // page.slug が変わったとき（別ページを開いたとき）だけ初期化すれば十分
@@ -88,6 +99,7 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
     setError(null);
     try {
       await onSave({ id: generateShareId() });
+      setNotice('issued');
     } catch (err) {
       setError(err instanceof Error ? err.message : messages.shareIssueFailed);
     } finally {
@@ -136,7 +148,7 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
         id: generateShareId(),
         ...(hasPassword ? { password: generateSharePassword() } : {}),
       });
-      setNotice('recreate');
+      setNotice('issued');
     } catch (err) {
       setError(err instanceof Error ? err.message : messages.shareRecreateFailed);
     } finally {
@@ -193,6 +205,8 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
                 onCopyError={() => setError(messages.shareCopyFailed)}
                 onCopySuccess={() => setError(null)}
               />
+              {/* 発行・作り直し直後の注意は、対象のURLの近くに出す */}
+              {notice ? <p className="field-hint">{noticeMessage(notice)}</p> : null}
               {page.expiresAt ? (
                 <div className="share-meta-row">
                   <Clock size={12} strokeWidth={1.75} aria-hidden />
@@ -232,7 +246,6 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
               ) : null}
 
               {error ? <p className="message message--error">{error}</p> : null}
-              {notice ? <p className="field-hint">{noticeMessage(notice)}</p> : null}
 
               <div className="ui-dialog__actions">
                 <div className="ui-dialog__actions-secondary">

@@ -200,9 +200,7 @@ describe('ShareDialog', () => {
     await user.click(confirmButtons[confirmButtons.length - 1]!);
 
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(null));
-    expect(
-      await screen.findByText('共有を停止しました。反映まで少し時間がかかります。'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('無効になるまで数秒かかることがあります。')).toBeInTheDocument();
   });
 
   it('共有中: 「作り直す」を確認すると新しいidとpasswordの両方が変わって保存される', async () => {
@@ -231,7 +229,7 @@ describe('ShareDialog', () => {
     expect(share.id).not.toBe('a'.repeat(22));
     expect(share.password).not.toBe('k7mq-3xwp-9rtd-h2vn');
     expect(
-      await screen.findByText('新しいURLに切り替わりました。反映まで少し時間がかかります。'),
+      await screen.findByText('開けるようになるまで数秒かかることがあります。'),
     ).toBeInTheDocument();
   });
 

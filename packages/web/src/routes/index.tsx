@@ -140,6 +140,9 @@ function HomePage() {
   const [highlight, setHighlight] = useState<ComposerSignal>(null);
   // ShareDialog の開閉は一覧・成功結果ブロックのどちらから開いても同じ経路になるよう、ここで一元管理する
   const [shareSlug, setShareSlug] = useState<string | null>(null);
+  // アップロード直後の自動オープン（今回新しく外部公開したとき）だけ、ShareDialog に
+  // 「発行直後」だと伝える。一覧の「外部共有…」から開いたときは null にして伝えない
+  const [justIssuedSlug, setJustIssuedSlug] = useState<string | null>(null);
   // pages から都度探すことで、保存後に一覧が更新されるとダイアログの表示（共有URLなど）も追随する
   const sharePage = shareSlug ? (pages.find((page) => page.slug === shareSlug) ?? null) : null;
 
@@ -206,6 +209,7 @@ function HomePage() {
     setBasePages((current) => applyPagesAction(current, { type: 'upsert', page }));
     if (openShare) {
       setShareSlug(page.slug);
+      setJustIssuedSlug(page.slug);
     }
   };
 
@@ -216,6 +220,7 @@ function HomePage() {
 
   const handleShare = (slug: string) => {
     setShareSlug(slug);
+    setJustIssuedSlug(null);
   };
 
   return (
@@ -252,11 +257,13 @@ function HomePage() {
           onOpenChange={(open) => {
             if (!open) {
               setShareSlug(null);
+              setJustIssuedSlug(null);
             }
           }}
           page={sharePage}
           pagesBaseUrl={api.urlOrigin}
           onSave={(share) => handleShareChange(sharePage, share)}
+          justIssued={shareSlug === justIssuedSlug}
         />
       ) : null}
     </div>
