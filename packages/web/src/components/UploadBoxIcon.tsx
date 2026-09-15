@@ -60,10 +60,16 @@ function svgEl<K extends keyof SVGElementTagNameMap>(
   parent: SVGElement,
   id: string,
   tag: K,
+  /** この要素の直前にあるべき兄弟（先頭なら null）。既にその位置にあるなら appendChild しない */
+  prevSibling: SVGElement | null,
 ): SVGElementTagNameMap[K] {
   const existing = pool.get(id);
   if (existing && existing.namespaceURI === SVG_NS && existing.tagName.toLowerCase() === tag) {
-    parent.appendChild(existing);
+    // 既に正しい位置にあるなら付け直さない。appendChild は一度 DOM から外して挿し直すため、
+    // 毎フレーム呼ぶと CSS の登場アニメーションが再生され続けて消えて見えてしまう
+    if (existing.parentNode !== parent || existing.previousSibling !== prevSibling) {
+      parent.appendChild(existing);
+    }
     return existing as SVGElementTagNameMap[K];
   }
   existing?.remove();
@@ -99,9 +105,14 @@ function itemPrefix(item: SortedNode, index: number): string {
 function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
   svg.setAttribute('stroke-linejoin', scene.join);
   const used = new Set<string>();
+  // 親ごとに「直前に置いた要素」を覚えておき、既にその次にある要素は動かさない
+  const lastByParent = new Map<SVGElement, SVGElement | null>();
   const take = <K extends keyof SVGElementTagNameMap>(parent: SVGElement, id: string, tag: K) => {
     used.add(id);
-    return svgEl(pool, parent, id, tag);
+    const prevSibling = lastByParent.get(parent) ?? null;
+    const el = svgEl(pool, parent, id, tag, prevSibling);
+    lastByParent.set(parent, el);
+    return el;
   };
 
   if (scene.ring) {
