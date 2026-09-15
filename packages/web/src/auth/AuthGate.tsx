@@ -29,7 +29,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (auth.isLoading || !auth.isAuthenticated) {
-    // このブランチは UtilityMenu・main を描画しないので、LoadingShell 側で main を持つ
+    // この分岐では UtilityMenu・main を描画しないので、LoadingShell 側で main を持つ
     return (
       <main className="main">
         <LoadingShell lead={messages.loadingLead} />

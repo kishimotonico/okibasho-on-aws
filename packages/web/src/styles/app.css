@@ -435,13 +435,15 @@ button.text-link,
   background: color-mix(in srgb, var(--line) 55%, var(--bg));
 }
 
+/* .url-input の高さ（padding 1rem + line-height 0.875rem*1.5 + border 2px）に揃える */
 .loading-placeholder--url {
-  height: 2.3rem;
+  height: calc(1rem + 0.875rem * 1.5 + 2px);
   width: 100%;
 }
 
+/* .chip の高さ（padding 0.8rem + line-height 0.8125rem*1.5 + border 2px）に揃える */
 .loading-placeholder--chip {
-  height: 2rem;
+  height: calc(0.8rem + 0.8125rem * 1.5 + 2px);
   width: 5rem;
   border-radius: 999px;
 }
