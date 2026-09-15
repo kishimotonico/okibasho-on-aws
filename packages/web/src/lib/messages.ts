@@ -14,14 +14,15 @@ export const messages = {
   notHtml: 'HTML 以外は置けません',
   uploaded: '公開しました',
   uploadedCopyAriaLabel: '公開しました。クリックで公開URLをコピーします',
-  uploadFailed: '送れませんでした。もう一度どうぞ。',
+  uploadFailed: 'アップロードに失敗しました。もう一度お試しください。',
   loginRequired: 'ログインが必要です',
   copyUrl: 'URLをコピー',
   copied: 'コピーしました',
   copyFailed: 'コピーに失敗しました',
   copyUrlFailed: 'URL のコピーに失敗しました',
   uploadAnother: '次のファイルを置く',
-  confirmOverwrite: (slug: string) => `${slug} はもうあるよ。差し替える？ 保存期間はそのまま`,
+  confirmOverwrite: (slug: string) =>
+    `${slug} は既にあります。保存期間はそのままで差し替えますか？`,
 
   /** 一覧 */
   listHeading: 'アップロード済みページ',
@@ -127,7 +128,7 @@ export const messages = {
     `${dateTimeLabel} まで（あと${daysRemaining}日）`,
 
   /** 通信エラー */
-  networkError: 'つながりません。接続を確かめて、もう一度どうぞ。',
+  networkError: '接続できませんでした。ネットワークを確認してお試しください。',
 
   /** アップロードの検証 */
   validationFilesRequired: 'ファイルを選んでください',
