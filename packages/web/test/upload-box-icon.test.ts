@@ -9,6 +9,8 @@ import {
   C30,
   S30,
   SC,
+  SUCCESS_HOVER_CLOSED,
+  SUCCESS_SEQUENCE_MS,
   bakePaint,
   boxIconAnimNeedsFrames,
   build,
@@ -17,6 +19,7 @@ import {
   effectiveMotion,
   idleAnim,
   lerp,
+  openingTarget,
   poseForReducedMotion,
   proj,
   rot,
@@ -261,7 +264,6 @@ describe('target', () => {
     expect(start.sheetZ).toBeCloseTo(P.sFloat, 10);
     expect(start.sheetOp).toBe(1);
     expect(start.closed).toBe(0);
-    expect(start.lidOp).toBe(0);
     expect(start.ringFill).toBe(0);
     expect(start.ringT).toBe(1);
 
@@ -274,14 +276,39 @@ describe('target', () => {
     expect(done.sheetZ).toBeCloseTo(-0.6 * P.h, 10);
     expect(done.sheetOp).toBe(0);
     expect(done.closed).toBe(1);
-    expect(done.lidOp).toBe(1);
     expect(done.ringFill).toBe(1);
     expect(done.ringDash).toBe(0);
   });
 });
 
+describe('openingTarget', () => {
+  it('success 完了状態から反転する（u=0 で closed=1、u=1 で idle 相当）', () => {
+    const start = openingTarget(P, 0);
+    expect(start.closed).toBe(1);
+    expect(start.sheetOp).toBe(0);
+    expect(start.ringFill).toBe(1);
+    expect(start.ringT).toBe(1);
+    expect(start.sheetZ).toBeCloseTo(-0.6 * P.h, 10);
+
+    const done = openingTarget(P, 1);
+    expect(done.closed).toBe(0);
+    expect(done.sheetOp).toBe(1);
+    expect(done.ringFill).toBe(0);
+    expect(done.ringT).toBe(0);
+    expect(done.sheetZ).toBeCloseTo(P.sFloat, 10);
+    expect(done.dFront).toBe(0);
+    expect(done.dBack).toBe(0);
+    expect(done.ringDash).toBe(0);
+  });
+
+  it('u を clamp01 する', () => {
+    expect(openingTarget(P, -1)).toEqual(openingTarget(P, 0));
+    expect(openingTarget(P, 2)).toEqual(openingTarget(P, 1));
+  });
+});
+
 describe('色トークンと viewBox', () => {
-  it('紙と蓋は --emerald / --emerald-soft を使う', () => {
+  it('紙は --emerald / --emerald-soft を使う。閉じた蓋は --well のまま（ユーザー決定 1）', () => {
     const idle = build(P, idleAnim(P));
     const sheet = idle.items.find((item) => item.type === 'sheet');
     expect(sheet).toMatchObject({
@@ -289,14 +316,11 @@ describe('色トークンと viewBox', () => {
       stroke: 'var(--emerald)',
     });
 
-    const closed = build(P, { ...idleAnim(P), closed: 1, lidOp: 1 });
-    const lid = closed.items.find((item) => item.type === 'lid');
-    expect(lid).toMatchObject({
-      type: 'lid',
-      stroke: 'var(--emerald)',
-      depth: 9,
-    });
-    expect(flap(closed, 'fr').fill).toContain('--emerald-soft');
+    // DECISION 2.5 の「蓋が薄緑になる」は採用しない。success で closed=1 になっても
+    // フラップの塗りは --well のまま（BoxIconAnim / SortedNode に lid/lidOp は存在しない）
+    const closed = build(P, { ...idleAnim(P), closed: 1, ringFill: 1, ringT: 1 });
+    expect(flap(closed, 'fr').fill).toBe('var(--well)');
+    expect(closed.ring?.fill).toBe('var(--emerald-soft)');
   });
 
   it('開口部の暗さは決定値の式どおり', () => {
@@ -393,9 +417,42 @@ describe('stepBoxIconAnim', () => {
       elapsedMs: 600,
     });
     expect(ok.closed).toBe(gOk.closed);
-    expect(ok.lidOp).toBe(gOk.lidOp);
     expect(ok.sheetOp).toBe(gOk.sheetOp);
     expect(ok.ringFill).toBe(gOk.ringFill);
+  });
+
+  it('success 完了後、hovering なら closed を SUCCESS_HOVER_CLOSED へ、そうでなければ 1 へ寄せる', () => {
+    const settled = { ...idleAnim(P), closed: 1, ringT: 1, ringFill: 1, sheetOp: 0 };
+
+    const hovered = stepBoxIconAnim({
+      ...base,
+      cur: settled,
+      motion: 'success',
+      elapsedMs: SUCCESS_SEQUENCE_MS,
+      hovering: true,
+    });
+    expect(hovered.closed).toBeCloseTo(lerp(1, SUCCESS_HOVER_CLOSED, ANIM_CONVERGE_K), 10);
+
+    const notHovered = stepBoxIconAnim({
+      ...base,
+      cur: { ...settled, closed: SUCCESS_HOVER_CLOSED },
+      motion: 'success',
+      elapsedMs: SUCCESS_SEQUENCE_MS,
+      hovering: false,
+    });
+    expect(notHovered.closed).toBeCloseTo(lerp(SUCCESS_HOVER_CLOSED, 1, ANIM_CONVERGE_K), 10);
+  });
+
+  it('success のシーケンス中（elapsedMs < SUCCESS_SEQUENCE_MS）は hovering を無視する', () => {
+    const g = target(P, 'success', 600);
+    const withHover = stepBoxIconAnim({
+      ...base,
+      cur: idleAnim(P),
+      motion: 'success',
+      elapsedMs: 600,
+      hovering: true,
+    });
+    expect(withHover.closed).toBe(g.closed);
   });
 
   it('spin は easeInOut で 0→360', () => {
@@ -438,7 +495,6 @@ describe('stepBoxIconAnim', () => {
 
     const ok = poseForReducedMotion(P, 'success');
     expect(ok.closed).toBe(1);
-    expect(ok.lidOp).toBe(1);
     expect(ok.sheetOp).toBe(0);
     expect(ok.ringFill).toBe(1);
   });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -91,6 +91,47 @@ describe('BoxBubble', () => {
     await user.click(screen.getByRole('button', { name: 'やめる' }));
 
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('onCopy 指定時、success の吹き出しをクリックするとコピーして「コピーしました」に変わる', async () => {
+    const onCopy = vi.fn().mockResolvedValue(true);
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <BoxBubble kind="success" open message="公開しました" onClose={onClose} onCopy={onCopy}>
+        <span>箱</span>
+      </BoxBubble>,
+    );
+
+    const panel = screen.getByRole('status');
+    expect(panel).toHaveAccessibleName(/クリックで公開URLをコピーします/);
+
+    await user.click(screen.getByText('公開しました'));
+
+    expect(onCopy).toHaveBeenCalledOnce();
+    // クリックした瞬間は閉じない（コピー成功の合図を一瞬見せてから閉じる）
+    expect(onClose).not.toHaveBeenCalled();
+    await waitFor(() => expect(panel).toHaveTextContent('コピーしました'));
+  });
+
+  it('onCopy が失敗したら失敗文言を表示し、閉じずに残す', async () => {
+    const onCopy = vi.fn().mockResolvedValue(false);
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <BoxBubble kind="success" open message="公開しました" onClose={onClose} onCopy={onCopy}>
+        <span>箱</span>
+      </BoxBubble>,
+    );
+
+    await user.click(screen.getByText('公開しました'));
+
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('URL のコピーに失敗しました'),
+    );
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('吹き出しクリックで箱側 onClick が発火しない', async () => {

@@ -5,12 +5,13 @@ import {
   SHARE_USERNAME,
   type PageShare,
 } from '@okibasho/core';
-import { X } from 'lucide-react';
+import { Clock, X } from 'lucide-react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useEffect, useState } from 'react';
 
 import { ConfirmAlertDialog } from '~/components/AlertDialog';
 import { CopyButton } from '~/components/CopyButton';
+import { PasswordToggle } from '~/components/PasswordToggle';
 import { Tooltip } from '~/components/Tooltip';
 import { UrlField } from '~/components/UrlField';
 import { formatJstDate } from '~/lib/expiration-status';
@@ -193,49 +194,42 @@ export function ShareDialog({ open, onOpenChange, page, pagesBaseUrl, onSave }: 
                 onCopySuccess={() => setError(null)}
               />
               {page.expiresAt ? (
-                <p className="field-hint">
-                  {messages.shareExpiresHint(formatJstDate(page.expiresAt))}
-                </p>
+                <div className="share-meta-row">
+                  <Clock size={12} strokeWidth={1.75} aria-hidden />
+                  <span>{messages.shareExpiresMeta(formatJstDate(page.expiresAt))}</span>
+                </div>
               ) : null}
 
-              <div className="share-password-group">
-                <label className="share-password-toggle">
-                  <input
-                    type="checkbox"
-                    checked={hasPassword}
-                    disabled={saving}
-                    onChange={(event) => void handlePasswordToggle(event.target.checked)}
-                  />
-                  {messages.sharePasswordToggle}
-                </label>
-                {!hasPassword ? (
-                  <p className="field-hint">{messages.sharePasswordToggleHint}</p>
-                ) : null}
-
-                {hasPassword ? (
-                  <div className="share-credentials">
-                    <div className="share-credentials__field">
-                      <span className="share-form__field-label">{messages.shareUsernameLabel}</span>
-                      <p className="share-credentials__value share-credentials__value--mono">
-                        {SHARE_USERNAME}
-                      </p>
-                    </div>
-                    <div className="share-credentials__field">
-                      <span className="share-form__field-label">{messages.sharePasswordLabel}</span>
-                      <div className="share-credentials__password">
-                        <span className="share-credentials__value share-credentials__value--mono">
-                          {existingShare.password}
-                        </span>
-                        <CopyButton
-                          value={existingShare.password!}
-                          variant="icon"
-                          label={messages.sharePasswordCopy}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
+              <div className="password-toggle-row">
+                <PasswordToggle
+                  pressed={hasPassword}
+                  disabled={saving}
+                  onToggle={() => void handlePasswordToggle(!hasPassword)}
+                />
               </div>
+
+              {hasPassword ? (
+                <div className="password-panel">
+                  <div className="password-panel__row">
+                    <span className="password-panel__label">{messages.shareUsernameLabel}</span>
+                    <span className="password-panel__value">{SHARE_USERNAME}</span>
+                    <CopyButton
+                      value={SHARE_USERNAME}
+                      variant="icon"
+                      label={messages.shareUsernameCopy}
+                    />
+                  </div>
+                  <div className="password-panel__row">
+                    <span className="password-panel__label">{messages.sharePasswordLabel}</span>
+                    <span className="password-panel__value">{existingShare.password}</span>
+                    <CopyButton
+                      value={existingShare.password!}
+                      variant="icon"
+                      label={messages.sharePasswordCopy}
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               {error ? <p className="message message--error">{error}</p> : null}
               {notice ? <p className="field-hint">{noticeMessage(notice)}</p> : null}

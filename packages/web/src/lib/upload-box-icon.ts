@@ -43,7 +43,6 @@ export type BoxIconAnim = {
   dFront: number;
   dBack: number;
   closed: number;
-  lidOp: number;
   ringT: number;
   ringFill: number;
   ringDash: number;
@@ -65,7 +64,6 @@ const INTERP_KEYS = [
   'dFront',
   'dBack',
   'closed',
-  'lidOp',
   'ringT',
   'ringFill',
   'ringDash',
@@ -132,16 +130,7 @@ export type FlapNode = {
   edges: readonly [StrokeSeg, StrokeSeg, StrokeSeg, StrokeSeg];
 };
 
-export type LidNode = {
-  type: 'lid';
-  depth: number;
-  d: string;
-  stroke: string;
-  strokeWidth: number;
-  opacity: number;
-};
-
-export type SortedNode = FaceNode | InnerNode | SheetNode | FlapNode | LidNode;
+export type SortedNode = FaceNode | InnerNode | SheetNode | FlapNode;
 
 export type BoxIconScene = {
   ring: RingNode | null;
@@ -272,7 +261,6 @@ export function idleAnim(p: BoxIconParams): BoxIconAnim {
     dFront: 0,
     dBack: 0,
     closed: 0,
-    lidOp: 0,
     ringT: 0,
     ringFill: 0,
     ringDash: 0,
@@ -282,8 +270,16 @@ export function idleAnim(p: BoxIconParams): BoxIconAnim {
 }
 
 /**
+ * success で箱にホバーしたときに蓋がわずかに開きかける（closed の目標値）。
+ * DECISION 2.2 の bobAmp 同様、見た目で決めた値（モックは 0.94。ここは 0.9）。
+ */
+export const SUCCESS_HOVER_CLOSED = 0.9;
+
+/**
  * 各状態の目標値。t は状態に入ってからの経過ミリ秒。
  * error はチューナー未定義のため IDLE へ戻す。
+ * DECISION 2.5 と異なり、success で蓋をエメラルドに染める lidOp は持たない
+ * （ユーザー決定: 閉じた蓋は --well のまま。成功は床の円の緑だけで伝える。詳細は DESIGN.md）。
  */
 export function target(p: BoxIconParams, state: BoxIconMotion, t: number): BoxIconAnim {
   const g = idleAnim(p);
@@ -312,7 +308,6 @@ export function target(p: BoxIconParams, state: BoxIconMotion, t: number): BoxIc
     g.sheetZ = lerp(p.sFloat, -0.6 * p.h, ease(u / 0.45));
     g.sheetOp = u < 0.4 ? 1 : Math.max(0, 1 - (u - 0.4) / 0.25);
     g.closed = ease((u - 0.35) / 0.55);
-    g.lidOp = ease((u - 0.85) / 0.35);
     g.ringT = 1;
     g.ringFill = ease((u - 0.6) / 0.4);
   }
@@ -368,6 +363,9 @@ export function poseForReducedMotion(p: BoxIconParams, motion: BoxIconMotion): B
   return idleAnim(p);
 }
 
+/** success の一度きりのシーケンスが終わるまでのミリ秒（target() の success 分岐が終息する時間）。 */
+export const SUCCESS_SEQUENCE_MS = 1200;
+
 export type StepBoxIconAnimInput = {
   cur: BoxIconAnim;
   params: BoxIconParams;
@@ -376,15 +374,20 @@ export type StepBoxIconAnimInput = {
   nowMs: number;
   spinStartedAt: number;
   reducedMotion: boolean;
+  /** success 完了後、箱にホバーしているか。蓋をわずかに開きかける演出にだけ使う。 */
+  hovering?: boolean;
 };
 
 /**
  * チューナー render() 1フレーム分。
  * uploading / success、および hover の sheetZ は目標値を直接代入。それ以外は指数補間。
  * spin は easeInOut で 0→360。reduced-motion ではポーズへ即時切替、spin は 0。
+ * success のシーケンスが終わったあとだけ、hovering に応じて closed を
+ * SUCCESS_HOVER_CLOSED（開きかけ）/ 1（閉じたまま）へ指数補間で寄せる
+ * （DECISION 未定義・今回追加。reduced-motion では動かさない）。
  */
 export function stepBoxIconAnim(input: StepBoxIconAnimInput): BoxIconAnim {
-  const { cur, params, motion, elapsedMs, nowMs, spinStartedAt, reducedMotion } = input;
+  const { cur, params, motion, elapsedMs, nowMs, spinStartedAt, reducedMotion, hovering } = input;
   if (reducedMotion) {
     return { ...poseForReducedMotion(params, motion), spin: 0 };
   }
@@ -394,6 +397,10 @@ export function stepBoxIconAnim(input: StepBoxIconAnimInput): BoxIconAnim {
     const assignDirect =
       motion === 'uploading' || motion === 'success' || (motion === 'hover' && key === 'sheetZ');
     next[key] = assignDirect ? g[key] : lerp(cur[key], g[key], ANIM_CONVERGE_K);
+  }
+  if (motion === 'success' && elapsedMs >= SUCCESS_SEQUENCE_MS) {
+    const liftTarget = hovering ? SUCCESS_HOVER_CLOSED : 1;
+    next.closed = lerp(cur.closed, liftTarget, ANIM_CONVERGE_K);
   }
   const su = (nowMs - spinStartedAt) / params.spinMs;
   next.spin = su < 1 ? 360 * easeInOut(su) : 0;
@@ -422,7 +429,7 @@ export function boxIconAnimNeedsFrames(input: StepBoxIconAnimInput): boolean {
     if (motion === 'hover' || motion === 'uploading') {
       return true;
     }
-    if (motion === 'success' && elapsedMs < 1200) {
+    if (motion === 'success' && elapsedMs < SUCCESS_SEQUENCE_MS) {
       return true;
     }
     const spinElapsed = nowMs - spinStartedAt;
@@ -432,6 +439,41 @@ export function boxIconAnimNeedsFrames(input: StepBoxIconAnimInput): boolean {
   }
   const next = stepBoxIconAnim(input);
   return !boxIconAnimNearlyEqual(cur, next);
+}
+
+/** success の一度きりのシーケンスのうち、opening が上書きしない残りのキー。 */
+export type BoxIconOpeningAnim = Pick<
+  BoxIconAnim,
+  | 'sheetOp'
+  | 'closed'
+  | 'ringFill'
+  | 'ringT'
+  | 'ringDash'
+  | 'dashOff'
+  | 'dFront'
+  | 'dBack'
+  | 'sheetZ'
+>;
+
+/**
+ * success 完了状態からクリックで開くときの、経過分数 u（0〜1）に対する目標値。
+ * DECISION に定義はなく、2.5（success）を反転させた今回の追加仕様（ユーザー決定 3）。
+ * spin は別途 easeInOut(u) * 360 で計算し、この戻り値には含めない
+ * （呼び出し側で spin を合成して1フレーム分の BoxIconAnim を組み立てる）。
+ */
+export function openingTarget(p: BoxIconParams, u: number): BoxIconOpeningAnim {
+  const uu = clamp01(u);
+  return {
+    sheetOp: clamp01((uu - 0.28) / 0.4),
+    closed: 1 - ease(clamp01((uu - 0.05) / 0.75)),
+    ringFill: 1 - clamp01(uu / 0.5),
+    ringT: 1 - clamp01((uu - 0.6) / 0.4),
+    ringDash: 0,
+    dashOff: 0,
+    dFront: 0,
+    dBack: 0,
+    sheetZ: lerp(-0.6 * p.h, p.sFloat, clamp01((uu - 0.3) / 0.6)),
+  };
 }
 
 function add(a: Vec3, b: Vec3): Vec3 {
@@ -602,8 +644,8 @@ export function build(p: BoxIconParams, st: BoxIconAnim): BoxIconScene {
   const bAng = lerp(p.bAng + st.dBack, 0, closed);
   const bLen = lerp(p.bLen, 0.5, closed);
   const fLen = lerp(p.fLen, 0.5, closed);
-  const lidFill =
-    st.lidOp > 0 ? mix('var(--well)', 'var(--emerald-soft)', st.lidOp) : 'var(--well)';
+  // ユーザー決定 1: 閉じた蓋は --well のまま。DECISION 2.5 の「蓋が薄緑になる」は採用しない
+  // （成功はフラップと重なって見た目が崩れていたため。床の円の緑だけで伝える。DESIGN.md 参照）。
 
   SIDES.forEach((s) => {
     const back = s.key === 'bl' || s.key === 'br';
@@ -625,7 +667,7 @@ export function build(p: BoxIconParams, st: BoxIconAnim): BoxIconScene {
       depth: depthOf(q3) + (PAIR_B[s.key] ? 1.0 * closed : 0),
       angDeg,
       len,
-      fill: closed > 0.5 ? lidFill : 'var(--well)',
+      fill: 'var(--well)',
       fillPath: pathFrom(q, true),
       points3: q3,
       edges: [
@@ -636,17 +678,6 @@ export function build(p: BoxIconParams, st: BoxIconAnim): BoxIconScene {
       ],
     });
   });
-
-  if (st.lidOp > 0.01) {
-    items.push({
-      type: 'lid',
-      depth: 9,
-      d: pathFrom(top, true),
-      stroke: 'var(--emerald)',
-      strokeWidth: round2(p.wOut),
-      opacity: round2(st.lidOp),
-    });
-  }
 
   items.sort((a, b) => a.depth - b.depth);
   return { ring, items, join, pts };
@@ -782,17 +813,10 @@ export function sceneToStaticSvg(
       }
       continue;
     }
-    if (item.type === 'flap') {
-      path(item.fillPath, ` fill="${bakePaint(item.fill)}" stroke="none"`);
-      for (const edge of item.edges) {
-        path(edge.d, ` fill="none" stroke-width="${edge.strokeWidth}"`);
-      }
-      continue;
+    path(item.fillPath, ` fill="${bakePaint(item.fill)}" stroke="none"`);
+    for (const edge of item.edges) {
+      path(edge.d, ` fill="none" stroke-width="${edge.strokeWidth}"`);
     }
-    path(
-      item.d,
-      ` fill="none" stroke="${bakePaint(item.stroke)}" stroke-width="${item.strokeWidth}" opacity="${item.opacity}"`,
-    );
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox.join(' ')}" fill="none" stroke="${BOX_ICON_BAKED_COLORS.text}" stroke-linecap="round" stroke-linejoin="${scene.join}">${parts.join('')}</svg>\n`;

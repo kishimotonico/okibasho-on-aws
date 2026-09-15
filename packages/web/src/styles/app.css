@@ -466,8 +466,22 @@ button.text-link,
   padding-top: 0.15rem;
 }
 
-/* 削除アイコンボタン（2.25rem 角）と高さを揃える。同じ ghost だが「次のファイルを置く」より
-   小さく控えめに見えるよう、padding とフォントサイズを絞る */
+/* 1行レイアウト: URL一体枠（伸縮）＋ 外部共有・削除（末尾）。高さ・角丸・罫線をそろえて
+   ひとまとまりに見せる。40rem 以下では stack（レスポンシブ節を参照） */
+.upload-result__row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.upload-result__row .url-field {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+/* 削除アイコンボタン（2.25rem 角）と高さを揃える。同じ ghost だが控えめに見えるよう、
+   padding とフォントサイズを絞る */
 .upload-result__share {
   gap: 0.4rem;
   height: 2.25rem;
@@ -476,8 +490,17 @@ button.text-link,
   font-weight: 600;
 }
 
+/* 外部共有ボタンと高さ・角丸・罫線・地色をそろえ、1行の中で一体に見えるようにする。
+   icon-button 既定の透明地のままだと、罫線だけが浮いた別枠に見えてしまう */
 .upload-result__delete {
   flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.upload-result__delete:hover {
+  background: var(--raised);
 }
 
 .upload-result__actions {
@@ -486,19 +509,16 @@ button.text-link,
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  margin-top: 0.65rem;
 }
 
-.upload-result__another {
-  display: flex;
-  margin: 0.85rem auto 0;
+.upload-result__row .upload-result__actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
 }
 
 /* ---------- SlugField（公開URL。固定部分 + slug 入力） ---------- */
 
-.url-field,
-.retention-field,
-.visibility-field {
+.url-field {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -506,9 +526,7 @@ button.text-link,
   width: 100%;
 }
 
-.url-field .field-label,
-.retention-field .field-label,
-.visibility-field .field-label {
+.url-field .field-label {
   margin-bottom: 0;
 }
 
@@ -633,73 +651,65 @@ button.text-link,
   border-radius: 0 5px 5px 0;
 }
 
-/* ---------- RetentionToggle（30日 / 無期限のセグメント） ---------- */
+/* ---------- UploadOptions（保存期間・公開範囲・パスワードのチップ列） ----------
+ * slug 入力の直下に横一列で並べる。チップは「もう設定済みの値」に見える閉じた表示で、
+ * クリックでポップオーバー（保存期間・公開範囲）から選ぶ。折り返しは flex-wrap に任せる
+ */
 
-.retention-field .seg {
-  align-self: flex-start;
-}
-
-/* ---------- VisibilityToggle（内部のみ / 外部にも公開のセグメント） ---------- */
-
-.visibility-field .seg {
-  align-self: flex-start;
-}
-
-/* ---------- 公開範囲の展開パネル（「外部にも公開」を選んだときだけ、にゅっと開く） ---------- */
-
-.share-visibility-panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  width: 100%;
-  transition: grid-template-rows 220ms ease;
-}
-
-.share-visibility-panel--open {
-  grid-template-rows: 1fr;
-}
-
-.share-visibility-panel__inner {
+.toolbar-row {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-height: 0;
-  overflow: hidden;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  width: 100%;
 }
 
-/* Composer の展開パネル内では、パネル自体の gap がまとまりを作るので
-   share-password-toggle 側の上マージンは重ねない（一つの設定に見せる） */
-.share-password-toggle.share-password-toggle--tight {
-  margin-top: 0;
-}
-
-.seg {
+.chip {
   display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--raised);
-}
-
-.seg button {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  padding: 0.5rem 0.75rem;
-  font: inherit;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.seg button[aria-pressed='true'],
-.seg button.on {
-  background: color-mix(in srgb, var(--text) 8%, var(--raised));
+  border-radius: 999px;
+  background: var(--well);
   color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
   font-weight: 600;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.seg button:disabled {
+.chip:hover:not(:disabled):not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--text) 5%, var(--well));
+}
+
+.chip:disabled,
+.chip[aria-disabled='true'] {
   cursor: not-allowed;
-  opacity: 0.55;
+  color: var(--muted);
+}
+
+.chip .chip__icon {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.chip .chip__chev {
+  display: inline-flex;
+  color: var(--muted);
+  margin-left: 0.1rem;
+}
+
+/* パスワードのオン/オフ（PasswordToggle）。オンはセグメントの選択と同じ薄い墨の塗り */
+.chip--toggle.chip--on {
+  background: color-mix(in srgb, var(--text) 8%, var(--well));
+  color: var(--text);
+  font-weight: 700;
+}
+
+.chip--toggle.chip--on .chip__icon {
+  color: var(--text);
 }
 
 /* ---------- UploadBoxIcon（箱アイコン。幾何は lib/upload-box-icon.ts） ---------- */
@@ -719,6 +729,12 @@ button.text-link,
   width: 100%;
   height: 100%;
   overflow: visible;
+}
+
+/* success 状態の箱は「次のファイルを置く」の操作。role="button" として押せる見た目にする */
+.upload-box-icon--openable {
+  cursor: pointer;
+  border-radius: 12px;
 }
 
 .upload-box-icon [data-role='outline'],
@@ -890,6 +906,25 @@ button.text-link,
   font-size: 0.875rem;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+/* success かつコピー操作を持つときだけ、テキストの右にコピーの意図を示す小さなアイコンを添える。
+   文言では説明せず、形（Copy → コピー成功で Check）で伝える */
+.box-bubble__message--copy {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.box-bubble__copy-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  opacity: 0.75;
+}
+
+.box-bubble__panel--copied .box-bubble__copy-icon {
+  opacity: 1;
 }
 
 .box-bubble__actions {
@@ -1094,7 +1129,7 @@ button.text-link,
   width: min(26rem, calc(100vw - 2rem));
   max-height: calc(100vh - 4rem);
   overflow-y: auto;
-  padding: 1.1rem 1.25rem 1.25rem;
+  padding: 1.3rem 1.4rem 1.4rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--raised);
@@ -1105,14 +1140,14 @@ button.text-link,
 
 .ui-dialog__close {
   position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
+  top: 0.7rem;
+  right: 0.7rem;
 }
 
 .ui-dialog__title {
-  margin: 0 2rem 0.45rem 0;
-  font-size: 0.95rem;
-  font-weight: 600;
+  margin: 0 2rem 0.7rem 0;
+  font-size: 0.98rem;
+  font-weight: 700;
 }
 
 .ui-dialog__description {
@@ -1143,65 +1178,55 @@ button.text-link,
   margin-left: 0.75rem;
 }
 
-.share-form__field-label {
-  display: block;
+/* ---------- ShareDialog のパスワードのオン/オフ（PasswordToggle）と、オン時の表示 ---------- */
+
+.password-toggle-row {
+  display: flex;
+  margin-top: 0.75rem;
+}
+
+.password-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.password-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.password-panel__label {
+  flex: 0 0 auto;
+  min-width: 4.5rem;
   color: var(--muted);
   font-weight: 600;
   font-size: 0.8125rem;
 }
 
-/* ---------- ShareDialog / Composer のパスワード付け外しトグル ---------- */
-
-.share-password-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
+.password-panel__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.share-password-toggle input[type='checkbox'] {
-  width: 1rem;
-  height: 1rem;
-  accent-color: var(--text);
-  cursor: pointer;
-}
-
-/* ---------- ShareDialog のユーザー名・パスワード表示（常時表示。ハッシュ化も一時表示もしない） ---------- */
-
-.share-credentials {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  margin-top: 0.6rem;
-  margin-left: 1.5rem;
-  padding-left: 0.75rem;
-  /* チェックボックスの下にぶら下がる形にし、罫線だけで控えめにグルーピングする */
-  border-left: 1px solid var(--line);
-}
-
-.share-credentials__field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.share-credentials__value {
-  margin: 0;
-  font-size: 0.875rem;
+  letter-spacing: 0.05em;
   overflow-wrap: anywhere;
 }
 
-.share-credentials__value--mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: 0.05em;
-}
+/* ---------- 保存期限のメタ行（共有URLの直下。Clock アイコン + 短いラベル） ---------- */
 
-.share-credentials__password {
+.share-meta-row {
   display: flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 /* ---------- Menu（一覧行の kebab、UtilityMenu の中身。Radix DropdownMenu） ---------- */
@@ -1253,6 +1278,21 @@ button.text-link,
   background: var(--danger-soft);
 }
 
+/* ---------- ラジオ項目（UploadOptions の保存期間・公開範囲チップのポップオーバー） ---------- */
+
+.ui-menu__item--radio {
+  gap: 0.4rem;
+}
+
+.ui-menu__item-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  flex-shrink: 0;
+  color: var(--text);
+}
+
 /* ---------- Tooltip（slug 入力・アイコンボタン・UtilityMenu トリガーで共用） ---------- */
 
 .ui-tooltip {
@@ -1263,7 +1303,10 @@ button.text-link,
   border-radius: 8px;
   font-size: 0.8125rem;
   line-height: 1.4;
-  box-shadow: var(--shadow-overlay);
+  /* box-shadow は本体の矩形にしか掛からず、矩形からはみ出す矢印の手前で影が
+     途切れて段差に見えてしまう。box-shadow ではなく filter: drop-shadow にして、
+     本体＋矢印（子要素）をまとめた描画結果のシルエットに影を落とす */
+  filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--text) 10%, transparent));
   z-index: 40;
   animation: ui-overlay-in 120ms ease-out;
 }
@@ -1274,19 +1317,25 @@ button.text-link,
   height: 8px;
   margin-left: -4px;
   background: var(--raised);
-  border: 1px solid var(--line);
   transform: rotate(45deg);
   z-index: -1;
 }
 
+/* 矢印の border は、本体からはみ出して見える2辺だけに付ける。本体側を向く2辺には
+   border を付けないことで、本体の矩形の border と矢印の border が重なって
+   継ぎ目の線に見えることを防ぐ（Radix の Arrow を使わない代わりの手当て） */
 .ui-tooltip[data-side='top'] .ui-tooltip__arrow {
   left: 50%;
-  bottom: -5px;
+  bottom: -4px;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
 }
 
 .ui-tooltip[data-side='bottom'] .ui-tooltip__arrow {
   left: 50%;
-  top: -5px;
+  top: -4px;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
 }
 
 /* ---------- UtilityMenu（右上の固定メニュー） ---------- */
@@ -1330,10 +1379,6 @@ button.text-link,
   .box-bubble__panel {
     transition: none;
   }
-
-  .share-visibility-panel {
-    transition: none;
-  }
 }
 
 /* ---------- レスポンシブ ---------- */
@@ -1370,13 +1415,13 @@ button.text-link,
     padding-left: 0.65rem;
   }
 
-  .retention-field .seg,
-  .visibility-field .seg {
-    width: 100%;
+  .upload-result__row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .retention-field .seg button,
-  .visibility-field .seg button {
-    flex: 1;
+  .upload-result__row .url-field {
+    flex: 0 0 auto;
+    width: 100%;
   }
 }

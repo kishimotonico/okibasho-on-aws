@@ -13,6 +13,7 @@ export const messages = {
   invalidSlug: '使えるのは小文字の英数字と - _ だけ',
   notHtml: 'HTML 以外は置けません',
   uploaded: '公開しました',
+  uploadedCopyAriaLabel: '公開しました。クリックで公開URLをコピーします',
   uploadFailed: '送れませんでした。もう一度どうぞ。',
   loginRequired: 'ログインが必要です',
   copyUrl: 'URLをコピー',
@@ -52,12 +53,11 @@ export const messages = {
   /** 外部共有ダイアログ */
   shareDialogTitleNew: '外部共有',
   shareDialogTitleEdit: '外部共有の設定',
-  shareDialogDescriptionNew: '外部の人に渡す別のURLを発行します。内部URLはそのまま使えます。',
+  shareDialogDescriptionNew: '外部向けの別URLを発行します（内部URLはそのまま）。',
   shareUrlLabel: '共有URL',
-  shareExpiresHint: (dateLabel: string) => `保存期限（${dateLabel}）を過ぎると共有も終わります`,
-  sharePasswordToggle: 'パスワードを付ける',
-  sharePasswordToggleHint: 'オンにすると、開くときにユーザー名とパスワードの入力が必要になります。',
+  shareExpiresMeta: (dateLabel: string) => `${dateLabel} まで`,
   shareUsernameLabel: 'ユーザー名',
+  shareUsernameCopy: 'ユーザー名をコピー',
   sharePasswordLabel: 'パスワード',
   sharePasswordCopy: 'パスワードをコピー',
   shareIssue: '共有URLを発行',
@@ -75,8 +75,8 @@ export const messages = {
   shareStopDialogTitle: '外部共有を停止する',
   shareStopDialogDescription: '共有URLは使えなくなります。続行しますか？',
   shareStopFailed: '共有停止に失敗しました',
-  shareNoticeRecreate: '新しいURLに切り替わるまで少し時間がかかることがあります。',
-  shareNoticeStop: '無効になるまで少し時間がかかることがあります。',
+  shareNoticeRecreate: '新しいURLに切り替わりました。反映まで少し時間がかかります。',
+  shareNoticeStop: '共有を停止しました。反映まで少し時間がかかります。',
   shareClose: '閉じる',
   shareCopyAll: 'まとめてコピー',
   shareCopyAllText: (url: string, username: string, password: string) =>
@@ -114,9 +114,12 @@ export const messages = {
   shareVisibilityLabel: '公開範囲',
   shareVisibilityInternalOption: '内部のみ',
   shareVisibilityExternalOption: '外部にも公開',
-  shareVisibilityLocked: '外部共有中（設定はそのまま）',
-  shareVisibilityAutoNotice: '外部共有URLを自動で発行します。',
-  shareVisibilityPasswordToggle: 'パスワードを付ける',
+  shareVisibilityLocked: '外部共有中',
+  shareVisibilityLockedHint: '設定はそのまま',
+
+  /** パスワードのオン/オフ（PasswordToggle。Composer のチップと ShareDialog で共通） */
+  sharePasswordChipOff: 'パスワードなし',
+  sharePasswordChipOn: 'パスワードあり',
 
   /** 一覧の期限表示 */
   expiredLabel: (dateLabel: string) => `期限切れ（${dateLabel}）`,

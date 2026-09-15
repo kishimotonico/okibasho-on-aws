@@ -7,31 +7,30 @@ import viteReact from '@vitejs/plugin-react';
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
-const HARNESS_URL = '/dev/upload-box-icon';
-const HARNESS_HTML = path.resolve(rootDir, 'dev/upload-box-icon.html');
 
-function isHarnessUrl(url: string | undefined): boolean {
+function isHarnessUrl(url: string | undefined, harnessUrl: string): boolean {
   const pathOnly = url?.split('?')[0]?.split('#')[0];
   return (
-    pathOnly === HARNESS_URL || pathOnly === `${HARNESS_URL}/` || pathOnly === `${HARNESS_URL}.html`
+    pathOnly === harnessUrl || pathOnly === `${harnessUrl}/` || pathOnly === `${harnessUrl}.html`
   );
 }
 
-/** Vite serve のときだけ箱アイコン確認用 HTML を返す。build には載せない。 */
-function uploadBoxIconHarness(): Plugin {
+/** Vite serve のときだけ確認用 HTML を返す dev 専用ハーネス。build には載せない */
+function devHarness(name: string, harnessUrl: string, htmlFile: string): Plugin {
+  const harnessHtml = path.resolve(rootDir, 'dev', htmlFile);
   return {
-    name: 'upload-box-icon-harness',
+    name,
     apply: 'serve',
     configureServer(server: ViteDevServer) {
       server.middlewares.use((req, res, next) => {
-        if (!isHarnessUrl(req.url)) {
+        if (!isHarnessUrl(req.url, harnessUrl)) {
           next();
           return;
         }
         void (async () => {
           try {
-            const raw = await fs.readFile(HARNESS_HTML, 'utf8');
-            const html = await server.transformIndexHtml(HARNESS_URL, raw);
+            const raw = await fs.readFile(harnessHtml, 'utf8');
+            const html = await server.transformIndexHtml(harnessUrl, raw);
             res.statusCode = 200;
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             res.end(html);
@@ -52,7 +51,8 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   plugins: [
-    uploadBoxIconHarness(),
+    devHarness('upload-box-icon-harness', '/dev/upload-box-icon', 'upload-box-icon.html'),
+    devHarness('options-harness', '/dev/options', 'options.html'),
     tanstackStart({
       spa: {
         enabled: true,

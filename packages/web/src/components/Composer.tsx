@@ -10,11 +10,11 @@ import { useEffect, useRef, useState } from 'react';
 import { BoxBubble } from '~/components/BoxBubble';
 import { DragOverlay } from '~/components/DragOverlay';
 import { PickLinks } from '~/components/PickLinks';
-import { RetentionToggle } from '~/components/RetentionToggle';
 import { isSlugInvalid, SlugField } from '~/components/SlugField';
 import { UploadBoxIcon } from '~/components/UploadBoxIcon';
+import { UploadOptions, type PageVisibility } from '~/components/UploadOptions';
 import { UploadResult } from '~/components/UploadResult';
-import { VisibilityToggle, type PageVisibility } from '~/components/VisibilityToggle';
+import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 import { usePagesApi } from '~/hooks/usePagesApi';
 import { useUploadFlow } from '~/hooks/useUploadFlow';
 import { useWindowFileDrag } from '~/hooks/useWindowFileDrag';
@@ -64,6 +64,8 @@ export function Composer({
   const composerRef = useRef<HTMLDivElement>(null);
   const slugInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 箱の吹き出し「公開しました」のクリックコピー用
+  const { copy: copyBubbleUrl } = useCopyToClipboard();
 
   const [slug, setSlug] = useState(() => initialSlug ?? generateRandomSlug());
   const [retention, setRetention] = useState<Retention>(DEFAULT_RETENTION);
@@ -151,13 +153,21 @@ export function Composer({
   const { state, bubble } = flow;
   const success = state.kind === 'success' ? state : null;
   const busy = state.kind === 'uploading';
+  // 成功状態の箱をクリック/Enter・Spaceで開いたときの「次のファイルを置く」。
+  // 「次のファイルを置く」ボタン（UploadResult）は廃止し、箱自体の操作になった
+  const resetToInitial = () => {
+    setSlug(generateRandomSlug());
+    setRetention(DEFAULT_RETENTION);
+    setVisibility(DEFAULT_VISIBILITY);
+    setWithPassword(false);
+    flow.reset();
+  };
   // 差し替え確認中だけ、どの slug を上書きするのかを danger 系の枠で示す。
   // アップロード中（新規も差し替えも）まで強調すると、新規 slug でも
   // 「この名前が問題」という誤った合図になるため付けない
   const overwrite = state.kind === 'confirming';
   const progressLabel =
     state.kind === 'uploading' && state.total > 1 ? `${state.completed}/${state.total}` : '1件';
-  const sharePanelOpen = visibility === 'external' && !lockedShare;
 
   return (
     <div className="upload-panel">
@@ -181,6 +191,11 @@ export function Composer({
             onClose={flow.dismissNotice}
             onReplace={bubble?.kind === 'confirm' ? flow.replace : undefined}
             onCancel={bubble?.kind === 'confirm' ? flow.cancel : undefined}
+            onCopy={
+              bubble?.kind === 'success' && success
+                ? () => copyBubbleUrl(success.viewUrl)
+                : undefined
+            }
           >
             <UploadBoxIcon
               phase={flow.iconPhase}
@@ -191,6 +206,7 @@ export function Composer({
                   fileInputRef.current?.click();
                 }
               }}
+              onOpened={resetToInitial}
             />
           </BoxBubble>
           <p className="composer-brand">okibasho</p>
@@ -202,13 +218,6 @@ export function Composer({
               deleting={deleting}
               onDelete={() => onDelete(success.slug)}
               onShare={() => onShare(success.slug)}
-              onAnother={() => {
-                setSlug(generateRandomSlug());
-                setRetention(DEFAULT_RETENTION);
-                setVisibility(DEFAULT_VISIBILITY);
-                setWithPassword(false);
-                flow.reset();
-              }}
             />
           ) : (
             <>
@@ -245,34 +254,16 @@ export function Composer({
               urlOrigin={api.urlOrigin}
               userPath={api.userPath}
             />
-            <RetentionToggle value={retention} onChange={setRetention} disabled={busy} />
-            <VisibilityToggle
-              value={visibility}
-              onChange={setVisibility}
-              disabled={busy}
+            <UploadOptions
+              retention={retention}
+              onRetentionChange={setRetention}
+              visibility={visibility}
+              onVisibilityChange={setVisibility}
               locked={Boolean(lockedShare)}
+              withPassword={withPassword}
+              onPasswordToggle={() => setWithPassword((current) => !current)}
+              disabled={busy}
             />
-            <div
-              className={`share-visibility-panel${sharePanelOpen ? ' share-visibility-panel--open' : ''}`}
-              aria-hidden={!sharePanelOpen}
-              inert={!sharePanelOpen}
-            >
-              <div className="share-visibility-panel__inner">
-                <p className="field-hint">{messages.shareVisibilityAutoNotice}</p>
-                <label className="share-password-toggle share-password-toggle--tight">
-                  <input
-                    type="checkbox"
-                    checked={withPassword}
-                    disabled={busy}
-                    onChange={(event) => setWithPassword(event.target.checked)}
-                  />
-                  {messages.shareVisibilityPasswordToggle}
-                </label>
-                {!withPassword ? (
-                  <p className="field-hint">{messages.sharePasswordToggleHint}</p>
-                ) : null}
-              </div>
-            </div>
           </>
         ) : null}
       </div>
