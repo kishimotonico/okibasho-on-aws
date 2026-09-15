@@ -630,7 +630,14 @@ button.text-link,
   white-space: nowrap;
 }
 
-.url-input__reupload-clear {
+/*
+ * `.url-input .url-input__reupload-clear`（クラス2つ）にして specificity を上げる。
+ * button 要素向けの汎用スタイル（例: dev harness の `.harness button`。クラス1つ+要素1つで
+ * 単一クラスの `.url-input__reupload-clear` と同じ specificity になり、ソース順で負けると
+ * padding・背景・枠線・文字色が上書きされて × アイコンが枠だけの丸に見えてしまう）に
+ * 埋もれないようにする
+ */
+.url-input .url-input__reupload-clear {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -645,7 +652,7 @@ button.text-link,
   cursor: pointer;
 }
 
-.url-input__reupload-clear:hover {
+.url-input .url-input__reupload-clear:hover {
   color: var(--text);
   background: color-mix(in srgb, var(--text) 6%, transparent);
 }
