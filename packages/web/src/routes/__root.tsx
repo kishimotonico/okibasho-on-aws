@@ -6,7 +6,6 @@ import { AuthGate } from '~/auth/AuthGate';
 import { AuthProvider } from '~/auth/auth-context';
 import { NotFoundPage } from '~/components/NotFoundPage';
 import { TooltipProvider } from '~/components/Tooltip';
-import { UtilityMenu } from '~/components/UtilityMenu';
 import { getWebConfig } from '~/config/env';
 import { queryClient } from '~/lib/query-client';
 import appCss from '~/styles/app.css?url';
@@ -52,10 +51,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <TooltipProvider>
-              <AuthGate>
-                <UtilityMenu />
-                <main className="main">{children}</main>
-              </AuthGate>
+              <AuthGate>{children}</AuthGate>
             </TooltipProvider>
           </AuthProvider>
         </QueryClientProvider>
