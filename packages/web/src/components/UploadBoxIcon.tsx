@@ -57,7 +57,7 @@ type Pool = Map<string, SVGElement>;
 
 function svgEl<K extends keyof SVGElementTagNameMap>(
   pool: Pool,
-  parent: SVGSVGElement,
+  parent: SVGElement,
   id: string,
   tag: K,
 ): SVGElementTagNameMap[K] {
@@ -99,13 +99,13 @@ function itemPrefix(item: SortedNode, index: number): string {
 function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
   svg.setAttribute('stroke-linejoin', scene.join);
   const used = new Set<string>();
-  const take = <K extends keyof SVGElementTagNameMap>(id: string, tag: K) => {
+  const take = <K extends keyof SVGElementTagNameMap>(parent: SVGElement, id: string, tag: K) => {
     used.add(id);
-    return svgEl(pool, svg, id, tag);
+    return svgEl(pool, parent, id, tag);
   };
 
   if (scene.ring) {
-    const ring = take('ring', 'ellipse');
+    const ring = take(svg, 'ring', 'ellipse');
     ring.setAttribute('data-role', 'ring');
     ring.setAttribute('cx', String(scene.ring.cx));
     ring.setAttribute('cy', String(scene.ring.cy));
@@ -128,15 +128,20 @@ function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
     }
   }
 
+  // 床の円を除く箱の本体をまとめた <g>。Composer マウント時の登場アニメーション（CSS）を
+  // ここだけに掛けるための入れ物で、pool に載せて使い回すことで再生成時に再生しないようにする
+  const body = take(svg, 'body', 'g');
+  body.setAttribute('class', 'upload-box-icon__body');
+
   scene.items.forEach((item, index) => {
     const prefix = itemPrefix(item, index);
     if (item.type === 'face') {
-      applyPath(take(`${prefix}-fill`, 'path'), item.fillPath, {
+      applyPath(take(body, `${prefix}-fill`, 'path'), item.fillPath, {
         fill: item.fill,
         stroke: 'none',
       });
       item.edges.forEach((edge, ei) => {
-        applyPath(take(`${prefix}-e${ei}`, 'path'), edge.d, {
+        applyPath(take(body, `${prefix}-e${ei}`, 'path'), edge.d, {
           fill: 'none',
           'stroke-width': edge.strokeWidth,
           'data-role': 'outline',
@@ -145,21 +150,21 @@ function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
       return;
     }
     if (item.type === 'inner') {
-      applyPath(take(prefix, 'path'), item.d, {
+      applyPath(take(body, prefix, 'path'), item.d, {
         fill: item.fill,
         'stroke-width': item.strokeWidth,
       });
       return;
     }
     if (item.type === 'sheet') {
-      applyPath(take(`${prefix}-fill`, 'path'), item.fillPath, {
+      applyPath(take(body, `${prefix}-fill`, 'path'), item.fillPath, {
         fill: item.fill,
         stroke: item.stroke,
         'stroke-width': item.strokeWidth,
         opacity: item.opacity,
       });
       if (item.linesPath) {
-        applyPath(take(`${prefix}-lines`, 'path'), item.linesPath, {
+        applyPath(take(body, `${prefix}-lines`, 'path'), item.linesPath, {
           fill: 'none',
           stroke: item.stroke,
           'stroke-width': item.linesStrokeWidth,
@@ -168,12 +173,12 @@ function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
       }
       return;
     }
-    applyPath(take(`${prefix}-fill`, 'path'), item.fillPath, {
+    applyPath(take(body, `${prefix}-fill`, 'path'), item.fillPath, {
       fill: item.fill,
       stroke: 'none',
     });
     item.edges.forEach((edge, ei) => {
-      applyPath(take(`${prefix}-e${ei}`, 'path'), edge.d, {
+      applyPath(take(body, `${prefix}-e${ei}`, 'path'), edge.d, {
         fill: 'none',
         'stroke-width': edge.strokeWidth,
         'data-role': ei === 3 ? null : 'outline',

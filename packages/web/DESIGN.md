@@ -293,6 +293,12 @@ components:
 - **イースターエッグ（未予告）:** 何もないページ地をダブルクリックすると箱が `spin()` で1回転する（ファイル選択は開かない。uploading 中や reduced-motion では既存の `spin()` のガードでそのまま何も起きない）
 - **Favicon:** idle の静的 SVG。CSS 変数は使わずライトパレットの実色を焼き込む
 
+### LoadingShell（JS読み込み〜ハイドレーション〜認証確認のあいだ）
+
+- **Role:** 箱は出さず、床の円（`UploadBoxIcon` と同じ位置・大きさ）の上を墨色の短い弧が回るだけの静的な画面。state・effect を持たず、prerender した `_shell.html` に焼き込む。composer・一覧の大きさと位置は本物と揃え、中身だけ一覧スケルトンと同じ視覚言語の薄いバーに置き換える
+- **ウェル:** composer は地色へ沈め、文字は muted に寄せる。本物の `Composer` がマウントした瞬間だけ、ウェル色が通常へ戻り（0.28s）、箱が床の円からせり上がる（560ms、back-ease）1回きりの CSS アニメーションを流す
+- **reduced-motion:** 弧は回さず、箱は短くフェードインするだけ
+
 ### Buttons
 
 - **Primary:** 墨背景・地色文字、6px 角、600、hover は brightness(1.08)

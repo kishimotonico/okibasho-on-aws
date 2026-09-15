@@ -379,6 +379,75 @@ button.text-link,
   gap: 1.15rem;
   box-shadow: var(--shadow);
   overflow: visible;
+  /* 本物の Composer がマウントされた瞬間だけ、沈んだ地色（LoadingShell の
+     composer--loading）から通常のウェル色へ 1 回だけ戻す */
+  animation: composer-well-settle 0.28s ease both;
+}
+
+@keyframes composer-well-settle {
+  from {
+    background: color-mix(in srgb, var(--well) 55%, var(--bg));
+    border-color: color-mix(in srgb, var(--line) 55%, var(--bg));
+  }
+  to {
+    background: var(--well);
+    border-color: var(--line);
+  }
+}
+
+/* ---------- LoadingShell（JS読み込み〜ハイドレーション〜認証確認のあいだの静的な画面） ---------- */
+
+.composer--loading {
+  background: color-mix(in srgb, var(--well) 55%, var(--bg));
+  border-color: color-mix(in srgb, var(--line) 55%, var(--bg));
+  animation: none;
+}
+
+.composer--loading .composer-lead {
+  color: var(--muted);
+}
+
+.loading-box-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* 弧の楕円は床の円（UploadBoxIcon のring）とまったく同じ位置・大きさに重ねる。
+   楕円自体を rotate すると形ごと傾くため、stroke-dashoffset だけを円周に沿って動かす */
+.loading-floor-arc {
+  stroke: var(--text);
+  stroke-width: 2;
+  stroke-dasharray: 22 78;
+  opacity: 0.85;
+  animation: loading-floor-arc-run 1.1s linear infinite;
+}
+
+@keyframes loading-floor-arc-run {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+.loading-placeholder {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--line) 55%, var(--bg));
+}
+
+.loading-placeholder--url {
+  height: 2.3rem;
+  width: 100%;
+}
+
+.loading-placeholder--chip {
+  height: 2rem;
+  width: 5rem;
+  border-radius: 999px;
+}
+
+.loading-placeholder--chip-wide {
+  width: 6.5rem;
 }
 
 .composer--active {
@@ -808,6 +877,39 @@ button.text-link,
 .upload-box-icon--openable {
   cursor: pointer;
   border-radius: 12px;
+}
+
+/* 床の円を除く箱の本体をまとめた <g>（UploadBoxIcon の applyScene が作る）。
+   本物の Composer がマウントされた瞬間だけ、床の円から少し行き過ぎて戻る
+   （back-ease）せり上がりを1回だけ流す。以後は再生成されないので再生しない */
+.upload-box-icon__body {
+  transform-box: view-box;
+  transform-origin: 0px -6px;
+  animation: upload-box-icon-enter 560ms cubic-bezier(0.34, 1.45, 0.64, 1) both;
+}
+
+@keyframes upload-box-icon-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-1.5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes upload-box-icon-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .upload-box-icon [data-role='outline'],
@@ -1487,6 +1589,19 @@ button.text-link,
   .box-bubble__reveal,
   .box-bubble__panel {
     transition: none;
+  }
+
+  .composer {
+    animation: none;
+  }
+
+  .loading-floor-arc {
+    animation: none;
+    opacity: 0;
+  }
+
+  .upload-box-icon__body {
+    animation: upload-box-icon-fade 200ms ease both;
   }
 }
 

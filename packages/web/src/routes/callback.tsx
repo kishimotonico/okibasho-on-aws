@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 
 import { completeSignInCallbackOnce } from '~/auth/user-manager';
+import { LoadingShell } from '~/components/LoadingShell';
 import { messages } from '~/lib/messages';
 
 export const Route = createFileRoute('/callback')({
@@ -22,11 +23,7 @@ async function handleCallback(): Promise<void> {
 }
 
 function CallbackPending() {
-  return (
-    <div className="page">
-      <p>{messages.loginInProgress}</p>
-    </div>
-  );
+  return <LoadingShell lead={messages.loginInProgress} />;
 }
 
 function CallbackError({ error }: { error: unknown }) {

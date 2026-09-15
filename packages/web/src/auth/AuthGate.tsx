@@ -2,7 +2,8 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { useRouterState } from '@tanstack/react-router';
 
 import { useAuth } from '~/auth/auth-context';
-import { PendingFallback } from '~/components/PendingFallback';
+import { LoadingShell } from '~/components/LoadingShell';
+import { messages } from '~/lib/messages';
 
 // 管理UIはチーム内専用でIAMがセキュリティ境界のため、未ログインで見せる画面は用意しない。
 // ここで全ページを一括してログインゲートする（/callback はコールバック処理のため素通し）。
@@ -28,7 +29,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (auth.isLoading || !auth.isAuthenticated) {
-    return <PendingFallback />;
+    // このブランチは UtilityMenu・main を描画しないので、LoadingShell 側で main を持つ
+    return (
+      <main className="main">
+        <LoadingShell lead={messages.loadingLead} />
+      </main>
+    );
   }
 
   return <>{children}</>;
