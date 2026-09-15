@@ -369,7 +369,6 @@ export const UploadBoxIcon = forwardRef<UploadBoxIconHandle, UploadBoxIconProps>
       kickRef.current();
     }, [phase, dragging, forceHover, reducedMotion]);
 
-    // success 状態の箱は「次のファイルを置く」の操作。uploading 中はクリック無効
     const openable = phase === 'success';
 
     const onClick = (event: MouseEvent<HTMLDivElement>) => {

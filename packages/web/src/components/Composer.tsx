@@ -71,7 +71,6 @@ export function Composer({
   const slugInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const boxIconRef = useRef<UploadBoxIconHandle>(null);
-  // 箱の吹き出し「公開しました」のクリックコピー用
   const { copy: copyBubbleUrl } = useCopyToClipboard();
 
   const [slug, setSlug] = useState(() => initialSlug ?? generateRandomSlug());
@@ -157,7 +156,6 @@ export function Composer({
     slugInputRef.current?.focus();
   }, [seed]);
 
-  // ページ地のダブルクリック（イースターエッグ）
   useEffect(() => {
     if (!spinSignal) {
       return;
@@ -168,7 +166,6 @@ export function Composer({
   const { state, bubble } = flow;
   const success = state.kind === 'success' ? state : null;
   const busy = state.kind === 'uploading';
-  // 成功状態の箱をクリック/Enter・Spaceで開いたときの「次のファイルを置く」
   const resetToInitial = () => {
     setSlug(generateRandomSlug());
     setRetention(DEFAULT_RETENTION);

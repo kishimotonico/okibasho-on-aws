@@ -121,7 +121,6 @@ export function BoxBubble({
 
   const role = kind === 'error' ? 'alert' : kind === 'confirm' ? 'dialog' : 'status';
   const clickToClose = kind === 'error' || kind === 'success';
-  /** success のみ、かつ onCopy が渡されたときだけ吹き出しがコピー操作になる */
   const copyable = kind === 'success' && Boolean(onCopy);
 
   const runCopy = async () => {

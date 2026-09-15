@@ -9,13 +9,7 @@ interface PasswordToggleProps {
   onToggle: () => void;
 }
 
-/**
- * パスワードのオン/オフを文字とアイコンの両方で示すトグル。
- * オフ = LockOpen + 「パスワードなし」（罫線だけの控えめなチップ）。
- * オン = Lock + 「パスワードあり」（セグメントの選択と同じ薄い墨の塗り + 600）。
- * アップロードフォームのチップ列（UploadOptions）と外部共有ダイアログ（ShareDialog）の
- * 両方から使う共通部品。エメラルドは使わない。
- */
+/** パスワードのオン/オフを文字とアイコンの両方で示すトグル。UploadOptions と ShareDialog で共用 */
 export function PasswordToggle({ pressed, disabled = false, onToggle }: PasswordToggleProps) {
   const Icon = pressed ? Lock : LockOpen;
   return (

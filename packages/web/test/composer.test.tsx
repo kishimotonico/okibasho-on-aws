@@ -294,7 +294,6 @@ describe('Composer', () => {
       ).toBeInTheDocument(),
     );
     expect(screen.queryByRole('textbox', { name: /公開URL/ })).toBeNull();
-    // 「次のファイルを置く」の専用ボタンは廃止。成功状態の箱自体がその操作になる
     expect(screen.queryByRole('button', { name: 'ファイルを選ぶ' })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: '次のファイルを置く' }));

@@ -319,8 +319,6 @@ describe('色トークンと viewBox', () => {
       stroke: 'var(--emerald)',
     });
 
-    // DECISION 2.5 の「蓋が薄緑になる」は採用しない。success で closed=1 になっても
-    // フラップの塗りは --well のまま（BoxIconAnim / SortedNode に lid/lidOp は存在しない）
     const closed = build(P, { ...idleAnim(P), closed: 1, closedOuter: 1, ringFill: 1, ringT: 1 });
     expect(flap(closed, 'fr').fill).toBe('var(--well)');
     expect(closed.ring?.fill).toBe('var(--emerald-soft)');
