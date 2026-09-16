@@ -22,6 +22,30 @@ pnpm --filter @okibasho/infra exec cdk bootstrap
 pnpm --filter @okibasho/infra exec cdk bootstrap aws://<account>/us-east-1   # 独自ドメイン設定時
 ```
 
+### Google ログイン（任意）
+
+使わないならこの節は飛ばす。ローカルユーザーだけで動く。
+
+GCP のコンソールで、Workspace の組織の下にあるプロジェクトを選んで操作する。Cognito のドメインはデプロイ前から `okibasho-<account>.auth.<region>.amazoncognito.com` に決まっている。
+
+1. Google Auth Platform の「対象」で、ユーザーの種類を「内部」にする。選べないならプロジェクトが組織の下に無い
+2. 「ブランディング」でアプリ名とサポートメールを入れ、承認済みドメインに `amazoncognito.com` を足す
+3. 「データアクセス」のスコープに `openid` `email` `profile` を足す
+4. 「クライアント」で、種類「ウェブ アプリケーション」のクライアントを作る
+   - 承認済みの JavaScript 生成元: `https://okibasho-<account>.auth.<region>.amazoncognito.com`
+   - 承認済みのリダイレクト URI: `https://okibasho-<account>.auth.<region>.amazoncognito.com/oauth2/idpresponse`
+5. 作成直後に JSON をダウンロードする。client secret は後から見られないことがある
+
+client secret を Secrets Manager に置き、client ID を `.env` の `GOOGLE_CLIENT_ID` に書く。
+
+```bash
+aws secretsmanager create-secret --name okibasho/google-client-secret \
+  --secret-string "$(jq -r .web.client_secret client_secret_*.json)"
+jq -r .web.client_id client_secret_*.json
+```
+
+JSON は登録後に消す。secret を作り直したときは `put-secret-value` で上書きしてから `cdk deploy` し直す。
+
 ## 2. デプロイ
 
 ```bash
@@ -40,7 +64,9 @@ aws cloudformation describe-stacks --stack-name Okibasho \
 
 ## 3. ユーザーの作成
 
-当面は Cognito のローカルユーザーで運用する（Google IdP は未導入）。メールアドレスが S3 のキーになるので小文字で作る。
+Google ログインを設定したなら、メンバーは初回ログインで自動的に作られるので、この手順は要らない。
+
+ローカルユーザー（ID / パスワード）は Google を使わないときのメンバーと、デバッグ用に作る。メールは `EMAIL_DOMAIN` のアドレスを小文字で、`+` を付けずに指定する（外れると PreSignUp が拒否する）。Google と併用するなら、実在する Google アカウントと重ならないアドレス（例: `okibasho-debug@example.jp`）にする。Google に移る前のローカルユーザーは、本人が Google で初回ログインする前に `admin-delete-user` で消しておく。ページはメールアドレスで紐づくので消えない。
 
 ```bash
 aws cognito-idp admin-create-user --user-pool-id <UserPoolId> \

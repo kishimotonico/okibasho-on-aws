@@ -55,7 +55,7 @@
 Lambda は次の 3 つ。どれも小さく独立している。API Gateway は無い。認可は IAM ポリシーに委譲する。
 
 - Signed Cookie 発行（独自ドメイン設定時のみ作る）
-- PreSignUp（メールドメイン制限。Google IdP 追加時）
+- PreSignUp（メールドメイン制限）
 - PageMaintenance（`meta/` 配下の metadata の `share` を CloudFront KeyValueStore へ投影しつつ、期限切れページの削除も担う。詳細は「外部共有」節と「保存期間」節）
 
 このほかに、CDK の `BucketDeployment`（pages バケットの `errors/` に固定ページを配置するためだけのカスタムリソース Lambda）が存在する。これは IAM の境界の外にある処理として次節で扱う。
@@ -165,16 +165,29 @@ IAM の境界の外にある処理が 2 つある。いずれもレビュー対�
 
 Cognito User Pool に Google Workspace を外部 IdP として連携する。Managed Login を使う（ログイン画面を自作しない）。組織の Workspace ドメインのアカウントのみ許可する。
 
-メールドメイン制限は PreSignUp Lambda トリガーで実装する。`event.request.userAttributes.email` のドメインと `email_verified` を検証し、不一致なら reject する。
+Google IdP は任意で、`GOOGLE_CLIENT_ID` を設定したときだけ作る。Cognito のローカルユーザー（管理者作成の ID / パスワード）も併用し、Google アカウントを持たないデバッグ用ユーザーに使う。App Client は `COGNITO` と `GOOGLE` の両方を許可するので、Managed Login には両方の入口が並ぶ。クライアントは IdP を指定せずに authorize へ飛ばすだけで、Google の有無を知らない。
 
-導入は段階的に行う。当面は Cognito のローカルユーザー（管理者作成）で運用し、Google IdP と PreSignUp は後から追加する。Managed Login + Authorization Code + PKCE というフローは変わらないため、クライアント側の変更は不要（[roadmap.md](roadmap.md) 参照）。
+- Google OAuth クライアントは GCP の「内部」アプリとして作る。組織外の Google アカウントは Google 側の同意画面で弾かれる
+- client ID は秘密ではないので環境変数で渡す。client secret は Secrets Manager の `okibasho/google-client-secret`（プレーンテキスト）に手で置き、CDK は `SecretValue.secretsManager` で参照する。Cognito の IdP リソースは CloudFormation の `ssm-secure` 動的参照に対応していないため、SSM Parameter Store は使わない
+- 属性マッピングは `email` と `email_verified`。`email_verified` は明示的にマッピングしないと PreSignUp に届かない
+- App Client は IdP を名前の文字列で参照するため、CloudFormation の依存が付かない。`client.node.addDependency(provider)` で IdP を先に作る
+
+メールドメイン制限は PreSignUp Lambda トリガーで実装する。Google の有無に関係なく常に置き、ローカルユーザーの作成（`PreSignUp_AdminCreateUser`）にもかける。S3 のキーを必ず `EMAIL_DOMAIN` 配下にするためである。次のどれかに当たれば reject する。
+
+- メールのドメインが `EMAIL_DOMAIN` と一致しない
+- メールに大文字か `+` を含む
+- Google から来た（`PreSignUp_ExternalProvider`）のに `email_verified` が `true` でない
+
+デバッグ用ユーザーは実在しないアドレス（例: `okibasho-debug@example.jp`）で作る。実在する Google アカウントと同じメールでローカルユーザーを作ると、同じメールの User Pool ユーザーが 2 つでき、同じ S3 prefix を共有してしまう。
+
+将来 Google だけにするときは、App Client から `COGNITO` を外して `GOOGLE_CLIENT_ID` を必須にし、web と CLI の authorize に `identity_provider=Google` を付けて Managed Login の選択画面を飛ばす。
 
 App Client は 2 つ。どちらも public client（client secret なし）+ PKCE。
 
 - web 用: callback は `https://<app のホスト名>/callback`（独自ドメイン設定時は `app.okibasho.example.com`、未設定なら CloudFront の Distribution ドメイン）。開発時は `http://localhost:3000/callback`
 - cli 用: callback は `http://127.0.0.1:<port>/callback`（localhost 許可）。Cognito は callback URL をポートまで含めた完全一致で照合するため、空きポートを動的に 1 つだけ選ぶことはできない。候補ポート `8976` `8977` `8978` を登録し、空いている最初のポートを使う。全部使用中ならポートを空けるよう伝えて終了する
 
-メールアドレスが S3 キーになる。User Pool 側でメールを小文字に正規化する。`+` 付きアドレスは PreSignUp で拒否する。キーの揺れを増やさないためである。
+メールアドレスが S3 キーになる。大文字や `+` を含むアドレスを PreSignUp で拒否するのは、キーの揺れを増やさないためである。
 
 ### CLI
 
@@ -544,8 +557,8 @@ lib/
   certificate-stack.ts     us-east-1 の ACM 証明書（DNS 検証）
   config.ts                  環境変数から emailDomain / serviceDomain を読む
   constructs/
-    auth.ts                  UserPool / Managed Login / App Client x2 /
-                             IdentityPool / authenticated role / principal tag
+    auth.ts                  UserPool / Managed Login / App Client x2 / Google IdP（設定時のみ）/
+                             PreSignUp Lambda / IdentityPool / authenticated role / principal tag
     pages-storage.ts         pages バケット（private, PAB, CORS）/ errors/ への BucketDeployment
                              （配置ロールは bucket policy の Deny で errors/ だけに限定）
     pages-delivery.ts        pages Distribution / OAC / CloudFront Function（/p/* /s/*）/
@@ -562,6 +575,7 @@ lib/
                              発行 Lambda + Function URL（Lambda OAC）
   lambda/
     page-maintenance/
+    pre-sign-up/             メールドメイン制限の PreSignUp トリガー
     pages-cookie/            Signed Cookie 発行 Lambda
     signing-key-pair/        鍵ペアを生成して SSM に置くカスタムリソースの Lambda
   static/errors/             404.html / 403.html
@@ -569,16 +583,17 @@ lib/
 
 PageMaintenance Lambda 本体（`packages/infra/lib/lambda/page-maintenance/`）は SigV4A が必要な `@aws-sdk/client-cloudfront-keyvaluestore` を呼ぶため、副作用 import で純 JS の `@aws-sdk/signature-v4a` を読み込んでいる（ネイティブの `@aws-sdk/signature-v4-crt` は使わない）。`NodejsFunction` の bundling では `@aws-sdk/*` を external にしない。
 
-PreSignUp の Construct は Google IdP の導入と同時に追加する。導入順は [roadmap.md](roadmap.md) にある。
-
-環境ごとに変わる値（メールドメイン、デプロイ先、独自ドメイン）はリポジトリに持たず、`packages/infra/.env`（git 管理外）かシェルの環境変数で渡す。項目は `packages/infra/.env.example` にある。メールドメインだけは必須で、未設定なら synth の時点で止める。
+環境ごとに変わる値（メールドメイン、デプロイ先、独自ドメイン、Google の client ID）はリポジトリに持たず、`packages/infra/.env`（git 管理外）かシェルの環境変数で渡す。項目は `packages/infra/.env.example` にある。メールドメインだけは必須で、未設定なら synth の時点で止める。
 
 | 環境変数 | 必須 | 意味 |
 | --- | --- | --- |
 | `EMAIL_DOMAIN` | 必須 | メンバーのメールドメイン |
 | `SERVICE_DOMAIN` / `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` | 任意（3 つそろえる） | サービスドメインと、それを含む同一アカウントの Hosted Zone。設定すると独自ドメインで構築する |
+| `GOOGLE_CLIENT_ID` | 任意 | Google OAuth クライアントの ID。設定すると Google IdP を作る。client secret は Secrets Manager に先に置いておく |
 
 `config.ts` は 3 つのうち一部だけ設定された状態を synth の時点で止める。
+
+Google IdP の有無による分岐は `Auth` の中で IdP を作るか作らないか（と App Client の依存）だけにする。web と CLI は分岐を持たない。
 
 独自ドメインの有無による分岐は次の 2 種類に限り、Construct の中に `if (domain)` を増やさない。
 
@@ -600,6 +615,7 @@ GitHub Actions からの `cdk deploy` はアクセスキーを置かず、OIDC �
 使わなくなったときに `cdk destroy` で認証基盤と配信基盤を消す。作り直しは想定しない。
 
 - User Pool は `DESTROY`。Hosted UI ドメインも一緒に消える
+- Google の client secret（Secrets Manager）はスタック外に手で置いたものなので残る。GCP の OAuth クライアントと一緒に手で消す
 - 管理 UI 用バケットは `DESTROY` + `autoDeleteObjects`。ビルドし直せる静的ファイルだけなので中身ごと消す
 - pages バケットは `RETAIN`。アップロード済みオブジェクトはスタック削除後も残る。`autoDeleteObjects` は付けない。課金は続くので、不要なら手で空にしてバケットを消す
 - CloudFront など残りのリソースはデフォルトどおり消える。Distribution の削除は完了まで待たされる
