@@ -10,19 +10,21 @@ export interface Config {
 }
 
 export interface ServiceDomainConfig {
-  /** pages を置くサービスドメイン (例: okibasho.example.com)。app は `app.` を付けて導出する */
+  /** pages を置くサービスドメイン (例: okibasho.example.com) */
   domainName: string;
-  /** us-east-1 の ACM 証明書。SAN に pages と app を含む */
-  certificateArn: string;
-  /** 渡したときだけ Alias レコードを作る。サービスドメインを含む共用のゾーンでよい */
-  hostedZone?: { id: string; name: string };
+  /** サービスドメインを含む同一アカウントの Hosted Zone。共用のゾーンでよい */
+  hostedZone: { id: string; name: string };
+}
+
+/** app はサービスドメインの `app.` サブドメインに置く */
+export function appDomainName(serviceDomainName: string): string {
+  return `app.${serviceDomainName}`;
 }
 
 export function loadConfig(): Config {
   const {
     EMAIL_DOMAIN: emailDomain,
     SERVICE_DOMAIN: domainName,
-    CERTIFICATE_ARN: certificateArn,
     HOSTED_ZONE_ID: hostedZoneId,
     HOSTED_ZONE_NAME: hostedZoneName,
   } = process.env;
@@ -32,28 +34,17 @@ export function loadConfig(): Config {
       'EMAIL_DOMAIN が未設定です。packages/infra/.env.example を .env にコピーして埋めてください',
     );
   }
-  if (!domainName) {
-    if (certificateArn || hostedZoneId || hostedZoneName) {
-      throw new Error(
-        'CERTIFICATE_ARN / HOSTED_ZONE_ID / HOSTED_ZONE_NAME は SERVICE_DOMAIN と一緒に設定してください',
-      );
-    }
+  if (!domainName && !hostedZoneId && !hostedZoneName) {
     return { emailDomain };
   }
-  if (!certificateArn) {
-    throw new Error('SERVICE_DOMAIN を設定するときは CERTIFICATE_ARN も必要です');
-  }
-  if (Boolean(hostedZoneId) !== Boolean(hostedZoneName)) {
-    throw new Error('HOSTED_ZONE_ID と HOSTED_ZONE_NAME は両方そろえて設定してください');
+  if (!domainName || !hostedZoneId || !hostedZoneName) {
+    throw new Error(
+      'SERVICE_DOMAIN / HOSTED_ZONE_ID / HOSTED_ZONE_NAME は 3 つそろえて設定してください',
+    );
   }
 
   return {
     emailDomain,
-    serviceDomain: {
-      domainName,
-      certificateArn,
-      hostedZone:
-        hostedZoneId && hostedZoneName ? { id: hostedZoneId, name: hostedZoneName } : undefined,
-    },
+    serviceDomain: { domainName, hostedZone: { id: hostedZoneId, name: hostedZoneName } },
   };
 }

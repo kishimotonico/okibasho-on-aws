@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Duration } from 'aws-cdk-lib';
+import { Duration, Stack } from 'aws-cdk-lib';
 import { KeyGroup, PublicKey } from 'aws-cdk-lib/aws-cloudfront';
 import type { UserPool, UserPoolClient } from 'aws-cdk-lib/aws-cognito';
 import { Architecture, FunctionUrlAuthType, Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -10,10 +10,7 @@ import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import type { AppDelivery } from './app-delivery.js';
 import type { PagesStorage } from './pages-storage.js';
-
-// 鍵ペアは手で作って置く。名前は README の手順と揃える
-const PUBLIC_KEY_PARAMETER = '/okibasho/pages-signing/public-key';
-const PRIVATE_KEY_PARAMETER = '/okibasho/pages-signing/private-key';
+import { SigningKeyPair } from './signing-key-pair.js';
 
 export interface PagesViewerAuthProps {
   readonly userPool: UserPool;
@@ -37,8 +34,13 @@ export class PagesViewerAuth extends Construct {
     super(scope, id);
     const here = dirname(fileURLToPath(import.meta.url));
 
+    const keyPair = new SigningKeyPair(this, 'SigningKeyPair', {
+      parameterPrefix: `/${Stack.of(this).stackName}/pages-signing`,
+      // 鍵を作り直すときは進める。古い Cookie は 403 になって再ログインが走るだけ
+      generation: 1,
+    });
     const publicKey = new PublicKey(this, 'PublicKey', {
-      encodedKey: StringParameter.valueForStringParameter(this, PUBLIC_KEY_PARAMETER),
+      encodedKey: keyPair.publicKeyPem,
       comment: '内部ページの Signed Cookie 検証用',
     });
     this.keyGroup = new KeyGroup(this, 'KeyGroup', { items: [publicKey] });
@@ -55,7 +57,7 @@ export class PagesViewerAuth extends Construct {
         WEB_CLIENT_ID: props.webClient.userPoolClientId,
         PAGES_DOMAIN: props.pagesDomainName,
         KEY_PAIR_ID: publicKey.publicKeyId,
-        PRIVATE_KEY_PARAMETER,
+        PRIVATE_KEY_PARAMETER: keyPair.privateKeyParameterName,
       },
       bundling: {
         externalModules: [],
@@ -67,7 +69,7 @@ export class PagesViewerAuth extends Construct {
       description: 'pages: id_token を検証して /p/* の Signed Cookie を発行する',
     });
     StringParameter.fromSecureStringParameterAttributes(this, 'PrivateKey', {
-      parameterName: PRIVATE_KEY_PARAMETER,
+      parameterName: keyPair.privateKeyParameterName,
     }).grantRead(issuer);
 
     // CloudFront 経由でしか呼べないよう IAM 認証にし、app Distribution の OAC で署名させる
