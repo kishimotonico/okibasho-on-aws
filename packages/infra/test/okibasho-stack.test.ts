@@ -226,7 +226,7 @@ describe('OkibashoStack', () => {
           EncodedKey: { 'Fn::GetAtt': [keyPairId, 'PublicKeyPem'] },
         }),
       });
-      // SSM から公開鍵を読む CloudFormation パラメータはもう無い
+      // 鍵は Lambda が SSM に置くので、テンプレートに SSM パラメータの参照は無い
       expect(Object.keys(template.toJSON().Parameters ?? {})).not.toContainEqual(
         expect.stringMatching(/pagessigning/),
       );
@@ -439,7 +439,7 @@ describe('OkibashoStack', () => {
         }),
       });
 
-      // error-scrubberを廃止したのでviewer-responseの関連付けはもう無い
+      // viewer-responseの関連付けは無い
       const defaultFunctionAssociations =
         pagesDistribution?.Properties?.DistributionConfig?.DefaultCacheBehavior
           ?.FunctionAssociations;
