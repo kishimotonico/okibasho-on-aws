@@ -84,18 +84,6 @@ CI:
 - tag の衝突対策（書き込み前の占有チェック）。66bit なら 1 万ページでも偶然の衝突は 10⁻¹³ 程度
 - DynamoDB への移行。一覧の N+1 と全件走査は消えるが構成要素が増える。ページ数が数百を超えて一覧が重くなったら再検討する
 
-## ビルド成果物のデプロイ
-
-App Distribution の UI 用 bucket へは、`cdk deploy` とは別に手でアップロードする。`cdk synth` が web のビルドに依存する形にしたくないため、CDK の BucketDeployment は使わない。
-
-```bash
-pnpm --filter @okibasho/web build
-aws s3 sync packages/web/dist/client s3://<AppBucketName> --delete
-aws cloudfront create-invalidation --distribution-id <id> --paths '/*'
-```
-
-Cache-Control はアップロード時に指定しない。CloudFront の Response Headers Policy が behavior ごとに付与する（`/assets/*` は `public, max-age=31536000, immutable`、`_shell.html` を含むそれ以外は `no-cache`）。ハッシュ付きアセットは長期キャッシュしてよく、`_shell.html` は毎回再検証させるためデプロイのたびに invalidation を打つ。
-
 ## 並行の指針
 
 - 基本は「CDK の縦切り 1 本 + 並行 1 本」まで
