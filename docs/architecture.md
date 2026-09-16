@@ -33,19 +33,20 @@
                              再発行は同じキーの上書き）
         ▲
         │ OAC                              │ 参照
-   CloudFront（pages.share.example.jp / UNTRUSTED、単一 Distribution）
-        └ デフォルトビヘイビア＝/p/*（内部。/p/ 以外は 404。Signed Cookie 必須、独自ドメイン導入後）
+   CloudFront（okibasho.example.com / UNTRUSTED、単一 Distribution）
+        └ デフォルトビヘイビア＝/p/*（内部。/ は app へ 302。/p/ 以外は 404。
+             Signed Cookie 必須（独自ドメイン設定時のみ））
              CloudFront Function: /p/<user>/... → /pages/<user>@<domain>/... + index.html 補完
         └ /s/* ビヘイビア（外部共有。KVS 参照、Basic / IP 制限、Signed Cookie は付けない）
              CloudFront Function: /s/<tag><share-id>/... → KVS の投影先へ rewrite
         └ /errors/* ビヘイビア（カスタムエラーレスポンス専用。関数なし。
              BucketDeployment が pages バケットの errors/ に配置した固定ページを配信）
-        └ 共通設定: errorResponses（404 → /errors/404.html。403 は将来の Signed Cookie
-          ログイン誘導のために空けてある）/ Response Headers Policy（Referrer-Policy: no-referrer 等）/
-          Geo restriction / IPv6 無効化
+        └ 共通設定: errorResponses（404 → /errors/404.html。独自ドメイン設定時は
+          403 → /errors/403.html も足し、app のログイン導線にする）/
+          Response Headers Policy（Referrer-Policy: no-referrer 等）/ Geo restriction / IPv6 無効化
 
-   CloudFront（app.share.example.jp / TRUSTED）
-        ├ /auth/*  → Lambda（Signed Cookie 発行）
+   CloudFront（app.okibasho.example.com / TRUSTED）
+        ├ /auth/*  → Lambda Function URL（Signed Cookie 発行。独自ドメイン設定時のみ）
         └ /*       → S3（管理UIの静的ファイル）
 ```
 
@@ -53,13 +54,13 @@
 
 Lambda は次の 3 つ。どれも小さく独立している。API Gateway は無い。認可は IAM ポリシーに委譲する。
 
-- Signed Cookie 発行（独自ドメイン導入後）
+- Signed Cookie 発行（独自ドメイン設定時のみ作る）
 - PreSignUp（メールドメイン制限。Google IdP 追加時）
 - PageMaintenance（`meta/` 配下の metadata の `share` を CloudFront KeyValueStore へ投影しつつ、期限切れページの削除も担う。詳細は「外部共有」節と「保存期間」節）
 
 このほかに、CDK の `BucketDeployment`（pages バケットの `errors/` に固定ページを配置するためだけのカスタムリソース Lambda）が存在する。これは IAM の境界の外にある処理として次節で扱う。
 
-CDK のスタックは 1 つとし、機能的・概念的な境界は Construct で表現する（auth / storage / delivery / page-maintenance / app-site / domains）。Stack 本体は各 Construct の組み立てだけを行う。スタック分割による cross-stack reference の複雑さは持ち込まない。
+CDK のスタックは 1 つとし、機能的・概念的な境界は Construct で表現する（auth / storage / delivery / page-maintenance / app-site / service-domain / pages-viewer-auth）。Stack 本体は各 Construct の組み立てだけを行う。スタック分割による cross-stack reference の複雑さは持ち込まない。
 
 DynamoDB、WAF、Lambda@Edge、API Gateway、S3 Lifecycle、presigned URL は使わない。CloudFront KeyValueStore は外部共有の投影先として採用したため、この対象からは外れる。
 
@@ -69,21 +70,43 @@ trusted な管理アプリと untrusted な共有ページを別 origin に分�
 
 | origin | 信頼 | 用途 |
 | --- | --- | --- |
-| `app.share.example.jp` | trusted | ログイン、アップロード UI、My Pages、Signed Cookie 発行 |
-| `pages.share.example.jp` | untrusted | アップロードされた HTML・JS・CSS・画像 |
+| `app.okibasho.example.com` | trusted | ログイン、アップロード UI、My Pages、Signed Cookie 発行 |
+| `okibasho.example.com` | untrusted | アップロードされた HTML・JS・CSS・画像 |
 
 アップロードされた HTML には任意の JavaScript（AI 生成コードを含む）が入りうる。管理アプリと同一 origin にすると DOM・storage・Cookie へアクセスできてしまう。この境界にブラウザの Same-Origin Policy をそのまま使う。
 
 | URL | 公開範囲 | 認証 | Distribution | S3 key |
 | --- | --- | --- | --- | --- |
-| `https://pages.share.example.jp/p/<user>/<slug>/` | 内部（ログイン必須） | Signed Cookie 必須（独自ドメイン導入後） | pages（`/p/*`） | `pages/<email>/<slug>/` |
-| `https://pages.share.example.jp/s/<tag><share-id>/` | 外部（ページ作成者が発行した URL を知っている人） | share-id自体が推測困難な秘匿情報（基本の保護）＋任意で自動生成パスワードによるBasic認証＋任意でIP制限 | pages（`/s/*`） | KVS の投影から解決（実体は `pages/<email>/<slug>/`） |
+| `https://okibasho.example.com/p/<user>/<slug>/` | 内部（ログイン必須） | Signed Cookie 必須（独自ドメイン設定時） | pages（`/p/*`） | `pages/<email>/<slug>/` |
+| `https://okibasho.example.com/s/<tag><share-id>/` | 外部（ページ作成者が発行した URL を知っている人） | share-id自体が推測困難な秘匿情報（基本の保護）＋任意で自動生成パスワードによるBasic認証＋任意でIP制限 | pages（`/s/*`） | KVS の投影から解決（実体は `pages/<email>/<slug>/`） |
 
 `<user>` はメールのローカル部だけを見せる。全員が同じ Workspace ドメインなので、ドメイン部は CloudFront Function で静的に補完する。
 
 内部 URL のパスに `/p/` を置くのは、外部共有用の `/s/` と名前空間を分けるためである。旧 `/<user>/<slug>/` は未公開だったため互換リダイレクトを持たない。
 
-ホスト名は `app` / `pages` の 2 つのままとする。外部への URL 共有はページ単位のオプトインとして実装した（詳細は「外部共有」節）。共有していないページは従来どおりログイン必須である。
+ホスト名は pages と app の 2 つとする。外部への URL 共有はページ単位のオプトインとして実装した（詳細は「外部共有」節）。共有していないページは従来どおりログイン必須である。
+
+### 独自ドメイン
+
+サービスドメインを 1 つ決め（例: `okibasho.example.com`）、pages をその apex に、app を `app.` サブドメインに置く。設定はサービスドメイン 1 つだけで、ホスト名は導出する。
+
+| 役割 | ホスト名 | 導出 |
+| --- | --- | --- |
+| pages | `okibasho.example.com` | `SERVICE_DOMAIN` そのもの |
+| app | `app.okibasho.example.com` | `app.` + `SERVICE_DOMAIN` |
+| Signed Cookie の `Domain` | `okibasho.example.com` | `SERVICE_DOMAIN` そのもの |
+
+pages を apex に置くのは共有 URL を短くするためである。かつては `pages.` を置き、第 3 のホスト `shares.` を作る構想もあったが、外部共有を同じ Distribution の `/s/*` に集約したので apex が空いた。app が apex でないことによる違いはない。Cookie の届く範囲は app が apex でも `app.` でも同じで、アップロードできるのは信頼済みのメンバーだけなので、apex に偽のログイン画面を置かれる懸念は考えない。
+
+Signed Cookie の `Domain` はサービスドメインにする。Hosted Zone のドメイン（`example.com`）にすると、同じゾーンに同居する他サービスへ Cookie が送られてしまう。サービスドメインと Hosted Zone のドメインは別の概念として扱う。
+
+DNS と証明書は次のとおり。
+
+- Route 53 の Hosted Zone は他サービスのレコードも入っている共用のもの（`example.com`）を使い、サブゾーンへの委任はしない。Hosted Zone の ID と名前を渡したときだけ、CDK が pages と app の Alias レコード（A。app は AAAA も）を作る。渡さなければレコードは作らず、CloudFront の Distribution ドメインを Output に出すので、外部の DNS に手で CNAME / ALIAS を置く
+- ACM 証明書は us-east-1 で手動で作り（DNS 検証、SAN は pages と app の 2 つ）、ARN を渡す。スタックは 1 つのまま保つ。`crossRegionReferences` は experimental で削除や置き換えが面倒になり、年に 1 回も触らない証明書のためにスタックを増やす価値が薄い。Distribution は証明書の ARN が us-east-1 でないと synth で止まる
+- Cognito Managed Login のドメインは `amazoncognito.com` のままにする。独自ドメインにしたくなったら、証明書に `auth.` を足して `UserPoolDomain` を `customDomain` に切り替える
+
+独自ドメインを設定しなくても、今までどおり CloudFront のデフォルトドメインでデプロイして使える。そのとき作らないのは証明書の参照・alias・Route 53 レコード・Signed Cookie 閲覧認証一式（`/auth/*`・Key Group・403 エラーページ）である。`cloudfront.net` は Public Suffix List に載っていて親ドメイン Cookie を置けないため、閲覧認証はドメインが無いと原理的に成り立たない。ドメイン無しでは内部ページ `/p/*` はログイン不要のまま配信される。CLI と web は接続先を CfnOutput から受け取るだけなので、ドメインの有無による分岐を持たない。
 
 CloudFront の Distribution は app 用と pages 用の 2 つ。pages 用の 1 つに `/p/*`（内部）と `/s/*`（外部共有）の 2 ビヘイビアを持たせる。別 Distribution や第 3 ホストにはしない。理由は「外部共有」節にまとめる。
 
@@ -148,7 +171,7 @@ Cognito User Pool に Google Workspace を外部 IdP として連携する。Man
 
 App Client は 2 つ。どちらも public client（client secret なし）+ PKCE。
 
-- web 用: callback は `https://app.share.example.jp/callback`。開発時は `http://localhost:3000/callback`
+- web 用: callback は `https://<app のホスト名>/callback`（独自ドメイン設定時は `app.okibasho.example.com`、未設定なら CloudFront の Distribution ドメイン）。開発時は `http://localhost:3000/callback`
 - cli 用: callback は `http://127.0.0.1:<port>/callback`（localhost 許可）。Cognito は callback URL をポートまで含めた完全一致で照合するため、空きポートを動的に 1 つだけ選ぶことはできない。候補ポート `8976` `8977` `8978` を登録し、空いている最初のポートを使う。全部使用中ならポートを空けるよう伝えて終了する
 
 メールアドレスが S3 キーになる。User Pool 側でメールを小文字に正規化する。`+` 付きアドレスは PreSignUp で拒否する。キーの揺れを増やさないためである。
@@ -182,31 +205,48 @@ authenticated role の信頼ポリシー。`sts:TagSession` を忘れるとプ�
 
 クライアントは id_token を Identity Pool に渡し、一時 IAM クレデンシャルを得る。Cognito のアクセストークンには `email` クレームが入らないため、id_token を使う。
 
-### 内部ページの閲覧（Signed Cookie）※独自ドメイン導入後
+### 内部ページの閲覧（Signed Cookie）※独自ドメイン設定時のみ
 
-pages Distribution に Trusted Key Group を設定する。CloudFront の公開鍵は CDK で作り、秘密鍵は SSM SecureString に置く。
+pages Distribution のデフォルトビヘイビア（`/p/*`）に Trusted Key Group を設定する。`/s/*` と `/errors/*` には付けない。
 
-発行するのは `/auth/*` の Lambda 1 つ。app Distribution のビヘイビアとして Function URL を紐づける。
+鍵ペアは手で作る。AWS には CloudFront 用の鍵ペアを生成するリソースが無く、カスタムリソースで自動化するより証明書と同じ「手で作って参照を渡す」流儀に揃えるほうが単純なためである。公開鍵も秘密鍵も SSM Parameter Store に置き、ローカルにファイルを残さない（CI からデプロイするときにファイルを配る必要が無い）。パラメータ名は固定で、CDK は環境変数を介さずこの名前を読む。
 
-- `POST /auth/pages-cookie`、`Authorization: Bearer <id_token>`
-- `aws-jwt-verify`（AWS 公式ライブラリ）で JWKS 検証してから署名する
-- `Domain=.share.example.jp` / `Secure` / `HttpOnly` / `SameSite=Lax` で `CloudFront-Policy` / `CloudFront-Signature` / `CloudFront-Key-Pair-Id` を Set-Cookie
+| パラメータ | 種類 | 使う場所 |
+| --- | --- | --- |
+| `/okibasho/pages-signing/public-key` | String（PEM） | CDK が `PublicKey` の `encodedKey` に渡す（`StringParameter.valueForStringParameter`） |
+| `/okibasho/pages-signing/private-key` | SecureString（PEM） | 発行 Lambda がコールドスタート時に `GetParameter`（復号あり）で読む |
+
+発行するのは `/auth/*` の Lambda 1 つ。Function URL を Lambda OAC 付きで app Distribution の `/auth/*` ビヘイビアに紐づけ、CloudFront 経由でしか呼べないようにする。
+
+- `POST /auth/pages-cookie`。id_token は JSON ボディ `{ "idToken": "..." }` で渡す。OAC 付きの Function URL では CloudFront が `Authorization` ヘッダを自分の SigV4 署名で上書きするため、`Authorization: Bearer` は使えない
+- Lambda OAC で POST するとき、ビューアは `x-amz-content-sha256`（ボディの SHA-256 の hex）を送る必要がある。web は `crypto.subtle.digest` で計算して付ける
+- `aws-jwt-verify`（AWS 公式ライブラリ）で User Pool と web 用 App Client の id_token として検証してから、`@aws-sdk/cloudfront-signer` の `getSignedCookies` でカスタムポリシー（Resource は `https://<pages>/p/*`、有効期間 24 時間）に署名する
+- `Domain=<サービスドメイン>` / `Path=/p` / `Secure` / `HttpOnly` / `SameSite=Lax` / `Max-Age=86400` で `CloudFront-Policy` / `CloudFront-Signature` / `CloudFront-Key-Pair-Id` を Set-Cookie し、204 を返す。`Path=/p` にしておくと `/s/*` と app には送られない
+- CORS は要らない。呼び出し元は同じ origin（app）の SPA である
+- Lambda の環境変数は User Pool ID・App Client ID・サービスドメイン・pages の URL・Key Pair ID（`PublicKey` の ID）・秘密鍵のパラメータ名
 
 Signed Cookie は閲覧専用で、漏れても内部ページの閲覧以外の権限を持たない。1 ページが複数ファイルを参照するため、Signed URL ではなく Signed Cookie を使う。有効期間は 24 時間。切れたら下記の再認証フローが走るだけなので、長さに神経質にならない。
 
-管理 UI のセッション Cookie（もし持つなら）は `__Host-` プレフィックスを付ける。`__Host-` は `Domain` 指定付きでは設定できないため、pages 上の untrusted JS からの cookie tossing（親ドメイン Cookie の送りつけ）で app session を上書きできない。
+管理 UI のセッション Cookie（もし持つなら）は `__Host-` プレフィックスを付ける。`__Host-` は `Domain` 指定付きでは設定できないため、pages 上の untrusted JS からの cookie tossing（親ドメイン Cookie の送りつけ）で app session を上書きできない。現状の web は Cookie を持たず、トークンは sessionStorage にある。
 
 未ログインで閲覧 URL を開いたときのフロー:
 
 ```text
-pages.share.example.jp/p/<user>/<slug>/ → 403
- → CloudFront カスタムエラーページ（元URLを持って app へ飛ばす小さなHTML）
- → app: Cognito ログイン（済んでいればスキップ）
- → POST /auth/pages-cookie で Signed Cookie 発行
- → 元の pages URL へリダイレクト
+okibasho.example.com/p/<user>/<slug>/ → 403（Cookie が無い・期限切れ）
+ → CloudFront カスタムエラーページ /errors/403.html
+     元 URL を持って https://app.okibasho.example.com/pages-login?return=<元URL> へ location.replace
+ → app: AuthGate が Cognito ログインを要求（済んでいればスキップ）
+ → /pages-login: return を検証し、POST /auth/pages-cookie で Signed Cookie 発行
+ → 元の pages URL へ location.replace
 ```
 
-`cloudfront.net` は Public Suffix List に載っているため親ドメイン Cookie を設定できない。この機能は独自ドメイン導入後にしか有効化できない。それまで pages 側は閲覧認証なしで検証する。ドメイン関連の分岐は `domains.ts` の 1 箇所に閉じ込め、他の構成に波及させない。
+- `errors/403.html` は `errors/404.html` と同じく固定の HTML で、app の URL を `BucketDeployment` の `Source.data` でデプロイ時に埋める。パスが `/p/` で始まるときだけ app へ飛ばし、それ以外（`/s/*` の Geo restriction による 403 や `/`）は「閲覧できません」の固定文言を出す。同じブラウザで直前（60 秒以内）に app へ飛ばしたばかりなら再度は飛ばさず固定文言を出す（sessionStorage で判定）。Cookie を発行したのに 403 が続く設定ミスでループしないためである
+- `/pages-login` の `return` は「`VITE_PAGES_BASE_URL` と同じ origin で、パスが `/p/` で始まる `https` の URL」だけ受け付ける。open redirect を防ぐ。それ以外は `/` へ寄せる
+- `/callback` はログイン前のパスを復元する。今は `/` と `?slug=` だけを復元しているが、`/pages-login?return=...` も復元できるようにする（相対パスであることを確認して `redirect({ href })`）
+- 403 のカスタムエラーレスポンスは Distribution 全体に効くが、CloudFront Function が返した 401 / 403 / 404 には適用されない。`/s/*` の share-router が返す 403 はこの導線に巻き込まれない
+- viewer-request の CloudFront Function と Signed Cookie の検証のどちらが先に走るかは公式に明記されていない。どちらの順でも app に着地するよう、`/` → app の 302 は pages-router に持たせ、Cookie 無しの `/p/*` は 403 ページに任せる
+
+ドメイン無しでは `/auth/*` ビヘイビア・Key Group・403 エラーレスポンスを作らず、web の `/pages-login` は存在するだけで誰も飛ばされない。web にドメインの有無による分岐は無い。
 
 ## S3構造
 
@@ -258,7 +298,7 @@ metadata はページ成果物の prefix（配信対象）の外にあるため�
 
 ```json
 [{
-  "AllowedOrigins": ["https://app.share.example.jp"],
+  "AllowedOrigins": ["https://app.okibasho.example.com"],
   "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
   "AllowedHeaders": ["*"],
   "ExposeHeaders": ["ETag"],
@@ -266,7 +306,7 @@ metadata はページ成果物の prefix（配信対象）の外にあるため�
 }]
 ```
 
-`POST` は `DeleteObjects` が使う。開発時は `http://localhost:<port>` も AllowedOrigins に足す。
+`POST` は `DeleteObjects` が使う。AllowedOrigins は app Distribution が公開するホスト名（独自ドメインか CloudFront のデフォルトドメイン）から組み立てる。開発時は `http://localhost:<port>` も AllowedOrigins に足す。
 
 - S3 Lifecycle ルールとオブジェクトタグは使わない。期限切れ削除は PageMaintenance Lambda の定期処理に一本化する
 
@@ -284,7 +324,7 @@ slug の指定は任意。web は省略時に乱数（小文字英数字 10 文�
 3. meta/<email>/<slug>.json を先に書く
 4. ディレクトリを走査し、pages/<email>/<slug>/ 配下へ PutObject
 5. 同じ prefix を List し、今回のアップロードに含まれないキーを DeleteObjects
-6. https://pages.share.example.jp/p/<user>/<slug>/ を表示
+6. https://okibasho.example.com/p/<user>/<slug>/ を表示
 ```
 
 metadata を先に書くのは、途中で失敗しても一覧に残り続けるようにするためである。成果物の Put や差分削除で失敗しても、metadata さえ書けていれば一覧から見え続け、利用者が消すか上げ直せる。metadata の Put 自体が失敗すれば新規ページとして一覧に現れないので、これも上げ直せば済む。
@@ -299,6 +339,7 @@ metadata の無い pages/ 配下のファイルは削除しない。metadata を
 
 内部向けの公開 URL は `/p/<user>/<slug>/`。実装は `packages/infra/lib/functions/pages-router.js`（pages Distribution のデフォルトビヘイビアに viewer-request として付ける CloudFront Function。`/p/` 以外は 404 にする）。ランタイムは `cloudfront-js-2.0` を指定する（1.0 だと `String.prototype.endsWith` などが使えない）。
 
+- `/` は app の URL へ 302 する。app の URL はメールドメインと同じくビルド時に埋め込む（独自ドメインの有無に関係なく常に有効）
 - `%2f` / `.` / `..` / 空セグメントを含む URI は 404 にする
 - `@` を含む user を弾く。`/a@b.jp@example.jp/` のような入力で別ユーザーの prefix を指させないため
 - `/p/<user>/<slug>` に完全一致するなら末尾 `/` 付きへ 301 する（クエリ文字列は保持）。スラッシュ無しのまま HTML を返すと、ページ内の相対パスが壊れる
@@ -447,12 +488,13 @@ API クライアントは書かない。ブラウザから直接 AWS SDK for Jav
 
 - `/`（トップ）: 上にアップロード（単一ファイル / ディレクトリ / drag & drop、保存期間の選択、slug の指定は任意で、省略すれば乱数の slug を自動生成する）、下に自分のページ一覧（URL コピー・保存期間変更・削除・再アップロード）。一覧の「再アップロード」はアップロードフォームに slug をセットしてスクロールする。`?slug=` クエリもこの画面が受ける
 - `/callback`（ログインコールバック処理。未ログインでも到達できる唯一のルート）
+- `/pages-login?return=<pages の URL>`（内部ページの閲覧認証。ログイン済みを前提に Signed Cookie を発行して元の URL へ戻る。画面は LoadingShell だけ。詳細は「内部ページの閲覧（Signed Cookie）」節）
 - 404
 
 App Distribution のルーティング:
 
 ```text
-/auth/*  → Signed Cookie 発行 Lambda（Function URL）。独自ドメイン未設定ならこの behavior は作らない
+/auth/*  → Signed Cookie 発行 Lambda（Function URL + Lambda OAC）。独自ドメイン未設定ならこの behavior は作らない
 それ以外  → 管理UI用 S3 origin（404 は SPA シェルへ rewrite）
 ```
 
@@ -497,7 +539,7 @@ OAuth / PKCE は既存ライブラリ（openid-client）を使い、独自実装
 ```text
 lib/
   okibasho-stack.ts        各 Construct の組み立てだけ
-  config.ts                  環境変数から emailDomain / domains を読む
+  config.ts                  環境変数から emailDomain / serviceDomain を読む
   constructs/
     auth.ts                  UserPool / Managed Login / App Client x2 /
                              IdentityPool / authenticated role / principal tag
@@ -510,15 +552,41 @@ lib/
                              （S3 イベントでページ単位の投影 + 1 時間ごとの定期処理で
                              期限切れ削除・KVS全件突き合わせ。アラームは持たない）
     app-delivery.ts          app バケット + Distribution + SPA 用 CloudFront Function
+    service-domain.ts        独自ドメイン（設定時のみ）。ACM 証明書の参照、Hosted Zone の参照、
+                             pages / app それぞれのホスト名と Alias レコード
+    pages-viewer-auth.ts     Signed Cookie 閲覧認証（独自ドメイン設定時のみ）。PublicKey / KeyGroup、
+                             SSM の鍵の参照、発行 Lambda + Function URL（Lambda OAC）
+  lambda/
+    page-maintenance/
+    pages-cookie/            Signed Cookie 発行 Lambda
+  static/errors/             404.html / 403.html
 ```
 
 PageMaintenance Lambda 本体（`packages/infra/lib/lambda/page-maintenance/`）は SigV4A が必要な `@aws-sdk/client-cloudfront-keyvaluestore` を呼ぶため、副作用 import で純 JS の `@aws-sdk/signature-v4a` を読み込んでいる（ネイティブの `@aws-sdk/signature-v4-crt` は使わない）。`NodejsFunction` の bundling では `@aws-sdk/*` を external にしない。
 
-Signed Cookie 発行 Lambda・PreSignUp・ドメイン関連（Route 53 / ACM）の Construct は、それぞれの機能の導入と同時に追加する。導入順は [roadmap.md](roadmap.md) にある。
+PreSignUp の Construct は Google IdP の導入と同時に追加する。導入順は [roadmap.md](roadmap.md) にある。
 
 環境ごとに変わる値（メールドメイン、デプロイ先、独自ドメイン）はリポジトリに持たず、`packages/infra/.env`（git 管理外）かシェルの環境変数で渡す。項目は `packages/infra/.env.example` にある。メールドメインだけは必須で、未設定なら synth の時点で止める。
 
-`config.domains` が未設定でも `cdk synth` が通ること。ドメイン関連の分岐は 1 つの Construct に閉じ込め、他の構成に波及させない。未設定の間は CloudFront のデフォルトドメインで構築し、証明書・Route 53・Signed Cookie 閲覧認証は作らない。
+| 環境変数 | 必須 | 意味 |
+| --- | --- | --- |
+| `EMAIL_DOMAIN` | 必須 | メンバーのメールドメイン |
+| `SERVICE_DOMAIN` | 任意 | サービスドメイン。設定すると独自ドメインで構築する |
+| `CERTIFICATE_ARN` | `SERVICE_DOMAIN` 設定時は必須 | us-east-1 の ACM 証明書 |
+| `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` | 任意（両方そろえる） | Route 53 の Alias レコードを作るときだけ |
+
+`config.ts` は組み合わせの不備（`SERVICE_DOMAIN` があるのに `CERTIFICATE_ARN` が無い、Hosted Zone の ID と名前が片方だけ）を synth の時点で止める。Signed Cookie の鍵の SSM パラメータが無いことはデプロイ時にしか分からないので、README の手順に書く。
+
+独自ドメインの有無による分岐は次の 2 種類に限り、Construct の中に `if (domain)` を増やさない。
+
+- スタックの組み立て（`okibasho-stack.ts`）で、`ServiceDomain` と `PagesViewerAuth` を作るか作らないか
+- 各 Construct が受け取る optional な props（`customDomain?: { domainName, certificate }`、`viewerAuth?: { keyGroup }`、`cookieIssuer?: origin`）を Distribution の props に渡すか渡さないか
+
+`PagesDelivery` と `AppDelivery` は `domainName`（独自ドメインか CloudFront のデフォルトドメインか）を公開し、CfnOutput・CORS の許可 origin・Cognito のコールバック URL・pages-router に埋め込む app の URL はすべてこの値から組み立てる。下流はどちらのモードかを知らない。
+
+Construct の生成順は Storage → PageMaintenance → ServiceDomain → AppDelivery → Auth → PagesViewerAuth → PagesDelivery → Alias レコード。`AppDelivery` の `/auth/*` ビヘイビアは `PagesViewerAuth` が Auth（User Pool ID・App Client ID）に依存するため、`AppDelivery` 生成後に `addBehavior` で足す。
+
+`SERVICE_DOMAIN` が未設定でも `cdk synth` が通ること。snapshot テストはドメイン無し・ドメインあり（固定の証明書 ARN と Hosted Zone を渡す）の両方で合成し、どちらのモードも壊れていないことを守る。
 
 Identity Pool は L2 Construct（`aws-cdk-lib/aws-cognito-identitypool`）を使う。attributes for access control（principal tag マッピング）は L2 で設定できないため、`CfnIdentityPoolPrincipalTag` で補う。
 
@@ -588,7 +656,9 @@ PageMaintenance（`packages/infra/lib/lambda/page-maintenance/`）は S3 / KVS �
 
 CDK は `Template.fromStack()` の snapshot テストを正とする。個別リソースのアサーションは、意図を明示したい箇所（bucket が private であること、CORS があること、pages Distribution に OAC と Function が付いていること、authenticated role のポリシーと信頼ポリシー、unauthenticated access が無効であること）にだけ足す。
 
-snapshot は `.env` や環境変数を読まず、固定のメールドメインだけを渡し、env / domains が未設定の状態で合成する。これにより「設定が空でも synth が通る」という制約がテストで守られる。
+snapshot は `.env` や環境変数を読まず、固定の値だけを渡して合成する。ドメイン無し（メールドメインだけ）とドメインあり（固定の証明書 ARN・Hosted Zone を含む）の 2 つを持ち、「設定が空でも synth が通る」と「ドメインを渡すと alias・Key Group・`/auth/*`・403 が揃う」の両方をテストで守る。
+
+Signed Cookie 発行 Lambda（`packages/infra/lib/lambda/pages-cookie/`）は、JWT 検証と署名を差し替えられる形にして、ボディの検証・Set-Cookie の属性・ステータスを単体テストする。
 
 IAM の境界は、別ユーザーの prefix に書こうとすると `AccessDenied` になることをテストで確認する。実 AWS が要る確認はデプロイ後に回し、単体ではポリシー文書の形をアサートする。
 

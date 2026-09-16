@@ -10,15 +10,40 @@ CloudFront のデフォルトドメインで初回デプロイ済み。web / CLI
 
 ## 残っている作業
 
-独自ドメインと閲覧認証（前提: ドメイン取得、us-east-1 での `cdk bootstrap`）:
+### 独自ドメインと閲覧認証
 
-- [ ] Route 53 hosted zone + ACM 証明書、app / pages のカスタムドメイン
-- [ ] CloudFront 公開鍵 + Key Group、秘密鍵を SSM SecureString へ
-- [ ] `/auth/pages-cookie` Lambda（`aws-jwt-verify` で検証 → 親ドメイン Cookie 発行）
-- [ ] 403 カスタムエラーページ → app → 元 URL の再認証フロー
-- [ ] app セッション Cookie を使う場合は `__Host-` プレフィックス
+設計は [architecture.md](architecture.md) の「独自ドメイン」「内部ページの閲覧（Signed Cookie）」「CDK」節に決めてある。2 つの PR に分け、1 つ目だけでもデプロイできる状態にする。ドメイン無しでも synth・deploy できることは両方の PR で保つ。
 
-受け入れ: 未ログインで pages URL を開くとログインへ誘導され、ログイン後に元のページが表示される。
+PR 1: ドメインの付け替え（`packages/infra` のみ）
+
+- [ ] `config.ts` を `SERVICE_DOMAIN` / `CERTIFICATE_ARN` / `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` に置き換える。pages と app のホスト名は導出し、組み合わせの不備は synth で止める。`.env.example` は更新済み
+- [ ] `ServiceDomain` Construct（`constructs/service-domain.ts`）。`Certificate.fromCertificateArn`、`HostedZone.fromHostedZoneAttributes`（渡されたときだけ）、pages / app の `{ domainName, certificate }`、Distribution を受け取って Alias レコード（pages は A のみ。IPv6 を無効にしているため。app は A と AAAA）を作るメソッド
+- [ ] `PagesDelivery` / `AppDelivery` に `customDomain?: { domainName, certificate }` を足し、`domainName`（独自ドメインか Distribution ドメイン）を公開する。Distribution の `domainNames` / `certificate` は props の spread で渡すだけにする
+- [ ] `Auth` の `appDomain` / `appDistributionDomain` を `appDomainName` 1 つにまとめる。CfnOutput（`PagesBaseUrl` / `AppUrl`）と CORS の許可 origin も `domainName` から組み立てる。Hosted Zone を渡さないときのために `PagesDistributionDomainName` / `AppDistributionDomainName` を Output に足す
+- [ ] `pages-router.js` に app の URL を埋め込み、`/` を app へ 302 する（ドメインの有無に関係なく常に）。`pages-router.test.ts` に追加
+- [ ] snapshot テストにドメインあり（固定の ARN・Hosted Zone）を追加し、alias・証明書・Alias レコードをアサートする
+- [ ] `packages/cli/src/config.ts` と `constructs/auth.ts` に残る `share.example.jp` の例を `okibasho.example.com` に直す
+
+受け入れ: `SERVICE_DOMAIN` 未設定で今までどおり synth・deploy でき、設定すると `PagesBaseUrl` が `https://okibasho.example.com`、`AppUrl` が `https://app.okibasho.example.com/` になり、ブラウザで両方開ける。apex の `/` は app へ飛ぶ。
+
+PR 2: Signed Cookie 閲覧認証（`packages/infra` と `packages/web`）
+
+- [ ] `PagesViewerAuth` Construct（`constructs/pages-viewer-auth.ts`）。SSM の公開鍵から `PublicKey` と `KeyGroup`、発行 Lambda（`lambda/pages-cookie/`、`NodejsFunction`、arm64）、Function URL（Lambda OAC）。秘密鍵のパラメータへの `ssm:GetParameter` を Lambda に付与
+- [ ] 発行 Lambda。JSON ボディの `idToken` を `aws-jwt-verify` で検証し、`@aws-sdk/cloudfront-signer` の `getSignedCookies` でカスタムポリシー（`https://<pages>/p/*`、24 時間）に署名、`Domain=<サービスドメイン>; Path=/p; Secure; HttpOnly; SameSite=Lax; Max-Age=86400` で 3 つの Cookie を返す。検証失敗は 401、ボディ不正は 400。成功・失敗をログに出す（トークンは出さない）
+- [ ] `AppDelivery` に `/auth/*` ビヘイビアを足すメソッド（`allowedMethods: ALLOW_ALL`、キャッシュ無効、`x-amz-content-sha256` を含めて全ヘッダを転送する origin request policy）。スタックで `PagesViewerAuth` があるときだけ呼ぶ
+- [ ] `PagesDelivery` に `viewerAuth?: { keyGroup }` を足し、デフォルトビヘイビアの `trustedKeyGroups` と 403 → `/errors/403.html` のカスタムエラーレスポンスを、渡されたときだけ設定する。`/s/*` と `/errors/*` には付けない
+- [ ] `static/errors/403.html`。`/p/` で始まるパスだけ `https://<app>/pages-login?return=<元URL>` へ飛ばす。60 秒以内に飛ばした直後なら固定文言。app の URL は `BucketDeployment` の `Source.data` で埋める（404.html と同じ `errors/` に置く）
+- [ ] web に `/pages-login` ルート。`return` を検証（`VITE_PAGES_BASE_URL` と同じ origin、`/p/` 始まり）し、`POST /auth/pages-cookie`（`x-amz-content-sha256` 付き）してから `location.replace(return)`。表示は LoadingShell。`/callback` がログイン前の `/pages-login?return=...` を復元できるようにする
+- [ ] snapshot（ドメインあり）に Key Group・`/auth/*`・403 を足し、ドメイン無しでは存在しないことをアサートする。Lambda は JWT 検証と署名を差し替えて単体テストする
+
+受け入れ: 未ログインで pages の URL を開くとログインへ誘導され、ログイン後に元のページが表示される。Cookie 発行後 24 時間は再ログインなしで別ページも見られる。`/s/*` は Cookie なしで今までどおり見られる。ドメイン無しの synth・deploy は変わらない。
+
+デプロイ後に確認する点:
+
+- Lambda OAC 越しの POST が通ること（`x-amz-content-sha256` が無いと 403 になるはず。`Authorization` は CloudFront が上書きするためボディで渡す設計にしている）
+- `StringParameter.valueForStringParameter` で複数行の PEM が `PublicKey` に入ること。入らなければ `valueFromLookup`（`cdk.context.json` は git 管理外）に切り替える
+- viewer-request の CloudFront Function と Signed Cookie の検証のどちらが先か。Cookie 無しで `/` を開いたとき、302 で app へ行くか、403 ページ経由で app へ行くか
+- Geo restriction の 403 で `/s/*` を開いたとき、403.html が固定文言を出して app へ飛ばさないこと
 
 Google IdP とメールドメイン制限:
 

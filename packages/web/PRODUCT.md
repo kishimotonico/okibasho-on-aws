@@ -33,9 +33,9 @@ AI エージェントや開発者が生成した HTML（分析レポート、説
 ## Operating Context
 
 - 規模: 全ユーザー合計で 10〜100 request/hour 程度。高負荷・高可用性・低レイテンシは求めない
-- 2 つのホスト: `app.<service-domain>`（trusted。ログイン・アップロード・アップロード済みページ・Signed Cookie 発行）と `pages.<service-domain>`（untrusted。アップロードされた HTML を配信）。実際のドメイン名は未確定
-- 内部向け共有 URL は `https://pages.<service-domain>/p/<user>/<slug>/`。`<user>` はメールアドレスのローカル部（`@` より前）
-- 外部向け共有 URL は `https://pages.<service-domain>/s/<tag><share-id>/`（`tag` はページごとに決まる 11 文字、`share-id` はランダムな 22 文字）。ページ単位で発行し、ログイン不要。この URL 自体が推測困難な秘匿情報であり基本の保護として十分だが、他社への安心感を上乗せしたい場合に任意で自動生成パスワードによる Basic 認証（ユーザー名は `guest` 固定）を付けられる。IP アドレス制限（完全一致リスト）も仕組みとしては持つが、管理 UI には出さず metadata の直接編集でのみ設定する
+- 2 つのホスト: `app.<service-domain>`（trusted。ログイン・アップロード・アップロード済みページ・Signed Cookie 発行）と `<service-domain>` の apex（untrusted。アップロードされた HTML を配信）。サービスドメインは環境ごとに決める（例: `okibasho.example.com`）
+- 内部向け共有 URL は `https://<service-domain>/p/<user>/<slug>/`。`<user>` はメールアドレスのローカル部（`@` より前）
+- 外部向け共有 URL は `https://<service-domain>/s/<tag><share-id>/`（`tag` はページごとに決まる 11 文字、`share-id` はランダムな 22 文字）。ページ単位で発行し、ログイン不要。この URL 自体が推測困難な秘匿情報であり基本の保護として十分だが、他社への安心感を上乗せしたい場合に任意で自動生成パスワードによる Basic 認証（ユーザー名は `guest` 固定）を付けられる。IP アドレス制限（完全一致リスト）も仕組みとしては持つが、管理 UI には出さず metadata の直接編集でのみ設定する
 - 典型フロー（Web）: 管理アプリを開く（未ログインなら即 Managed Login にリダイレクト） → Google ログイン → `/` の白いウェルに HTML またはフォルダをドロップ（または箱をクリックしてファイル選択） → その時点の公開URL（slug）と保存期間（30 日 / 無期限。デフォルト 30 日）で即アップロードが始まる → 箱の下に表示された URL をコピーして共有。slug は初期表示から自動入力されているので、変えたいときだけ編集する。アップロード成功中はフォーム（slug・保存期間・ファイル選択）を隠して結果ブロックだけを表示し、連続アップロードは受け付けない。次のファイルを共有したいときは、成功状態の箱（「次のファイルを置く」）をクリックしてフォームの初期状態に戻す
 - 典型フロー（CLI）: `okiba login` → `okiba ./report/ --name q3-report [--permanent]` → URL が表示される。`list` / `rm` もある
 - 認証は Cognito Managed Login（ログイン画面は自作しない）。web は Authorization Code + PKCE（`oidc-client-ts`）

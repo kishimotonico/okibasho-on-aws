@@ -93,14 +93,14 @@ Authenticated.
 $ okiba ./report/ --name q3-report
 Uploading 4 files...
 
-https://pages.share.example.jp/p/tanaka/q3-report/
+https://okibasho.example.com/p/tanaka/q3-report/
 
 $ okiba ./report/ --name q3-report --permanent
 Uploading 4 files...
 
-https://pages.share.example.jp/p/tanaka/q3-report/
+https://okibasho.example.com/p/tanaka/q3-report/
 ```
 
-閲覧者が URL を開くと、未認証なら Google ログインを挟んで HTML が表示される。独自ドメイン導入前は閲覧認証なしで検証する。
+閲覧者が URL を開くと、未認証なら Google ログインを挟んで HTML が表示される。独自ドメインを設定しないデプロイでは閲覧認証が無く、URL を知っていれば見られる。
 
 外部の相手に見せたいときは、管理 UI から外部共有 URL（`/s/<tag><share-id>/`）を発行する。こちらはログイン不要で開ける。
