@@ -2683,6 +2683,10 @@ exports[`OkibashoStack > 独自ドメインありのテンプレートが意図�
       "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]",
       "Type": "AWS::SSM::Parameter::Value<String>",
     },
+    "SsmParameterValueokibashopagessigningpublickeyC96584B6F00A464EAD1953AFF4B05118Parameter": {
+      "Default": "/okibasho/pages-signing/public-key",
+      "Type": "AWS::SSM::Parameter::Value<String>",
+    },
   },
   "Resources": {
     "AppDeliveryAssetsResponseHeaders1BA4432B": {
@@ -2901,6 +2905,38 @@ exports[`OkibashoStack > 独自ドメインありのテンプレートが意図�
       },
       "Type": "AWS::S3::BucketPolicy",
     },
+    "AppDeliveryCookieIssuerInvokeFunctionC731FC77": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PagesViewerAuthCookieIssuerFunctionFunctionUrlA7F6BE84",
+            "FunctionArn",
+          ],
+        },
+        "Principal": "cloudfront.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":cloudfront::",
+              {
+                "Ref": "AWS::AccountId",
+              },
+              ":distribution/",
+              {
+                "Ref": "AppDeliveryDistribution02142691",
+              },
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
     "AppDeliveryDistribution02142691": {
       "Properties": {
         "DistributionConfig": {
@@ -2917,6 +2953,23 @@ exports[`OkibashoStack > 独自ドメインありのテンプレートが意図�
               },
               "TargetOriginId": "OkibashoAppDeliveryDistributionOrigin1BAC13D3D",
               "ViewerProtocolPolicy": "redirect-to-https",
+            },
+            {
+              "AllowedMethods": [
+                "GET",
+                "HEAD",
+                "OPTIONS",
+                "PUT",
+                "PATCH",
+                "POST",
+                "DELETE",
+              ],
+              "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+              "Compress": true,
+              "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
+              "PathPattern": "/auth/*",
+              "TargetOriginId": "OkibashoAppDeliveryDistributionOrigin28C57C950",
+              "ViewerProtocolPolicy": "https-only",
             },
           ],
           "Comment": "trusted 管理UI配信",
@@ -2963,6 +3016,37 @@ exports[`OkibashoStack > 独自ドメインありのテンプレートが意図�
                 "OriginAccessIdentity": "",
               },
             },
+            {
+              "CustomOriginConfig": {
+                "OriginProtocolPolicy": "https-only",
+                "OriginSSLProtocols": [
+                  "TLSv1.2",
+                ],
+              },
+              "DomainName": {
+                "Fn::Select": [
+                  2,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::GetAtt": [
+                          "PagesViewerAuthCookieIssuerFunctionFunctionUrlA7F6BE84",
+                          "FunctionUrl",
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              "Id": "OkibashoAppDeliveryDistributionOrigin28C57C950",
+              "OriginAccessControlId": {
+                "Fn::GetAtt": [
+                  "AppDeliveryDistributionOrigin2FunctionUrlOriginAccessControl9B38F592",
+                  "Id",
+                ],
+              },
+            },
           ],
           "PriceClass": "PriceClass_200",
           "ViewerCertificate": {
@@ -2984,6 +3068,49 @@ exports[`OkibashoStack > 独自ドメインありのテンプレートが意図�
         },
       },
       "Type": "AWS::CloudFront::OriginAccessControl",
+    },
+    "AppDeliveryDistributionOrigin2FunctionUrlOriginAccessControl9B38F592": {
+      "Properties": {
+        "OriginAccessControlConfig": {
+          "Name": "OkibashoAppDeliveryDistributnctionUrlOriginAccessControlFE424A75",
+          "OriginAccessControlOriginType": "lambda",
+          "SigningBehavior": "always",
+          "SigningProtocol": "sigv4",
+        },
+      },
+      "Type": "AWS::CloudFront::OriginAccessControl",
+    },
+    "AppDeliveryDistributionOrigin2InvokeFromApiForOkibashoAppDeliveryDistributionOrigin28C57C9500EC72095": {
+      "Properties": {
+        "Action": "lambda:InvokeFunctionUrl",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PagesViewerAuthCookieIssuerFunctionFunctionUrlA7F6BE84",
+            "FunctionArn",
+          ],
+        },
+        "Principal": "cloudfront.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":cloudfront::",
+              {
+                "Ref": "AWS::AccountId",
+              },
+              ":distribution/",
+              {
+                "Ref": "AppDeliveryDistribution02142691",
+              },
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
     },
     "AppDeliveryResponseHeadersC3C12CC1": {
       "Properties": {
@@ -4183,6 +4310,12 @@ def sort_filter_rules(json_obj):
               "ResponseCode": 404,
               "ResponsePagePath": "/errors/404.html",
             },
+            {
+              "ErrorCachingMinTTL": 0,
+              "ErrorCode": 403,
+              "ResponseCode": 403,
+              "ResponsePagePath": "/errors/403.html",
+            },
           ],
           "DefaultCacheBehavior": {
             "CachePolicyId": {
@@ -4204,6 +4337,11 @@ def sort_filter_rules(json_obj):
               "Ref": "PagesDeliveryResponseHeaders847FFCC2",
             },
             "TargetOriginId": "OkibashoPagesDeliveryDistributionOrigin1EA4A56FB",
+            "TrustedKeyGroups": [
+              {
+                "Ref": "PagesViewerAuthKeyGroup19B5039C",
+              },
+            ],
             "ViewerProtocolPolicy": "redirect-to-https",
           },
           "Enabled": true,
@@ -4995,14 +5133,184 @@ function buildQueryString(querystring) {
           {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
+          {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+        ],
+        "SourceMarkers": [
+          {},
+          {},
+        ],
+        "SourceMarkersConfig": [
+          {},
+          {},
         ],
         "SourceObjectKeys": [
+          "<asset-hash>.zip",
           "<asset-hash>.zip",
         ],
         "WaitForDistributionInvalidation": true,
       },
       "Type": "Custom::CDKBucketDeployment",
       "UpdateReplacePolicy": "Delete",
+    },
+    "PagesViewerAuthCookieIssuerFunction2CE09860": {
+      "DependsOn": [
+        "PagesViewerAuthCookieIssuerFunctionServiceRoleDefaultPolicyBBA8F934",
+        "PagesViewerAuthCookieIssuerFunctionServiceRoleC0D8DAC6",
+      ],
+      "Properties": {
+        "Architectures": [
+          "arm64",
+        ],
+        "Code": {
+          "S3Bucket": {
+            "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
+          },
+          "S3Key": "<asset-hash>.zip",
+        },
+        "Description": "pages: id_token を検証して /p/* の Signed Cookie を発行する",
+        "Environment": {
+          "Variables": {
+            "KEY_PAIR_ID": {
+              "Ref": "PagesViewerAuthPublicKey79E53BEE",
+            },
+            "PAGES_DOMAIN": "okibasho.example.com",
+            "PRIVATE_KEY_PARAMETER": "/okibasho/pages-signing/private-key",
+            "USER_POOL_ID": {
+              "Ref": "AuthUserPool8115E87F",
+            },
+            "WEB_CLIENT_ID": {
+              "Ref": "AuthUserPoolWebClient147E4E38",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "MemorySize": 512,
+        "Role": {
+          "Fn::GetAtt": [
+            "PagesViewerAuthCookieIssuerFunctionServiceRoleC0D8DAC6",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 10,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "PagesViewerAuthCookieIssuerFunctionFunctionUrlA7F6BE84": {
+      "Properties": {
+        "AuthType": "AWS_IAM",
+        "TargetFunctionArn": {
+          "Fn::GetAtt": [
+            "PagesViewerAuthCookieIssuerFunction2CE09860",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Url",
+    },
+    "PagesViewerAuthCookieIssuerFunctionServiceRoleC0D8DAC6": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "PagesViewerAuthCookieIssuerFunctionServiceRoleDefaultPolicyBBA8F934": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "ssm:DescribeParameters",
+                "ssm:GetParameters",
+                "ssm:GetParameter",
+                "ssm:GetParameterHistory",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ssm:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":parameter/okibasho/pages-signing/private-key",
+                  ],
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "PagesViewerAuthCookieIssuerFunctionServiceRoleDefaultPolicyBBA8F934",
+        "Roles": [
+          {
+            "Ref": "PagesViewerAuthCookieIssuerFunctionServiceRoleC0D8DAC6",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "PagesViewerAuthKeyGroup19B5039C": {
+      "Properties": {
+        "KeyGroupConfig": {
+          "Items": [
+            {
+              "Ref": "PagesViewerAuthPublicKey79E53BEE",
+            },
+          ],
+          "Name": "OkibashoPagesViewerAuthKeyGroup23BF487F",
+        },
+      },
+      "Type": "AWS::CloudFront::KeyGroup",
+    },
+    "PagesViewerAuthPublicKey79E53BEE": {
+      "Properties": {
+        "PublicKeyConfig": {
+          "CallerReference": "c843d75f8abafa38c80d5c391f4350498f1b5978fb",
+          "Comment": "内部ページの Signed Cookie 検証用",
+          "EncodedKey": {
+            "Ref": "SsmParameterValueokibashopagessigningpublickeyC96584B6F00A464EAD1953AFF4B05118Parameter",
+          },
+          "Name": "OkibashoPagesViewerAuthPublicKey1DE0CAAA",
+        },
+      },
+      "Type": "AWS::CloudFront::PublicKey",
     },
     "ServiceDomainAppAliasRecordCA7E7A6C": {
       "Properties": {

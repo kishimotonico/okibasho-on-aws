@@ -18,6 +18,7 @@ export const ERRORS_PREFIX = 'errors/';
  */
 export class PagesStorage extends Construct {
   readonly bucket: Bucket;
+  private readonly errorPagesDeployment: BucketDeployment;
 
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -32,17 +33,28 @@ export class PagesStorage extends Construct {
     });
 
     this.restrictCloudFrontToPagesPrefix();
-    this.deployErrorPages();
+    this.errorPagesDeployment = this.deployErrorPages();
   }
 
   /** カスタムエラーレスポンス(404)用の固定ページを errors/ prefix にだけ配置する */
-  private deployErrorPages(): void {
+  private deployErrorPages(): BucketDeployment {
     const deployment = new BucketDeployment(this, 'ErrorPagesDeployment', {
-      sources: [Source.asset(join(dirname(fileURLToPath(import.meta.url)), '../static/errors'))],
+      sources: [
+        Source.asset(join(dirname(fileURLToPath(import.meta.url)), '../static/errors'), {
+          // URL を埋め込むテンプレート。使う側が addErrorPage で置く
+          exclude: ['403.html'],
+        }),
+      ],
       destinationBucket: this.bucket,
       destinationKeyPrefix: ERRORS_PREFIX,
     });
     this.denyDeploymentRoleOutsideErrors(deployment.handlerRole);
+    return deployment;
+  }
+
+  /** デプロイ時に中身を組み立てるエラーページを errors/ に足す */
+  addErrorPage(fileName: string, html: string): void {
+    this.errorPagesDeployment.addSource(Source.data(fileName, html));
   }
 
   /**

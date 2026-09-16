@@ -12,6 +12,7 @@ import {
   FunctionRuntime,
   GeoRestriction,
   HeadersReferrerPolicy,
+  type IKeyGroup,
   type IKeyValueStore,
   PriceClass,
   ResponseHeadersPolicy,
@@ -32,6 +33,8 @@ export interface PagesDeliveryProps {
   readonly appOrigin: string;
   /** 未指定なら CloudFront のデフォルトドメインで配信する */
   readonly customDomain?: CustomDomain;
+  /** 指定すると /p/* を Signed Cookie 必須にし、403 を app へのログイン導線に差し替える */
+  readonly viewerAuth?: { readonly keyGroup: IKeyGroup };
 }
 
 /**
@@ -122,6 +125,7 @@ export class PagesDelivery extends Construct {
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy,
         responseHeadersPolicy: responseHeaders,
+        ...(props.viewerAuth && { trustedKeyGroups: [props.viewerAuth.keyGroup] }),
         functionAssociations: [
           {
             function: routerFunction,
@@ -163,6 +167,17 @@ export class PagesDelivery extends Construct {
           responsePagePath: '/errors/404.html',
           ttl: Duration.seconds(60),
         },
+        // Cookie を受け取った直後に同じ URL を開き直すので、403 は覚えさせない
+        ...(props.viewerAuth
+          ? [
+              {
+                httpStatus: 403,
+                responseHttpStatus: 403,
+                responsePagePath: '/errors/403.html',
+                ttl: Duration.seconds(0),
+              },
+            ]
+          : []),
       ],
     });
     this.domainName = props.customDomain?.domainName ?? this.distribution.distributionDomainName;

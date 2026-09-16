@@ -145,6 +145,71 @@ describe('OkibashoStack', () => {
     });
   });
 
+  describe('PagesViewerAuth', () => {
+    it('独自ドメインが無ければ Key Group・/auth/*・403 ページを作らない', () => {
+      const template = synth();
+
+      template.resourceCountIs('AWS::CloudFront::KeyGroup', 0);
+      template.resourceCountIs('AWS::Lambda::Url', 0);
+      const appDistribution = findDistributionByComment(template, 'trusted 管理UI配信');
+      expect(
+        appDistribution?.Properties?.DistributionConfig?.CacheBehaviors?.map((b) => b.PathPattern),
+      ).not.toContain('/auth/*');
+      const pagesDistribution = findDistributionByComment(template, 'pages配信');
+      expect(
+        (
+          pagesDistribution?.Properties?.DistributionConfig?.DefaultCacheBehavior as Record<
+            string,
+            unknown
+          >
+        )?.TrustedKeyGroups,
+      ).toBeUndefined();
+    });
+
+    it('/p/* だけに Key Group を付け、403 を /errors/403.html に差し替える', () => {
+      const template = synth(SERVICE_DOMAIN);
+
+      template.resourceCountIs('AWS::CloudFront::KeyGroup', 1);
+      const config = findDistributionByComment(template, 'pages配信')?.Properties
+        ?.DistributionConfig as Record<string, any>;
+      expect(config.DefaultCacheBehavior.TrustedKeyGroups).toHaveLength(1);
+      for (const behavior of config.CacheBehaviors) {
+        expect(behavior.TrustedKeyGroups).toBeUndefined();
+      }
+      expect(config.CustomErrorResponses).toContainEqual({
+        ErrorCode: 403,
+        ResponseCode: 403,
+        ResponsePagePath: '/errors/403.html',
+        ErrorCachingMinTTL: 0,
+      });
+    });
+
+    it('app の /auth/* に IAM 認証の Function URL を OAC で載せる', () => {
+      const template = synth(SERVICE_DOMAIN);
+
+      template.hasResourceProperties('AWS::Lambda::Url', { AuthType: 'AWS_IAM' });
+      const config = findDistributionByComment(template, 'trusted 管理UI配信')?.Properties
+        ?.DistributionConfig as Record<string, any>;
+      const authBehavior = config.CacheBehaviors.find(
+        (behavior: { PathPattern: string }) => behavior.PathPattern === '/auth/*',
+      );
+      expect(authBehavior.AllowedMethods).toContain('POST');
+      expect(authBehavior.OriginRequestPolicyId).toBe('b689b0a8-53d0-40ab-baf2-68738e2966ac');
+      const authOrigin = config.Origins.find(
+        (origin: { Id: string }) => origin.Id === authBehavior.TargetOriginId,
+      );
+      expect(authOrigin.OriginAccessControlId).toBeDefined();
+      template.hasResourceProperties('AWS::Lambda::Permission', {
+        Action: 'lambda:InvokeFunctionUrl',
+        Principal: 'cloudfront.amazonaws.com',
+      });
+      template.hasResourceProperties('AWS::Lambda::Permission', {
+        Action: 'lambda:InvokeFunction',
+        Principal: 'cloudfront.amazonaws.com',
+      });
+    });
+  });
+
   describe('PagesStorage', () => {
     it('bucketは完全privateでHTTPS必須、Website Hostingは使わない', () => {
       const template = synth();

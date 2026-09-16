@@ -5,6 +5,7 @@ import { Auth } from './constructs/auth.js';
 import { PagesDelivery } from './constructs/pages-delivery.js';
 import { PageMaintenance } from './constructs/page-maintenance.js';
 import { PagesStorage } from './constructs/pages-storage.js';
+import { PagesViewerAuth } from './constructs/pages-viewer-auth.js';
 import { ServiceDomain } from './constructs/service-domain.js';
 import type { ServiceDomainConfig } from './config.js';
 
@@ -24,6 +25,7 @@ export interface OkibashoStackProps extends StackProps {
  *     期限切れページの削除も担う。別のcleanup Lambdaは作らない）
  *   - EventBridge Rule（1時間ごとの安全網 + cleanup）+ S3通知（metadataの作成・削除で即時起動）
  *   - ACM 証明書の参照 / Route 53 の Alias レコード（serviceDomain 設定時のみ）
+ *   - /p/* の Signed Cookie 閲覧認証（Key Group + 発行 Lambda。serviceDomain 設定時のみ）
  */
 export class OkibashoStack extends Stack {
   constructor(scope: Construct, id: string, props: OkibashoStackProps) {
@@ -44,12 +46,24 @@ export class OkibashoStack extends Stack {
       pagesBucket: pagesStorage.bucket,
     });
 
+    // cloudfront.net には親ドメイン Cookie を置けないので、閲覧認証は独自ドメインがあるときだけ
+    const pagesViewerAuth =
+      serviceDomain &&
+      new PagesViewerAuth(this, 'PagesViewerAuth', {
+        userPool: auth.userPool,
+        webClient: auth.webClient,
+        pagesDomainName: serviceDomain.pages.domainName,
+        appDelivery,
+        pagesStorage,
+      });
+
     const pagesDelivery = new PagesDelivery(this, 'PagesDelivery', {
       bucket: pagesStorage.bucket,
       emailDomain: props.emailDomain,
       shareKeyValueStore: pageMaintenance.keyValueStore,
       appOrigin: `https://${appDelivery.domainName}`,
       customDomain: serviceDomain?.pages,
+      viewerAuth: pagesViewerAuth,
     });
 
     serviceDomain?.addAliasRecords({

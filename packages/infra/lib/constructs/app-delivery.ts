@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import {
   AccessLevel,
+  AllowedMethods,
   CachePolicy,
   Distribution,
   Function,
@@ -10,12 +11,14 @@ import {
   FunctionEventType,
   FunctionRuntime,
   HttpVersion,
+  OriginRequestPolicy,
   PriceClass,
   ResponseHeadersPolicy,
   type ResponseHeadersPolicyProps,
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
-import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { FunctionUrlOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { CfnPermission, type IFunctionUrl } from 'aws-cdk-lib/aws-lambda';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import type { CustomDomain } from './service-domain.js';
@@ -123,5 +126,28 @@ export class AppDelivery extends Construct {
       },
     });
     this.domainName = props.customDomain?.domainName ?? this.distribution.distributionDomainName;
+  }
+
+  /** Signed Cookie の発行 Lambda を /auth/* に載せる。同じ origin の SPA から呼ぶので CORS は要らない */
+  addCookieIssuer(functionUrl: IFunctionUrl): void {
+    this.distribution.addBehavior(
+      '/auth/*',
+      FunctionUrlOrigin.withOriginAccessControl(functionUrl),
+      {
+        viewerProtocolPolicy: ViewerProtocolPolicy.HTTPS_ONLY,
+        allowedMethods: AllowedMethods.ALLOW_ALL,
+        cachePolicy: CachePolicy.CACHING_DISABLED,
+        // Host は Function URL のものでないと OAC の署名が合わない。x-amz-content-sha256 はここで通す
+        originRequestPolicy: OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+      },
+    );
+    // withOriginAccessControl が付けるのは lambda:InvokeFunctionUrl だけ。
+    // 新しい Function URL は lambda:InvokeFunction も要る
+    new CfnPermission(this, 'CookieIssuerInvokeFunction', {
+      principal: 'cloudfront.amazonaws.com',
+      action: 'lambda:InvokeFunction',
+      functionName: functionUrl.functionArn,
+      sourceArn: this.distribution.distributionArn,
+    });
   }
 }
