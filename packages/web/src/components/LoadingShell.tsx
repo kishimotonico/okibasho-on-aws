@@ -1,3 +1,4 @@
+import { PagesListSkeleton } from '~/components/PagesSection';
 import { BOX_ICON_PARAMS, build, idleAnim, viewBoxFor } from '~/lib/upload-box-icon';
 import { messages } from '~/lib/messages';
 
@@ -59,13 +60,7 @@ export function LoadingShell({ lead }: LoadingShellProps) {
 
       <section className="pages-section" aria-hidden>
         <h2>{messages.listHeading}</h2>
-        <ul className="page-stack">
-          {[0, 1, 2].map((i) => (
-            <li key={i} className="page-row page-row--skeleton">
-              <div className="page-row__skeleton-bar" />
-            </li>
-          ))}
-        </ul>
+        <PagesListSkeleton />
       </section>
     </div>
   );

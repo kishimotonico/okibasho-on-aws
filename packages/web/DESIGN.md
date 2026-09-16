@@ -369,6 +369,8 @@ lib/listed-page.ts         metadata を一覧の行（ListedPage。公開URL・�
 lib/pages-queries.ts       一覧の queryOptions（queryKey は ['pages', email]）。
                             loader（prefetchQuery）とコンポーネント（useQuery / useSuspenseQuery）で共有する
 lib/query-client.ts        アプリで唯一の QueryClient
+lib/query-persistence.ts   一覧クエリの localStorage への保存と復元（loader は復元を待ってから prefetch する）。
+                            ログアウト時にメモリ・localStorage の両方を消す
 lib/s3-client.ts           idToken ごとの S3Client のキャッシュと PageStore の生成
 lib/messages.ts            画面に出す日本語の集約
 lib/to-user-message.ts     エラーを画面向けの日本語にする
@@ -376,7 +378,7 @@ lib/to-user-message.ts     エラーを画面向けの日本語にする
 
 ### 状態の置き場所
 
-- **一覧データ**: TanStack Query のキャッシュ（`lib/query-client.ts` の QueryClient、queryKey `['pages', email]`）を唯一の情報源にする。`routes/index.tsx` の loader は一覧を await せず `prefetchQuery` を始めるだけ。Composer は suspend しない `useQuery` で読み、まだ無ければ `undefined` として扱う。「アップロード済みページ」の中身だけ `useSuspenseQuery`（`components/PagesSection.tsx`）で待つ。削除・保存期間変更は `queryClient.setQueryData` で先にキャッシュを書き換える楽観更新で、失敗したら元に戻す。アップロード・共有変更は成功後に、書き込んだ内容（API 呼び出しの戻り値）でキャッシュの該当行を差し替える（一覧全体は取り直さない）
+- **一覧データ**: TanStack Query のキャッシュ（`lib/query-client.ts` の QueryClient、queryKey `['pages', email]`）を唯一の情報源にする。`routes/index.tsx` の loader は一覧を await せず `prefetchQuery` を始めるだけ。Composer は suspend しない `useQuery` で読み、まだ無ければ `undefined` として扱う。「アップロード済みページ」の中身だけ `useSuspenseQuery`（`components/PagesSection.tsx`）で待つ。削除・保存期間変更は `queryClient.setQueryData` で先にキャッシュを書き換える楽観更新で、失敗したら一覧を取り直す（スナップショットへ戻すと並行した別の操作の成功分まで巻き戻るため）。アップロード・共有変更は成功後に、書き込んだ内容（API 呼び出しの戻り値）でキャッシュの該当行を差し替える（一覧全体は取り直さない）
 - **route から下ろす合図**: `composerSeed`（再アップロード）・`retiredSlug`（消えたページ）・`highlight`（成功行）は `{ slug, nonce }` の値を props で Composer / PagesList へ渡す。`forwardRef` や `useImperativeHandle` は使わない
 - **ShareDialog の開閉**: `shareSlug`（開いている対象の slug、または `null`）を `routes/index.tsx` が持つ。一覧の kebab「外部共有…」も成功結果の「外部共有…」も同じ `onShare(slug)` を呼ぶだけで、ShareDialog 自体の描画・`pages` からの対象ページの引き直し・保存後の一覧反映（書き込んだ内容で該当行を差し替え）は route 側の一箇所にまとめる。Composer で今回新しく外部公開したときは、`onUploaded` の第2引数に `true` を渡すだけで同じ経路が開く（共有URL・パスワードの有無は ShareDialog が常に一覧の `page.share` から表示するので、値を運ぶ必要が無い）
 - **アップロードの状態**: `useUploadFlow` が `idle / checking / confirming / uploading / success / error` の判別共用体を `useReducer` で持つ。箱の吹き出し（`bubbleOf`）と箱アイコンの phase（`iconPhaseOf`）はこの状態から導出する

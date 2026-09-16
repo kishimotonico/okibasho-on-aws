@@ -161,35 +161,31 @@ function HomePage() {
     );
   }
 
-  /** 楽観更新。失敗したら戻す */
+  /** 楽観更新。失敗したら一覧を取り直す */
   function mutate(action: PagesAction, run: () => Promise<ListedPage | void>) {
     startMutation(async () => {
       setActionError(null);
 
-      if (queryClient.getQueryData<ListedPage[]>(queryKey) === undefined) {
-        // upsertPage と同じ理由で楽観更新はせず、成功後に取り直す
-        try {
-          await run();
-          void queryClient.invalidateQueries({ queryKey });
-        } catch (error) {
-          setActionError(userMessage(error));
-        }
-        return;
+      // upsertPage と同じ理由で、キャッシュが無いうちは楽観更新せず成功後に取り直す
+      const hasCache = queryClient.getQueryData<ListedPage[]>(queryKey) !== undefined;
+      if (hasCache) {
+        // in-flight の取得（フォーカス再取得など）が古い結果で上書きしないよう先に止める
+        await queryClient.cancelQueries({ queryKey });
+        queryClient.setQueryData<ListedPage[]>(queryKey, (current) =>
+          applyPagesAction(current ?? [], action),
+        );
       }
 
-      // in-flight の取得（フォーカス再取得など）が古い結果で上書きしないよう先に止める
-      await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<ListedPage[]>(queryKey) ?? [];
-      queryClient.setQueryData<ListedPage[]>(queryKey, applyPagesAction(previous, action));
       try {
         const result = await run();
         if (result) {
-          queryClient.setQueryData<ListedPage[]>(queryKey, (current) =>
-            applyPagesAction(current ?? previous, { type: 'upsert', page: result }),
-          );
+          upsertPage(result);
+        } else if (!hasCache) {
+          void queryClient.invalidateQueries({ queryKey });
         }
       } catch (error) {
-        queryClient.setQueryData(queryKey, previous);
+        // スナップショットへ戻すと並行した別の mutation の成功分まで巻き戻るので、取り直して直す
+        void queryClient.invalidateQueries({ queryKey });
         setActionError(userMessage(error));
       }
     });

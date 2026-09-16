@@ -77,8 +77,8 @@ function PagesListContent({
   );
 }
 
-/** 下線だけのフラットな行を数本。muted で控えめに、アニメーションは付けない */
-function PagesListSkeleton() {
+/** 下線だけのフラットな行を数本。muted で控えめに、アニメーションは付けない。LoadingShell も同じものを出す */
+export function PagesListSkeleton() {
   return (
     <ul className="page-stack" aria-hidden>
       {[0, 1, 2].map((i) => (
