@@ -635,13 +635,19 @@ describe('OkibashoStack', () => {
       });
     });
 
-    it('metadataの作成・削除のS3通知と、EventBridgeの1時間ごとのRule(安全網 + cleanup)の両方で起動する', () => {
+    it('metadataの作成・削除のS3通知と、cleanup(毎時)・reconcile(日次)のRuleで起動する', () => {
       const template = synth();
 
-      template.resourceCountIs('AWS::Events::Rule', 1);
-      template.hasResourceProperties('AWS::Events::Rule', {
-        ScheduleExpression: 'rate(1 hour)',
-      });
+      template.resourceCountIs('AWS::Events::Rule', 2);
+      for (const [schedule, task] of [
+        ['rate(1 hour)', 'cleanup'],
+        ['rate(1 day)', 'reconcile'],
+      ]) {
+        template.hasResourceProperties('AWS::Events::Rule', {
+          ScheduleExpression: schedule,
+          Targets: Match.arrayWith([Match.objectLike({ Input: JSON.stringify({ task }) })]),
+        });
+      }
 
       // pagesバケットのS3通知がprefix=meta/・suffix=.jsonのCreated/RemovedをPageMaintenanceへ流す
       const notifications = Object.values(template.findResources('Custom::S3BucketNotifications'));

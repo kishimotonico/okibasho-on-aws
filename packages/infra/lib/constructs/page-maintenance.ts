@@ -2,7 +2,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Duration } from 'aws-cdk-lib';
 import { KeyValueStore } from 'aws-cdk-lib/aws-cloudfront';
-import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
+import { Rule, RuleTargetInput, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -11,6 +11,7 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { LogGroup } from 'aws-cdk-lib/aws-logs';
 import { EventType, type Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import type { ScheduledTask } from '../lambda/page-maintenance/dispatch.js';
 import { LOG_GROUP_OPTIONS } from '../log-retention.js';
 
 export interface PageMaintenanceProps {
@@ -25,11 +26,10 @@ export interface PageMaintenanceProps {
  * 外部共有のエッジ側(share-router.js と /s/* ビヘイビア)は PagesDelivery が持つ。
  * このConstructはKVSへの書き込み経路とページのお掃除(定期処理とそのトリガー)だけを担う。
  *
- * Lambdaはmetadataの作成・削除のS3イベントと1時間ごとのスケジュールの両方から起動する。
- * S3イベントは該当ページだけを投影し(ページ単位でUpdateKeysを呼ぶ)、スケジュールは
- * 「期限切れページの削除」「meta/全件とKVS全件の突き合わせ」を順に行う冪等な処理。
- * KVSのキーはprefixから決まるtagのため、イベントの順序・重複には依存しない
- * (取りこぼしはスケジュールが最大1時間遅れで拾う)。
+ * Lambdaはmetadataの作成・削除のS3イベントと、2本のスケジュールから起動する。
+ * S3イベントは該当ページだけを投影する(ページ単位でUpdateKeysを呼ぶ)。スケジュールは
+ * cleanup(期限切れページの削除)とreconcile(meta/全件とKVS全件の突き合わせ)で、どちらも冪等。
+ * KVSのキーはprefixから決まるtagのため、イベントの順序・重複には依存しない。
  */
 export class PageMaintenance extends Construct {
   readonly keyValueStore: KeyValueStore;
@@ -124,8 +124,8 @@ export class PageMaintenance extends Construct {
           'cloudfront-keyvaluestore:DescribeKeyValueStore',
           'cloudfront-keyvaluestore:ListKeys',
           'cloudfront-keyvaluestore:UpdateKeys',
-          // 存在しないキーのdeleteがResourceNotFoundExceptionになったときだけ、
-          // GetKeyでそのキーが実際に無いことを確かめるために使う
+          // deleteの前にキーの有無を見るのと、存在しないキーのdeleteが
+          // ResourceNotFoundExceptionになったときの確認に使う
           'cloudfront-keyvaluestore:GetKey',
         ],
         resources: [this.keyValueStore.keyValueStoreArn],
@@ -134,9 +134,11 @@ export class PageMaintenance extends Construct {
   }
 
   /**
-   * metadataの作成・削除で即時に起動し、1時間ごとのスケジュールを重ねる。
-   * スケジュールは「S3イベントの取りこぼしを拾う安全網」と「cleanup(期限切れ削除)」を
-   * 兼ねる。取りこぼしの回復は最大1時間になるが、社内 `/p/` の cleanup 反映と同じ許容範囲とする
+   * metadataの作成・削除で即時に起動し、2本のスケジュールを重ねる。
+   *
+   * cleanupはS3だけで完結するので毎時回す(期限切れから実際に消えるまで最大1時間)。
+   * reconcileはKVS全件を読むぶん呼び出し回数が多く、即時反映はS3イベントが担っているので
+   * 日次で足りる。取りこぼしの回復は最大1日になる
    */
   private wireTriggers(pagesBucket: Bucket): void {
     this.maintenanceFunction.addEventSource(
@@ -146,10 +148,35 @@ export class PageMaintenance extends Construct {
       }),
     );
 
-    new Rule(this, 'ScheduleRule', {
+    this.addScheduledTask({
+      id: 'Cleanup',
+      task: 'cleanup',
       schedule: Schedule.rate(Duration.hours(1)),
-      targets: [new LambdaFunction(this.maintenanceFunction)],
-      description: '安全網 + cleanup(期限切れ削除・KVS全件突き合わせ)を1時間毎に実行',
+      description: '期限切れページの削除',
+    });
+    this.addScheduledTask({
+      id: 'Reconcile',
+      task: 'reconcile',
+      schedule: Schedule.rate(Duration.days(1)),
+      description: 'meta/全件とKVS全件の突き合わせ',
+    });
+  }
+
+  /** タスク名をinputで渡すEventBridge Ruleを1本足す。taskの値はhandlerが解釈する */
+  private addScheduledTask(props: {
+    readonly id: string;
+    readonly task: ScheduledTask;
+    readonly schedule: Schedule;
+    readonly description: string;
+  }): void {
+    new Rule(this, `${props.id}Rule`, {
+      schedule: props.schedule,
+      targets: [
+        new LambdaFunction(this.maintenanceFunction, {
+          event: RuleTargetInput.fromObject({ task: props.task }),
+        }),
+      ],
+      description: props.description,
     });
   }
 }

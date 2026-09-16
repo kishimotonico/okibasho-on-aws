@@ -73,6 +73,21 @@ export async function applyPlan(kvsArn: string, plan: DiffPlan): Promise<void> {
   }
 }
 
+/**
+ * キーがあれば消し、消したかどうかを返す。無ければ何もしない。
+ *
+ * S3イベントは共有していないページの操作でも飛ぶ。そのほとんどはKVSにキーが無く、
+ * 素直にUpdateKeysを投げると毎回 Describe + UpdateKeys の2回を払うことになる。
+ * GetKey 1回で見てから決めるほうが呼び出し回数が少なくて済む
+ */
+export async function deleteKeyIfPresent(kvsArn: string, key: string): Promise<boolean> {
+  if (!(await keyExists(kvsArn, key))) {
+    return false;
+  }
+  await applyPlan(kvsArn, { puts: [], deletes: [key] });
+  return true;
+}
+
 async function keyExists(kvsArn: string, key: string): Promise<boolean> {
   try {
     await client.send(new GetKeyCommand({ KvsARN: kvsArn, Key: key }));
@@ -91,7 +106,9 @@ async function keyExists(kvsArn: string, key: string): Promise<boolean> {
  *
  * 存在しないキーのdeleteをUpdateKeysに渡したときの挙動は公式ドキュメントで未確定
  * (ResourceNotFoundExceptionになる可能性がある)。1件だけのdelete(put無し)でそれが起きたときだけ、
- * GetKeyでそのキーが実際に無いことを確かめて成功扱いにする。あれば別の理由のエラーなので再送出する
+ * GetKeyでそのキーが実際に無いことを確かめて成功扱いにする。あれば別の理由のエラーなので再送出する。
+ * deleteKeyIfPresent の事前チェックとは役割が別で、こちらは reconcile の delete や、
+ * 確認した直後に消されたときの取りこぼしを受け止める
  */
 async function applyChunk(kvsArn: string, plan: DiffPlan): Promise<void> {
   for (let attempt = 0; attempt < MAX_CONFLICT_RETRIES; attempt++) {

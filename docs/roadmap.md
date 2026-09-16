@@ -4,7 +4,7 @@
 
 ## 現状
 
-CloudFront のデフォルトドメインで初回デプロイ済み。web / CLI から Cognito ローカルユーザーでログインし、Identity Pool の一時クレデンシャルで S3 に直接 PutObject / GetObject / DeleteObject / ListObjectsV2 する構成が動いている。`/p/<user>/<slug>/` の内部配信と `/s/<tag><share-id>/` の外部共有配信もどちらも実装済みで、KVS への投影と期限切れページの削除は PageMaintenance Lambda が 1 時間ごとのスケジュールで行う（S3 イベントによる該当ページだけの即時投影も別経路で動く）。
+CloudFront のデフォルトドメインで初回デプロイ済み。web / CLI から Cognito ローカルユーザーでログインし、Identity Pool の一時クレデンシャルで S3 に直接 PutObject / GetObject / DeleteObject / ListObjectsV2 する構成が動いている。`/p/<user>/<slug>/` の内部配信と `/s/<tag><share-id>/` の外部共有配信もどちらも実装済みで、期限切れページの削除は PageMaintenance Lambda が毎時、KVS 全件の突き合わせは日次で行う（S3 イベントによる該当ページだけの即時投影も別経路で動く）。
 
 独自ドメインと Signed Cookie による閲覧認証も実装・デプロイ済み。証明書と鍵ペアも CDK が作る（手順は [deploy.md](deploy.md)）。まだ入っていないのは、Google IdP、CLI の npm 配布、CI である。管理 UI の配置は `cdk deploy` とは別に手でアップロードしており、CDK に寄せるかは未決。
 
@@ -56,7 +56,7 @@ CI:
 - SigV4A 署名（`@aws-sdk/signature-v4a` の副作用 import）が Lambda 実行環境で通るか
 - `NodejsFunction` の bundling（pnpm workspace 特有の PATH 調整を含む）が CI で動くか
 - CloudWatch Logs Insights で PageMaintenance Lambda の `Init Duration` / `Duration` を集計する。共有を ON にしてから `/s/` が 404 以外を返すまでの時間を curl のループで測り、連続して 2〜3 ページを操作したときの値（スロットルの影響）も見る
-- 存在しない KVS キーへの `UpdateKeys` の delete が実際にどう振る舞うか。`kvs-client.ts` は `ResourceNotFoundException` が起きたときだけ `GetKey` で存在を確かめる実装にしているため、これが実際に必要な分岐かどうかを確認する
+- 存在しない KVS キーへの `UpdateKeys` の delete が実際にどう振る舞うか。`kvs-client.ts` は `ResourceNotFoundException` が起きたときに `GetKey` で存在を確かめる分岐を残しているため、これが実際に必要かどうかを確認する（S3 イベント経由の delete は先に `GetKey` で見るので、この分岐に入るのは reconcile 側だけのはず）
 - 上記の計測でスロットル待ちが残るようなら、`reservedConcurrentExecutions: 1` を外す検討をする（外す場合は「Describe（ETag）→ metadata の Get → UpdateKeys(IfMatch)」の順に処理を組み直す）
 
 ## 見送った案

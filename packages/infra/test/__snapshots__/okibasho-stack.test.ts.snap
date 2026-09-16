@@ -1483,6 +1483,45 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Role",
     },
+    "PageMaintenanceCleanupRule227E074A": {
+      "Properties": {
+        "Description": "期限切れページの削除",
+        "ScheduleExpression": "rate(1 hour)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"cleanup"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceCleanupRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38265B563AA6": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PageMaintenanceMaintenanceFunction6D21CD03",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "PageMaintenanceCleanupRule227E074A",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
     "PageMaintenanceMaintenanceFunction6D21CD03": {
       "DependsOn": [
         "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F",
@@ -1682,7 +1721,27 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Policy",
     },
-    "PageMaintenanceScheduleRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E3826B2363514": {
+    "PageMaintenanceReconcileRule5878C4D1": {
+      "Properties": {
+        "Description": "meta/全件とKVS全件の突き合わせ",
+        "ScheduleExpression": "rate(1 day)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"reconcile"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceReconcileRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38267B6A820E": {
       "Properties": {
         "Action": "lambda:InvokeFunction",
         "FunctionName": {
@@ -1694,31 +1753,12 @@ def sort_filter_rules(json_obj):
         "Principal": "events.amazonaws.com",
         "SourceArn": {
           "Fn::GetAtt": [
-            "PageMaintenanceScheduleRuleFAEEC66D",
+            "PageMaintenanceReconcileRule5878C4D1",
             "Arn",
           ],
         },
       },
       "Type": "AWS::Lambda::Permission",
-    },
-    "PageMaintenanceScheduleRuleFAEEC66D": {
-      "Properties": {
-        "Description": "安全網 + cleanup(期限切れ削除・KVS全件突き合わせ)を1時間毎に実行",
-        "ScheduleExpression": "rate(1 hour)",
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::GetAtt": [
-                "PageMaintenanceMaintenanceFunction6D21CD03",
-                "Arn",
-              ],
-            },
-            "Id": "Target0",
-          },
-        ],
-      },
-      "Type": "AWS::Events::Rule",
     },
     "PageMaintenanceShareKeyValueStoreAB6806D3": {
       "Properties": {
@@ -4320,6 +4360,45 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Role",
     },
+    "PageMaintenanceCleanupRule227E074A": {
+      "Properties": {
+        "Description": "期限切れページの削除",
+        "ScheduleExpression": "rate(1 hour)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"cleanup"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceCleanupRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38265B563AA6": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PageMaintenanceMaintenanceFunction6D21CD03",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "PageMaintenanceCleanupRule227E074A",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
     "PageMaintenanceMaintenanceFunction6D21CD03": {
       "DependsOn": [
         "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F",
@@ -4519,7 +4598,27 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Policy",
     },
-    "PageMaintenanceScheduleRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E3826B2363514": {
+    "PageMaintenanceReconcileRule5878C4D1": {
+      "Properties": {
+        "Description": "meta/全件とKVS全件の突き合わせ",
+        "ScheduleExpression": "rate(1 day)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"reconcile"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceReconcileRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38267B6A820E": {
       "Properties": {
         "Action": "lambda:InvokeFunction",
         "FunctionName": {
@@ -4531,31 +4630,12 @@ def sort_filter_rules(json_obj):
         "Principal": "events.amazonaws.com",
         "SourceArn": {
           "Fn::GetAtt": [
-            "PageMaintenanceScheduleRuleFAEEC66D",
+            "PageMaintenanceReconcileRule5878C4D1",
             "Arn",
           ],
         },
       },
       "Type": "AWS::Lambda::Permission",
-    },
-    "PageMaintenanceScheduleRuleFAEEC66D": {
-      "Properties": {
-        "Description": "安全網 + cleanup(期限切れ削除・KVS全件突き合わせ)を1時間毎に実行",
-        "ScheduleExpression": "rate(1 hour)",
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::GetAtt": [
-                "PageMaintenanceMaintenanceFunction6D21CD03",
-                "Arn",
-              ],
-            },
-            "Id": "Target0",
-          },
-        ],
-      },
-      "Type": "AWS::Events::Rule",
     },
     "PageMaintenanceShareKeyValueStoreAB6806D3": {
       "Properties": {
@@ -7265,6 +7345,45 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Role",
     },
+    "PageMaintenanceCleanupRule227E074A": {
+      "Properties": {
+        "Description": "期限切れページの削除",
+        "ScheduleExpression": "rate(1 hour)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"cleanup"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceCleanupRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38265B563AA6": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PageMaintenanceMaintenanceFunction6D21CD03",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "PageMaintenanceCleanupRule227E074A",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
     "PageMaintenanceMaintenanceFunction6D21CD03": {
       "DependsOn": [
         "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F",
@@ -7462,7 +7581,27 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Policy",
     },
-    "PageMaintenanceScheduleRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E3826B2363514": {
+    "PageMaintenanceReconcileRule5878C4D1": {
+      "Properties": {
+        "Description": "meta/全件とKVS全件の突き合わせ",
+        "ScheduleExpression": "rate(1 day)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"reconcile"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceReconcileRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38267B6A820E": {
       "Properties": {
         "Action": "lambda:InvokeFunction",
         "FunctionName": {
@@ -7474,31 +7613,12 @@ def sort_filter_rules(json_obj):
         "Principal": "events.amazonaws.com",
         "SourceArn": {
           "Fn::GetAtt": [
-            "PageMaintenanceScheduleRuleFAEEC66D",
+            "PageMaintenanceReconcileRule5878C4D1",
             "Arn",
           ],
         },
       },
       "Type": "AWS::Lambda::Permission",
-    },
-    "PageMaintenanceScheduleRuleFAEEC66D": {
-      "Properties": {
-        "Description": "安全網 + cleanup(期限切れ削除・KVS全件突き合わせ)を1時間毎に実行",
-        "ScheduleExpression": "rate(1 hour)",
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::GetAtt": [
-                "PageMaintenanceMaintenanceFunction6D21CD03",
-                "Arn",
-              ],
-            },
-            "Id": "Target0",
-          },
-        ],
-      },
-      "Type": "AWS::Events::Rule",
     },
     "PageMaintenanceShareKeyValueStoreAB6806D3": {
       "Properties": {
