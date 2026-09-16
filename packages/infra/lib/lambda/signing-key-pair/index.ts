@@ -16,7 +16,6 @@ export const handler = createHandler({
         Name: name,
         Value: value,
         Type: secure ? ParameterType.SECURE_STRING : ParameterType.STRING,
-        Overwrite: true,
       }),
     );
   },

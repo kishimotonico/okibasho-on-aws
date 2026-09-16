@@ -5123,7 +5123,7 @@ function buildQueryString(querystring) {
               "Ref": "PagesViewerAuthPublicKey79E53BEE",
             },
             "PAGES_DOMAIN": "okibasho.example.com",
-            "PRIVATE_KEY_PARAMETER": "/Okibasho/pages-signing/private-key",
+            "PRIVATE_KEY_PARAMETER": "/Okibasho/pages-signing/1/private-key",
             "USER_POOL_ID": {
               "Ref": "AuthUserPool8115E87F",
             },
@@ -5208,7 +5208,7 @@ function buildQueryString(querystring) {
                     {
                       "Ref": "AWS::Partition",
                     },
-                    ":ssm:ap-northeast-1:123456789012:parameter/Okibasho/pages-signing/private-key",
+                    ":ssm:ap-northeast-1:123456789012:parameter/Okibasho/pages-signing/1/private-key",
                   ],
                 ],
               },
@@ -5257,8 +5257,7 @@ function buildQueryString(querystring) {
     "PagesViewerAuthSigningKeyPair9A7917FC": {
       "DeletionPolicy": "Delete",
       "Properties": {
-        "Generation": "1",
-        "ParameterPrefix": "/Okibasho/pages-signing",
+        "ParameterPrefix": "/Okibasho/pages-signing/1",
         "ServiceToken": {
           "Fn::GetAtt": [
             "PagesViewerAuthSigningKeyPairProviderframeworkonEvent795FBD1A",

@@ -55,17 +55,16 @@ export class SigningKeyPair extends Construct {
       }),
     );
 
+    // generation ごとに別のパラメータにし、作った鍵ペアは書き換えない
+    const generationPrefix = `${props.parameterPrefix}/${props.generation}`;
     const provider = new Provider(this, 'Provider', { onEventHandler: onEvent });
     const resource = new CustomResource(this, 'Resource', {
       serviceToken: provider.serviceToken,
       resourceType: 'Custom::SigningKeyPair',
-      properties: {
-        ParameterPrefix: props.parameterPrefix,
-        Generation: String(props.generation),
-      },
+      properties: { ParameterPrefix: generationPrefix },
     });
 
     this.publicKeyPem = resource.getAttString('PublicKeyPem');
-    this.privateKeyParameterName = `${props.parameterPrefix}/private-key`;
+    this.privateKeyParameterName = `${generationPrefix}/private-key`;
   }
 }
