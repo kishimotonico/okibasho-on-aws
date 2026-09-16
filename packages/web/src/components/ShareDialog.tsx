@@ -94,14 +94,13 @@ export function ShareDialog({
     ? buildShareUrl(pagesBaseUrl, page.shareTag, existingShare.id)
     : null;
 
-  // 発行・作り直し・パスワード切替・停止の保存手順は同じ形なので一本化する
-  const save = async (share: PageShare | null, fallback: string, next: Notice) => {
+  const save = async (share: PageShare | null, fallback: string, successNotice: Notice) => {
     setSaving(true);
     setNotice(null);
     setError(null);
     try {
       await onSave(share);
-      setNotice(next);
+      setNotice(successNotice);
     } catch (err) {
       setError(err instanceof Error ? err.message : fallback);
     } finally {
