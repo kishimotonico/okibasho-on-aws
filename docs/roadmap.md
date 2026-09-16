@@ -28,10 +28,10 @@ PR 3: 証明書と鍵ペアの IaC 化（`packages/infra` のみ）
 
 PR 4: 鍵ペアを generation ごとの不変リソースにする（`packages/infra` のみ。Codex のセカンドオピニオンから採用）
 
-- [ ] `SigningKeyPair` の SSM パラメータ名を `/<スタック名>/pages-signing/<generation>/{public-key,private-key}` にし、PhysicalResourceId をその generation のプレフィックスにする。`privateKeyParameterName` も generation 込みになる
-- [ ] handler: Create は生成、Update は「generation（プレフィックス）が変わったら新しい PhysicalResourceId で Create と同じ処理、同じなら SSM の公開鍵を返す」に単純化し、既存パラメータの上書き（Put の `Overwrite`）と「変わったか比較して作り直す」分岐を消す。Delete はその PhysicalResourceId の 2 つを消す（無くても成功）。旧 generation の削除は CloudFormation が送る Delete に任せる
-- [ ] Lambda の IAM は `/<スタック名>/pages-signing/*` 配下のまま（generation をまたぐため）
-- [ ] 単体テストと snapshot を更新する
+- [x] `SigningKeyPair` の SSM パラメータ名を `/<スタック名>/pages-signing/<generation>/{public-key,private-key}` にし、PhysicalResourceId をその generation のプレフィックスにする。`privateKeyParameterName` も generation 込みになる
+- [x] handler: Create は生成、Update は「generation（プレフィックス）が変わったら新しい PhysicalResourceId で Create と同じ処理、同じなら SSM の公開鍵を返す」に単純化し、既存パラメータの上書き（Put の `Overwrite`）と「変わったか比較して作り直す」分岐を消す。Delete はその PhysicalResourceId の 2 つを消す（無くても成功）。旧 generation の削除は CloudFormation が送る Delete に任せる
+- [x] Lambda の IAM は `/<スタック名>/pages-signing/*` 配下のまま（generation をまたぐため）
+- [x] 単体テストと snapshot を更新する
 
 受け入れ: `generation` を進めてデプロイすると新しいパラメータが作られ、旧 generation は CloudFormation の Delete で消える。ロールバックすると旧 generation のパラメータがそのまま使われる。
 
