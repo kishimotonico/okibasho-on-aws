@@ -26,7 +26,6 @@ export const messages = {
 
   /** 一覧 */
   listHeading: 'アップロード済みページ',
-  listLoading: '一覧を読み込み中...',
   listEmpty: 'まだページがありません。上のフォームからアップロードしてください。',
   listLoadFailed: '一覧の取得に失敗しました',
   listReload: '再読み込み',
@@ -94,7 +93,10 @@ export const messages = {
   /** ログインコールバック */
   loginFailed: 'ログインに失敗しました',
   loginErrorTitle: 'ログインエラー',
-  loginInProgress: 'ログイン処理中...',
+  loginInProgress: 'ログインしています',
+
+  /** 読み込み中の画面（LoadingShell） */
+  loadingLead: '読み込み中',
 
   /** 404 */
   notFoundTitle: 'ページが見つかりません',

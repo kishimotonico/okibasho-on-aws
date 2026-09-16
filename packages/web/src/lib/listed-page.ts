@@ -22,18 +22,17 @@ export interface ListedPage {
    */
   shareTag: string;
   share?: PageShare;
+  /** 次回の一覧取得での差分の材料。書き込み直後に作る行には無い */
+  etag?: string;
 }
 
-/**
- * 書き込んだ metadata と slug から一覧の行を組み立てる。
- * アップロード・保存期間変更・共有設定変更の直後に、S3 を読み直さず一覧の該当行を差し替えるために使う。
- * shareTag（computeShareTag）は WebCrypto を使うため非同期
- */
+/** shareTag（computeShareTag）は WebCrypto を使うため非同期 */
 export async function listedPageFromMetadata(
   email: string,
   slug: string,
   metadata: PageMetadata,
   pagesBaseUrl: string,
+  etag?: string,
 ): Promise<ListedPage> {
   const shareTag = await computeShareTag(email, slug);
   return {
@@ -45,6 +44,7 @@ export async function listedPageFromMetadata(
     viewUrl: buildViewUrl(pagesBaseUrl, email, slug),
     shareTag,
     ...(metadata.share ? { share: metadata.share } : {}),
+    ...(etag ? { etag } : {}),
   };
 }
 
@@ -60,13 +60,21 @@ export function pageMetadataFromListed(page: ListedPage): PageMetadata {
   };
 }
 
+/** previous を渡すと PageStore.list の差分取得に使う（etag を持つ行だけが材料になる） */
 export async function listPages(
   store: PageStore,
   email: string,
   pagesBaseUrl: string,
+  previous?: readonly ListedPage[],
 ): Promise<ListedPage[]> {
-  const pages = await store.list();
+  const previousStored = (previous ?? []).flatMap((page) =>
+    page.etag ? [{ slug: page.slug, etag: page.etag, metadata: pageMetadataFromListed(page) }] : [],
+  );
+
+  const pages = await store.list(previousStored);
   return Promise.all(
-    pages.map(({ slug, metadata }) => listedPageFromMetadata(email, slug, metadata, pagesBaseUrl)),
+    pages.map(({ slug, metadata, etag }) =>
+      listedPageFromMetadata(email, slug, metadata, pagesBaseUrl, etag),
+    ),
   );
 }

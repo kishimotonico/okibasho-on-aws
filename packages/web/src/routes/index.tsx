@@ -4,77 +4,51 @@ import {
   type PageShare,
   type Retention,
 } from '@okibasho/core';
-import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
+import { createFileRoute } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState, useTransition } from 'react';
 
+import { useAuth } from '~/auth/auth-context';
 import { loadAuthSession } from '~/auth/user-manager';
 import { Composer, type BoxSpinSignal, type ComposerSignal } from '~/components/Composer';
-import { PagesList } from '~/components/PagesList';
+import { PagesSection } from '~/components/PagesSection';
 import { ShareDialog } from '~/components/ShareDialog';
 import { getWebConfig } from '~/config/env';
-import { usePagesApi, userMessage } from '~/hooks/usePagesApi';
-import { listPages, type ListedPage } from '~/lib/listed-page';
-import { messages } from '~/lib/messages';
+import { createPagesApi, usePagesApi, userMessage } from '~/hooks/usePagesApi';
+import type { ListedPage } from '~/lib/listed-page';
 import { PAGE_HIGHLIGHT_MS, sortPagesByCreatedAt } from '~/lib/page-list-highlight';
-import { getPageStore } from '~/lib/s3-client';
+import { pagesListQueryOptions, pagesQueryKey } from '~/lib/pages-queries';
+import { queryClient } from '~/lib/query-client';
+import { pagesRestored } from '~/lib/query-persistence';
+import { preloadPagesSdk } from '~/lib/s3-client';
 
 export const Route = createFileRoute('/')({
   validateSearch: (search: Record<string, unknown>): { slug?: string } => ({
     slug: typeof search.slug === 'string' && isValidSlug(search.slug) ? search.slug : undefined,
   }),
-  loader: loadPages,
+  loader: prefetchPages,
   component: HomePage,
-  pendingComponent: PagesPending,
-  errorComponent: PagesLoadError,
 });
 
-/**
- * 一覧は route の loader で取る。
- * ログイン情報は AuthProvider ではなく UserManager から直に読む。
- * loader は React の外で走るので context を辿れず、
- * 未ログインなら AuthGate がログインへ送るためここでは空の一覧でよい。
- */
-async function loadPages(): Promise<ListedPage[]> {
-  if (import.meta.env.SSR) {
-    // SPA シェルの生成時は認証も S3 も触らない
-    return [];
-  }
+async function prefetchPages(): Promise<void> {
+  // 一覧取得を待たず、S3・Cognito の SDK チャンクの読み込みだけ並行して始める
+  preloadPagesSdk();
 
   const session = await loadAuthSession();
   if (!session) {
-    return [];
+    return;
   }
 
+  // 復元前に prefetch すると差分の材料が無く全件取り直しになる
+  await pagesRestored;
+
   const config = getWebConfig();
-  const pages = await listPages(getPageStore(config, session), session.email, config.pagesBaseUrl);
-  return sortPagesByCreatedAt(pages);
-}
-
-function PagesPending() {
-  return (
-    <div className="page">
-      <p className="loading-note">{messages.listLoading}</p>
-    </div>
-  );
-}
-
-function PagesLoadError() {
-  const router = useRouter();
-
-  return (
-    <div className="page">
-      <div className="message message--error">
-        <p>{messages.listLoadFailed}</p>
-        <button
-          type="button"
-          className="button button--secondary"
-          onClick={() => void router.invalidate()}
-        >
-          {messages.listReload}
-        </button>
-      </div>
-    </div>
-  );
+  const api = createPagesApi(config, session);
+  // リロードのたびに裏で取り直す（ETag 差分なので安い）
+  void queryClient.prefetchQuery({
+    ...pagesListQueryOptions(api, session.email),
+    staleTime: 0,
+  });
 }
 
 type PagesAction =
@@ -84,7 +58,7 @@ type PagesAction =
   | { type: 'upsert'; page: ListedPage };
 
 /**
- * 一覧への反映。'remove' / 'retention' は通信の結果を待たずに使う楽観更新で、
+ * クエリキャッシュへの反映。'remove' / 'retention' は通信の結果を待たずに使う楽観更新で、
  * expiresAt は S3 側と同じ計算で出す。'upsert' は通信が成功したあと、
  * 書き込んだ内容で該当行を差し替える（S3 を読み直さない）
  */
@@ -127,20 +101,14 @@ function isBoxSpinBackground(target: EventTarget | null): boolean {
 
 function HomePage() {
   const api = usePagesApi();
-  const loadedPages = Route.useLoaderData();
+  const { session } = useAuth();
+  const email = session?.email ?? '';
   const { slug: initialSlug } = Route.useSearch();
   const uploadSectionRef = useRef<HTMLDivElement>(null);
 
-  // 一覧の本体は route のローカル state で持つ。loader は初期表示と手動再読み込み
-  // （PagesLoadError の「再読み込み」）のときだけ走るので、loader が再実行されたら
-  // ここへ同期する。それ以外の書き込み（削除・保存期間変更・共有変更・アップロード）は
-  // 一覧全体を取り直さず、書き込んだ内容でこの state の該当行だけを直接差し替える
-  const [basePages, setBasePages] = useState(loadedPages);
-  useEffect(() => {
-    setBasePages(loadedPages);
-  }, [loadedPages]);
+  // suspend しない読み方なので、読み込み前は undefined になる
+  const { data: pages } = useQuery(pagesListQueryOptions(api, email));
 
-  const [pages, applyOptimistic] = useOptimistic(basePages, applyPagesAction);
   const [isMutating, startMutation] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
   const [composerSeed, setComposerSeed] = useState<ComposerSignal>(null);
@@ -153,10 +121,11 @@ function HomePage() {
   // 「発行直後」だと伝える。一覧の「外部共有…」から開いたときは null にして伝えない
   const [justIssuedSlug, setJustIssuedSlug] = useState<string | null>(null);
   // pages から都度探すことで、保存後に一覧が更新されるとダイアログの表示（共有URLなど）も追随する
-  const sharePage = shareSlug ? (pages.find((page) => page.slug === shareSlug) ?? null) : null;
+  const sharePage = shareSlug ? (pages?.find((page) => page.slug === shareSlug) ?? null) : null;
 
-  // ハイライトは行が一覧に現れてから数秒。再取得が遅れても見えないまま終わらせない
-  const highlightVisible = highlight != null && pages.some((page) => page.slug === highlight.slug);
+  // ハイライトは行が一覧に現れてから数秒。一覧の読み込みが遅れても見えないまま終わらせない
+  const highlightVisible =
+    highlight != null && (pages?.some((page) => page.slug === highlight.slug) ?? false);
   useEffect(() => {
     if (!highlight || !highlightVisible) {
       return;
@@ -178,26 +147,49 @@ function HomePage() {
     return () => document.removeEventListener('dblclick', onDblClick);
   }, []);
 
-  /**
-   * 先に画面へ反映し、通信が終わったら結果で一覧の本体（basePages）を直す。
-   * useOptimistic の仮の状態はトランジションが終わると basePages に戻るので、
-   * run が返す「書き込んだ内容」を先に basePages へ入れておくことで一覧を取り直さずに済む。
-   * run が何も返さない（削除など）場合は、楽観更新と同じ action を basePages にも適用する。
-   */
-  const mutate = (action: PagesAction, run: () => Promise<ListedPage | void>) => {
+  const queryKey = pagesQueryKey(email);
+
+  /** 書き込み成功後、その内容で一覧の該当行を差し替える */
+  function upsertPage(page: ListedPage) {
+    if (queryClient.getQueryData<ListedPage[]>(queryKey) === undefined) {
+      // 無いところへ作ると、直後の in-flight な一覧取得の結果に上書きされて消える
+      void queryClient.invalidateQueries({ queryKey });
+      return;
+    }
+    queryClient.setQueryData<ListedPage[]>(queryKey, (current) =>
+      applyPagesAction(current ?? [], { type: 'upsert', page }),
+    );
+  }
+
+  /** 楽観更新。失敗したら一覧を取り直す */
+  function mutate(action: PagesAction, run: () => Promise<ListedPage | void>) {
     startMutation(async () => {
-      applyOptimistic(action);
       setActionError(null);
+
+      // upsertPage と同じ理由で、キャッシュが無いうちは楽観更新せず成功後に取り直す
+      const hasCache = queryClient.getQueryData<ListedPage[]>(queryKey) !== undefined;
+      if (hasCache) {
+        // in-flight の取得（フォーカス再取得など）が古い結果で上書きしないよう先に止める
+        await queryClient.cancelQueries({ queryKey });
+        queryClient.setQueryData<ListedPage[]>(queryKey, (current) =>
+          applyPagesAction(current ?? [], action),
+        );
+      }
+
       try {
         const result = await run();
-        setBasePages((current) =>
-          applyPagesAction(current, result ? { type: 'upsert', page: result } : action),
-        );
+        if (result) {
+          upsertPage(result);
+        } else if (!hasCache) {
+          void queryClient.invalidateQueries({ queryKey });
+        }
       } catch (error) {
+        // スナップショットへ戻すと並行した別の mutation の成功分まで巻き戻るので、取り直して直す
+        void queryClient.invalidateQueries({ queryKey });
         setActionError(userMessage(error));
       }
     });
-  };
+  }
 
   const handleDelete = (slug: string) => {
     mutate({ type: 'remove', slug }, async () => {
@@ -216,18 +208,18 @@ function HomePage() {
   };
 
   /**
-   * 外部共有の保存/再発行/停止。ShareDialog がエラーを自前で表示するので、
-   * 一覧の楽観更新（useOptimistic）は使わない。保存できた内容で一覧の該当行を直接差し替え、
-   * ダイアログはその一覧から自分の対象ページを引き直す（一覧を取り直さなくても表示が食い違わない）。
+   * 外部共有の保存/再発行/停止。ShareDialog がエラーを自前で表示するので、楽観更新は使わない。
+   * 保存できた内容で一覧の該当行を直接差し替え、ダイアログはその一覧から自分の対象ページを引き直す
+   * （一覧を取り直さなくても表示が食い違わない）
    */
   const handleShareChange = async (page: ListedPage, share: PageShare | null) => {
     const updated = await api.updateShare(page.slug, share);
-    setBasePages((current) => applyPagesAction(current, { type: 'upsert', page: updated }));
+    upsertPage(updated);
   };
 
-  const handleUploaded = (page: ListedPage, openShare?: boolean) => {
+  const handleUploaded = (page: ListedPage, openShare: boolean) => {
     setHighlight((current) => nextSignal(current, page.slug));
-    setBasePages((current) => applyPagesAction(current, { type: 'upsert', page }));
+    upsertPage(page);
     if (openShare) {
       setShareSlug(page.slug);
       setJustIssuedSlug(page.slug);
@@ -260,18 +252,16 @@ function HomePage() {
         />
       </div>
 
-      <section className="pages-section" aria-labelledby="uploaded-pages-heading">
-        <h2 id="uploaded-pages-heading">{messages.listHeading}</h2>
-        <PagesList
-          pages={pages}
-          highlightSlug={highlight?.slug ?? null}
-          error={actionError}
-          onReupload={handleReupload}
-          onRetentionChange={handleRetentionChange}
-          onDelete={(page) => handleDelete(page.slug)}
-          onShare={handleShare}
-        />
-      </section>
+      <PagesSection
+        api={api}
+        email={email}
+        highlightSlug={highlight?.slug ?? null}
+        error={actionError}
+        onReupload={handleReupload}
+        onRetentionChange={handleRetentionChange}
+        onDelete={(page) => handleDelete(page.slug)}
+        onShare={handleShare}
+      />
 
       {sharePage ? (
         <ShareDialog

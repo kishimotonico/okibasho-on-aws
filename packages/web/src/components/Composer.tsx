@@ -29,8 +29,8 @@ export type BoxSpinSignal = { nonce: number } | null;
 
 interface ComposerProps {
   initialSlug?: string;
-  /** 既存 slug の確認と、差し替え時に引き継ぐメタデータの取得元 */
-  pages: readonly ListedPage[];
+  /** 既存 slug の確認と、差し替え時に引き継ぐメタデータの取得元。読み込み前は undefined */
+  pages: readonly ListedPage[] | undefined;
   /** 一覧の「再アップロード」。slug を入れてフォーカスする */
   seed: ComposerSignal;
   /** 消えたページ。フォームに残っていれば外す */
@@ -45,7 +45,7 @@ interface ComposerProps {
    * route 側はこれを合図に、今アップロードしたページの ShareDialog を自動で開く
    * （パスワードはダイアログ側が常に表示するので、ここでは値を運ばない）
    */
-  onUploaded: (page: ListedPage, openShare?: boolean) => void;
+  onUploaded: (page: ListedPage, openShare: boolean) => void;
   onDelete: (slug: string) => void;
   /** 「外部共有…」。今アップロードしたページの ShareDialog を開く（route 側で一元管理） */
   onShare: (slug: string) => void;
@@ -78,12 +78,10 @@ export function Composer({
   const [visibility, setVisibility] = useState<PageVisibility>(DEFAULT_VISIBILITY);
   // 「外部にも公開」を選んだときだけ意味を持つ、パスワードを付けるかどうか。既定はオフ
   const [withPassword, setWithPassword] = useState(false);
-  // アップロード成功のタイミングで「今回新しく外部公開したか」を判別するための一時置き場。
-  // Composer の state は uploading 中も残るので、submit の直前に決めた内容をここへ控える
-  const justSharedRef = useRef(false);
 
-  // 対象 slug が既に外部共有中なら、公開範囲の選択を固定して既存の share を維持する
-  const existingPageForSlug = pages.find((page) => page.slug === slug.trim());
+  // 一覧がまだ無い間は固定しない（差し替え時に useUploadFlow が既存の share を優先して引き継ぐ）
+  const existingPageForSlug = pages?.find((page) => page.slug === slug.trim());
+  // 既に外部共有中なら公開範囲の選択を固定し、既存の share を維持する
   const lockedShare = existingPageForSlug?.share ?? null;
 
   /**
@@ -101,31 +99,16 @@ export function Composer({
     };
   };
 
-  /** share を確定してから run を呼ぶ */
-  const withShare = (run: (share?: PageShare) => void): void => {
-    const share = resolveShareForUpload();
-    justSharedRef.current = share !== undefined;
-    run(share);
-  };
-
   const flow = useUploadFlow({
     pages,
     slug,
     retention,
     onSlugChange: setSlug,
-    onUploaded: (page) => {
-      const openShare = justSharedRef.current;
-      justSharedRef.current = false;
-      if (openShare) {
-        onUploaded(page, true);
-      } else {
-        onUploaded(page);
-      }
-    },
+    onUploaded,
   });
   const isDragging = useWindowFileDrag({
     enabled: flow.accepts,
-    onDrop: (dataTransfer) => withShare((share) => flow.submitDataTransfer(dataTransfer, share)),
+    onDrop: (dataTransfer) => flow.submitDataTransfer(dataTransfer, resolveShareForUpload()),
   });
 
   // 一覧からの合図に合わせて状態を直す。描画中の setState は React の
@@ -250,7 +233,7 @@ export function Composer({
                 fileInputRef={fileInputRef}
                 disabled={busy}
                 onBeforePick={flow.cancel}
-                onPick={(files) => withShare((share) => flow.submitFiles(files, share))}
+                onPick={(files) => flow.submitFiles(files, resolveShareForUpload())}
               />
             </>
           )}

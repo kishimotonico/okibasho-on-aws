@@ -2,13 +2,19 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { useRouterState } from '@tanstack/react-router';
 
 import { useAuth } from '~/auth/auth-context';
-import { PendingFallback } from '~/components/PendingFallback';
+import { LoadingShell } from '~/components/LoadingShell';
+import { UtilityMenu } from '~/components/UtilityMenu';
+import { messages } from '~/lib/messages';
 
-// 管理UIはチーム内専用でIAMがセキュリティ境界のため、未ログインで見せる画面は用意しない。
-// ここで全ページを一括してログインゲートする（/callback はコールバック処理のため素通し）。
+// 管理UIはチーム内専用でIAMがセキュリティ境界のため、未ログインで見せる画面は用意しない
 export function AuthGate({ children }: { children: ReactNode }) {
   const auth = useAuth();
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const { pathname, isRoutePending } = useRouterState({
+    select: (state) => ({
+      pathname: state.location.pathname,
+      isRoutePending: state.status === 'pending',
+    }),
+  });
   const isCallback = pathname === '/callback';
   const hasRequestedLogin = useRef(false);
 
@@ -23,13 +29,23 @@ export function AuthGate({ children }: { children: ReactNode }) {
     void auth.login(`${window.location.pathname}${window.location.search}`);
   }, [auth, isCallback]);
 
-  if (isCallback) {
-    return <>{children}</>;
-  }
+  // 認証確認・未ログイン・トップページの loader 待ちを1つの状態にまとめ、常に同じ
+  // LoadingShell インスタンスを描画する（切り替えると弧アニメーションが巻き戻る）
+  const isLoading = !isCallback && (auth.isLoading || !auth.isAuthenticated || isRoutePending);
 
-  if (auth.isLoading || !auth.isAuthenticated) {
-    return <PendingFallback />;
-  }
-
-  return <>{children}</>;
+  return (
+    <>
+      {isLoading ? (
+        // モバイル幅では UtilityMenu が行を取るため、同じ寸法のプレースホルダーで場所を空けておく
+        <div className="utility-menu" aria-hidden>
+          <span className="utility-menu__placeholder" />
+        </div>
+      ) : (
+        <UtilityMenu />
+      )}
+      <main className="main">
+        {isLoading ? <LoadingShell lead={messages.loadingLead} /> : children}
+      </main>
+    </>
+  );
 }

@@ -1,55 +1,37 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
-import { useAuth } from '~/auth/auth-context';
+import { completeSignInCallbackOnce } from '~/auth/user-manager';
+import { LoadingShell } from '~/components/LoadingShell';
 import { messages } from '~/lib/messages';
 
 export const Route = createFileRoute('/callback')({
-  component: AuthCallbackPage,
+  // defaultSsr: false（src/start.ts）で全ルート既定になったが、
+  // signinCallback を誤ってサーバーで実行させないための明示
+  ssr: false,
+  loader: handleCallback,
+  component: CallbackPending,
+  pendingComponent: CallbackPending,
+  errorComponent: CallbackError,
 });
 
-function AuthCallbackPage() {
-  const auth = useAuth();
-  const navigate = useNavigate();
-  const [error, setError] = useState<string | null>(null);
+async function handleCallback(): Promise<void> {
+  const returnTo = await completeSignInCallbackOnce();
+  // ルートは "/" と "/callback" のみのため、ログイン前のパスは常に "/" 側。
+  // ただし ?slug=... の再アップロード指定だけは復元する。
+  const slug = new URL(returnTo, window.location.origin).searchParams.get('slug');
+  throw redirect({ to: '/', search: slug ? { slug } : {} });
+}
 
-  useEffect(() => {
-    let active = true;
+function CallbackPending() {
+  return <LoadingShell lead={messages.loginInProgress} />;
+}
 
-    auth
-      .completeSignInCallback()
-      .then((returnTo) => {
-        if (active) {
-          // ルートは "/" と "/callback" のみのため、ログイン前のパスは常に "/" 側。
-          // ただし ?slug=... の再アップロード指定だけは復元する。
-          const slug = new URL(returnTo, window.location.origin).searchParams.get('slug');
-          void navigate({ to: '/', search: slug ? { slug } : {} });
-        }
-      })
-      .catch((err: unknown) => {
-        if (active) {
-          const message = err instanceof Error ? err.message : messages.loginFailed;
-          setError(message);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [auth, navigate]);
-
-  if (error) {
-    return (
-      <div className="page">
-        <h1>{messages.loginErrorTitle}</h1>
-        <p>{error}</p>
-      </div>
-    );
-  }
-
+function CallbackError({ error }: { error: unknown }) {
+  const message = error instanceof Error ? error.message : messages.loginFailed;
   return (
     <div className="page">
-      <p>{messages.loginInProgress}</p>
+      <h1>{messages.loginErrorTitle}</h1>
+      <p>{message}</p>
     </div>
   );
 }

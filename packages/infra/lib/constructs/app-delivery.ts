@@ -9,8 +9,10 @@ import {
   FunctionCode,
   FunctionEventType,
   FunctionRuntime,
+  HttpVersion,
   PriceClass,
   ResponseHeadersPolicy,
+  type ResponseHeadersPolicyProps,
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
@@ -51,17 +53,34 @@ export class AppDelivery extends Construct {
       comment: 'SPAのディープリンクを _shell.html へ寄せる',
     });
 
-    const responseHeaders = new ResponseHeadersPolicy(this, 'ResponseHeaders', {
-      securityHeadersBehavior: {
-        strictTransportSecurity: {
-          accessControlMaxAge: Duration.days(365),
-          includeSubdomains: true,
-          override: true,
-        },
-        contentSecurityPolicy: {
-          contentSecurityPolicy: "frame-ancestors 'none'",
-          override: true,
-        },
+    // HSTS・CSPはbehavior間で共有し、Cache-Controlだけ出し分ける
+    const securityHeadersBehavior: ResponseHeadersPolicyProps['securityHeadersBehavior'] = {
+      strictTransportSecurity: {
+        accessControlMaxAge: Duration.days(365),
+        includeSubdomains: true,
+        override: true,
+      },
+      contentSecurityPolicy: {
+        contentSecurityPolicy: "frame-ancestors 'none'",
+        override: true,
+      },
+    };
+
+    // _shell.html はビルドのたびに中身が変わるので、S3側にCache-Controlを付けずCloudFront側で毎回再検証させる
+    const shellResponseHeaders = new ResponseHeadersPolicy(this, 'ResponseHeaders', {
+      securityHeadersBehavior,
+      customHeadersBehavior: {
+        customHeaders: [{ header: 'Cache-Control', value: 'no-cache', override: true }],
+      },
+    });
+
+    // /assets/* はファイル名にハッシュが入るため、同じ名前で中身が変わることはない
+    const assetsResponseHeaders = new ResponseHeadersPolicy(this, 'AssetsResponseHeaders', {
+      securityHeadersBehavior,
+      customHeadersBehavior: {
+        customHeaders: [
+          { header: 'Cache-Control', value: 'public, max-age=31536000, immutable', override: true },
+        ],
       },
     });
 
@@ -69,16 +88,26 @@ export class AppDelivery extends Construct {
       comment: 'trusted 管理UI配信',
       defaultRootObject: '_shell.html',
       priceClass: PriceClass.PRICE_CLASS_200,
+      httpVersion: HttpVersion.HTTP2_AND_3,
       defaultBehavior: {
         origin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: CachePolicy.CACHING_OPTIMIZED,
-        responseHeadersPolicy: responseHeaders,
+        responseHeadersPolicy: shellResponseHeaders,
         // CustomErrorResponseはDistribution全体に効いてしまい、404まで
         // SPAシェル(200)に化ける。behaviorごとに掛けられる関数側で寄せる
         functionAssociations: [
           { function: routerFunction, eventType: FunctionEventType.VIEWER_REQUEST },
         ],
+      },
+      additionalBehaviors: {
+        // ハッシュ付きで拡張子も必ず付くので、シェルへ寄せるrouter関数は不要
+        '/assets/*': {
+          origin,
+          viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+          responseHeadersPolicy: assetsResponseHeaders,
+        },
       },
     });
   }

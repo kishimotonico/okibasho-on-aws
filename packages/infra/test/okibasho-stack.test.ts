@@ -26,6 +26,7 @@ type DistributionResource = {
       DefaultRootObject?: string;
       CustomErrorResponses?: unknown;
       IPV6Enabled?: boolean;
+      HttpVersion?: string;
       Origins?: Array<{ OriginPath?: string }>;
       DefaultCacheBehavior?: {
         FunctionAssociations?: Array<{ EventType?: string }>;
@@ -433,7 +434,31 @@ describe('OkibashoStack', () => {
           ?.ResponseHeadersPolicyId,
       ).toBeDefined();
 
-      expect(appDistribution?.Properties?.DistributionConfig?.CacheBehaviors).toBeUndefined();
+      expect(appDistribution?.Properties?.DistributionConfig?.HttpVersion).toBe('http2and3');
+
+      // /assets/* はハッシュ付きファイル名なのでrouter関数は不要、長期キャッシュのヘッダだけ出し分ける
+      const assetsBehavior = (
+        appDistribution?.Properties?.DistributionConfig?.CacheBehaviors as
+          Array<{ PathPattern?: string; FunctionAssociations?: unknown }> | undefined
+      )?.find((behavior) => behavior.PathPattern === '/assets/*');
+      expect(assetsBehavior).toBeDefined();
+      expect(assetsBehavior?.FunctionAssociations).toBeUndefined();
+
+      const responseHeadersPolicies = Object.values(
+        template.findResources('AWS::CloudFront::ResponseHeadersPolicy'),
+      );
+      const cacheControlValues = responseHeadersPolicies
+        .map(
+          (policy) =>
+            (
+              policy.Properties?.ResponseHeadersPolicyConfig?.CustomHeadersConfig?.Items as
+                Array<{ Header?: string; Value?: string }> | undefined
+            )?.find((header) => header.Header === 'Cache-Control')?.Value,
+        )
+        .filter((value): value is string => value !== undefined);
+      expect(cacheControlValues).toEqual(
+        expect.arrayContaining(['no-cache', 'public, max-age=31536000, immutable']),
+      );
 
       template.hasResourceProperties('AWS::S3::BucketPolicy', {
         PolicyDocument: {

@@ -46,6 +46,20 @@ function devHarness(name: string, harnessUrl: string, htmlFile: string): Plugin 
 export default defineConfig({
   server: {
     port: 3000,
+    // dev はルート直下の認証ゲートからトップページまで数十の未バンドル ESM を配信するため、
+    // その経路のファイルを起動時に先読み変換させ、最初のアクセスでの変換待ちを減らす
+    warmup: {
+      clientFiles: [
+        './src/router.tsx',
+        './src/routeTree.gen.ts',
+        './src/routes/**/*.tsx',
+        './src/components/**/*.tsx',
+        './src/auth/**/*.{ts,tsx}',
+        './src/hooks/**/*.ts',
+        './src/lib/**/*.ts',
+        './src/config/**/*.ts',
+      ],
+    },
   },
   resolve: {
     tsconfigPaths: true,

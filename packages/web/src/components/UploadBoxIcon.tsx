@@ -57,13 +57,19 @@ type Pool = Map<string, SVGElement>;
 
 function svgEl<K extends keyof SVGElementTagNameMap>(
   pool: Pool,
-  parent: SVGSVGElement,
+  parent: SVGElement,
   id: string,
   tag: K,
+  /** この要素の直前にあるべき兄弟（先頭なら null）。既にその位置にあるなら appendChild しない */
+  prevSibling: SVGElement | null,
 ): SVGElementTagNameMap[K] {
   const existing = pool.get(id);
   if (existing && existing.namespaceURI === SVG_NS && existing.tagName.toLowerCase() === tag) {
-    parent.appendChild(existing);
+    // 既に正しい位置にあるなら付け直さない。appendChild は一度 DOM から外して挿し直すため、
+    // 毎フレーム呼ぶと CSS の登場アニメーションが再生され続けて消えて見えてしまう
+    if (existing.parentNode !== parent || existing.previousSibling !== prevSibling) {
+      parent.appendChild(existing);
+    }
     return existing as SVGElementTagNameMap[K];
   }
   existing?.remove();
@@ -99,13 +105,18 @@ function itemPrefix(item: SortedNode, index: number): string {
 function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
   svg.setAttribute('stroke-linejoin', scene.join);
   const used = new Set<string>();
-  const take = <K extends keyof SVGElementTagNameMap>(id: string, tag: K) => {
+  // 親ごとに「直前に置いた要素」を覚えておき、既にその次にある要素は動かさない
+  const lastByParent = new Map<SVGElement, SVGElement | null>();
+  const take = <K extends keyof SVGElementTagNameMap>(parent: SVGElement, id: string, tag: K) => {
     used.add(id);
-    return svgEl(pool, svg, id, tag);
+    const prevSibling = lastByParent.get(parent) ?? null;
+    const el = svgEl(pool, parent, id, tag, prevSibling);
+    lastByParent.set(parent, el);
+    return el;
   };
 
   if (scene.ring) {
-    const ring = take('ring', 'ellipse');
+    const ring = take(svg, 'ring', 'ellipse');
     ring.setAttribute('data-role', 'ring');
     ring.setAttribute('cx', String(scene.ring.cx));
     ring.setAttribute('cy', String(scene.ring.cy));
@@ -128,15 +139,20 @@ function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
     }
   }
 
+  // 床の円を除く箱の本体をまとめた <g>。Composer マウント時の登場アニメーション（CSS）を
+  // ここだけに掛けるための入れ物で、pool に載せて使い回すことで再生成時に再生しないようにする
+  const body = take(svg, 'body', 'g');
+  body.setAttribute('class', 'upload-box-icon__body');
+
   scene.items.forEach((item, index) => {
     const prefix = itemPrefix(item, index);
     if (item.type === 'face') {
-      applyPath(take(`${prefix}-fill`, 'path'), item.fillPath, {
+      applyPath(take(body, `${prefix}-fill`, 'path'), item.fillPath, {
         fill: item.fill,
         stroke: 'none',
       });
       item.edges.forEach((edge, ei) => {
-        applyPath(take(`${prefix}-e${ei}`, 'path'), edge.d, {
+        applyPath(take(body, `${prefix}-e${ei}`, 'path'), edge.d, {
           fill: 'none',
           'stroke-width': edge.strokeWidth,
           'data-role': 'outline',
@@ -145,21 +161,21 @@ function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
       return;
     }
     if (item.type === 'inner') {
-      applyPath(take(prefix, 'path'), item.d, {
+      applyPath(take(body, prefix, 'path'), item.d, {
         fill: item.fill,
         'stroke-width': item.strokeWidth,
       });
       return;
     }
     if (item.type === 'sheet') {
-      applyPath(take(`${prefix}-fill`, 'path'), item.fillPath, {
+      applyPath(take(body, `${prefix}-fill`, 'path'), item.fillPath, {
         fill: item.fill,
         stroke: item.stroke,
         'stroke-width': item.strokeWidth,
         opacity: item.opacity,
       });
       if (item.linesPath) {
-        applyPath(take(`${prefix}-lines`, 'path'), item.linesPath, {
+        applyPath(take(body, `${prefix}-lines`, 'path'), item.linesPath, {
           fill: 'none',
           stroke: item.stroke,
           'stroke-width': item.linesStrokeWidth,
@@ -168,12 +184,12 @@ function applyScene(svg: SVGSVGElement, scene: BoxIconScene, pool: Pool): void {
       }
       return;
     }
-    applyPath(take(`${prefix}-fill`, 'path'), item.fillPath, {
+    applyPath(take(body, `${prefix}-fill`, 'path'), item.fillPath, {
       fill: item.fill,
       stroke: 'none',
     });
     item.edges.forEach((edge, ei) => {
-      applyPath(take(`${prefix}-e${ei}`, 'path'), edge.d, {
+      applyPath(take(body, `${prefix}-e${ei}`, 'path'), edge.d, {
         fill: 'none',
         'stroke-width': edge.strokeWidth,
         'data-role': ei === 3 ? null : 'outline',

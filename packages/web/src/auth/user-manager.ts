@@ -117,3 +117,13 @@ export function consumeReturnPath(): string {
   sessionStorage.removeItem(RETURN_PATH_KEY);
   return value && value.startsWith('/') ? value : '/';
 }
+
+let signinCallbackPromise: Promise<string> | null = null;
+
+// loader が複数回走っても signinCallback（code_verifier を使い切る）は一度しか送らない
+export function completeSignInCallbackOnce(): Promise<string> {
+  signinCallbackPromise ??= getUserManager()
+    .signinCallback()
+    .then(() => consumeReturnPath());
+  return signinCallbackPromise;
+}
