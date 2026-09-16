@@ -307,7 +307,7 @@ metadata はページ成果物の prefix（配信対象）の外にあるため�
 ### S3 の設定
 
 - 完全 private + Public Access Block。S3 Website Hosting は使わない
-- バケットバージョニングは有効にしない（「消したら消える」を優先する）
+- バケットバージョニングを有効にし、非現行バージョンは 30 日で消す（誤削除・誤上書きからの復旧余地）。利用者のロールに `s3:DeleteObjectVersion` は与えないので、利用者の操作で旧版まで消えることはない
 - CORS を設定する（ブラウザから直接 PUT / LIST / DELETE するため。忘れると Web UI だけ落ちる）
 
 ```json
@@ -617,7 +617,7 @@ GitHub Actions からの `cdk deploy` はアクセスキーを置かず、OIDC �
 - User Pool は `DESTROY`。Hosted UI ドメインも一緒に消える
 - Google の client secret（Secrets Manager）はスタック外に手で置いたものなので残る。GCP の OAuth クライアントと一緒に手で消す
 - 管理 UI 用バケットは `DESTROY` + `autoDeleteObjects`。ビルドし直せる静的ファイルだけなので中身ごと消す
-- pages バケットは `RETAIN`。アップロード済みオブジェクトはスタック削除後も残る。`autoDeleteObjects` は付けない。課金は続くので、不要なら手で空にしてバケットを消す
+- pages バケットは `RETAIN`。アップロード済みオブジェクトはスタック削除後も残る。`autoDeleteObjects` は付けない。課金は続くので、不要なら手で空にしてバケットを消す。バージョニングを有効にしているので、空にするには旧バージョンと削除マーカーも消す必要がある
 - CloudFront など残りのリソースはデフォルトどおり消える。Distribution の削除は完了まで待たされる
 - Signed Cookie の鍵の SSM パラメータはカスタムリソースの Delete で消える
 - 独自ドメイン設定時は `Okibasho` → `OkibashoCertificate` の順に消す（`cdk destroy --all` がこの順で消す）

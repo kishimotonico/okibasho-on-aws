@@ -2294,6 +2294,18 @@ function buildQueryString(querystring) {
             },
           ],
         },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpiredObjectDeleteMarker": true,
+              "Id": "ExpireNoncurrentVersions",
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30,
+              },
+              "Status": "Enabled",
+            },
+          ],
+        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
@@ -2306,6 +2318,9 @@ function buildQueryString(querystring) {
             "Value": "true",
           },
         ],
+        "VersioningConfiguration": {
+          "Status": "Enabled",
+        },
       },
       "Type": "AWS::S3::Bucket",
       "UpdateReplacePolicy": "Retain",
@@ -4953,6 +4968,18 @@ function buildQueryString(querystring) {
             },
           ],
         },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpiredObjectDeleteMarker": true,
+              "Id": "ExpireNoncurrentVersions",
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30,
+              },
+              "Status": "Enabled",
+            },
+          ],
+        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
@@ -4965,6 +4992,9 @@ function buildQueryString(querystring) {
             "Value": "true",
           },
         ],
+        "VersioningConfiguration": {
+          "Status": "Enabled",
+        },
       },
       "Type": "AWS::S3::Bucket",
       "UpdateReplacePolicy": "Retain",
@@ -7684,6 +7714,18 @@ function buildQueryString(querystring) {
             },
           ],
         },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpiredObjectDeleteMarker": true,
+              "Id": "ExpireNoncurrentVersions",
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30,
+              },
+              "Status": "Enabled",
+            },
+          ],
+        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
@@ -7696,6 +7738,9 @@ function buildQueryString(querystring) {
             "Value": "true",
           },
         ],
+        "VersioningConfiguration": {
+          "Status": "Enabled",
+        },
       },
       "Type": "AWS::S3::Bucket",
       "UpdateReplacePolicy": "Retain",

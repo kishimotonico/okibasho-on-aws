@@ -334,7 +334,6 @@ describe('OkibashoStack', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
       for (const bucket of Object.values(buckets)) {
         expect(bucket.Properties?.WebsiteConfiguration).toBeUndefined();
-        expect(bucket.Properties?.LifecycleConfiguration).toBeUndefined();
       }
 
       template.hasResource('AWS::S3::Bucket', {
@@ -354,6 +353,23 @@ describe('OkibashoStack', () => {
               },
             }),
           ]),
+        },
+      });
+    });
+
+    it('バージョニングを有効にし、非現行バージョンは30日で消す', () => {
+      const template = synth();
+
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        VersioningConfiguration: { Status: 'Enabled' },
+        LifecycleConfiguration: {
+          Rules: [
+            {
+              NoncurrentVersionExpiration: { NoncurrentDays: 30 },
+              ExpiredObjectDeleteMarker: true,
+              Status: 'Enabled',
+            },
+          ],
         },
       });
     });
