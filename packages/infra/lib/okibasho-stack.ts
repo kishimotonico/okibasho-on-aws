@@ -25,7 +25,7 @@ export interface OkibashoStackProps extends StackProps {
  *     + Google IdP（googleClientId 設定時のみ）
  *   - CloudFront KeyValueStore + PageMaintenance Lambda（外部共有(/s/*)のエッジ投影に加え、
  *     期限切れページの削除も担う。別のcleanup Lambdaは作らない）
- *   - EventBridge Rule（1時間ごとの安全網 + cleanup）+ S3通知（metadataの作成・削除で即時起動）
+ *   - EventBridge Rule（毎時のcleanup + 日次のreconcile）+ S3通知（metadataの作成・削除で即時起動）
  *   - Route 53 の Alias レコード（serviceDomain 設定時のみ。証明書は CertificateStack）
  *   - /p/* の Signed Cookie 閲覧認証（Key Group + 発行 Lambda。serviceDomain 設定時のみ）
  */

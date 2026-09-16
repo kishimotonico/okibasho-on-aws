@@ -127,7 +127,7 @@ curl -sI https://app.okibasho.example.com/        | head -1     # 200
 うまくいかないときは発行 Lambda のログを見る。`{"result":"issued"}` が出ていれば Cookie は発行されている。
 
 ```bash
-aws logs tail "$(aws logs describe-log-groups --log-group-name-prefix /aws/lambda/Okibasho-PagesViewerAuth --query 'logGroups[0].logGroupName' --output text)" --since 10m
+aws logs tail "$(aws logs describe-log-groups --log-group-name-prefix Okibasho-PagesViewerAuthCookieIssuerFunctionLogs --query 'logGroups[0].logGroupName' --output text)" --since 10m
 ```
 
 初回デプロイでまだ実機確認できていない点は [roadmap.md](roadmap.md) の「デプロイ後に確認する点」にある。

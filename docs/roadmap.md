@@ -46,12 +46,13 @@ CI:
 
 ## デプロイ後に確認したい点
 
+- pages のアクセスログが S3 に届き、`/s/` のリクエストが記録されていること
 - 存在しないパスで `errors/404.html` が返り、S3 のキーが見えないこと（デプロイ後の確認は未了）
 - 不正な形式（33 文字でない、`/^[A-Za-z0-9_-]{33}$/` に合わない）の id が 404 になること
 - viewer-request の CloudFront Function が `Authorization` ヘッダを読めること（cache policy に含めていなくても）。`Authorization` ヘッダを削除して転送しても OAC の署名が壊れないこと
 - 401 でブラウザの認証ダイアログが出ること
 - `Buffer` / `crypto.createHash` / `Number.isInteger` が CloudFront Functions runtime 2.0 で動き、コードサイズとコンピュート使用率が上限内に収まること
-- `meta/` 配下の JSON の作成・削除・書き換えが数秒〜十数秒で KVS へ反映されること。S3 通知を止めても 1 時間以内の定期処理で追いつくこと
+- `meta/` 配下の JSON の作成・削除・書き換えが数秒〜十数秒で KVS へ反映されること。S3 通知を止めても日次の reconcile で追いつくこと
 - 共有を停止・削除した旧 id が 404 のままであること
 - SigV4A 署名（`@aws-sdk/signature-v4a` の副作用 import）が Lambda 実行環境で通るか
 - `NodejsFunction` の bundling（pnpm workspace 特有の PATH 調整を含む）が CI で動くか
