@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>Forbidden</title>
+    <script>
+      // 内部ページ(/p/*)で Signed Cookie が無いときだけ、管理UIでログインして Cookie を受け取りに行く。
+      // Cookie を発行したのに 403 が続く設定ミスでループしないよう、直前に飛ばしたばかりなら止まる
+      (function () {
+        var APP_ORIGIN = '__APP_ORIGIN__';
+        var KEY = 'okibasho:pages-login:redirectedAt';
+        // 署名検証が pages-router より先に走ると / もここに来る
+        if (location.pathname === '/') {
+          location.replace(APP_ORIGIN + '/');
+          return;
+        }
+        if (location.pathname.indexOf('/p/') !== 0) {
+          return;
+        }
+        try {
+          var last = Number(sessionStorage.getItem(KEY));
+          if (last && Date.now() - last < 60000) {
+            return;
+          }
+          sessionStorage.setItem(KEY, String(Date.now()));
+        } catch (e) {
+          return;
+        }
+        location.replace(APP_ORIGIN + '/pages-login?return=' + encodeURIComponent(location.href));
+      })();
+    </script>
+  </head>
+  <body>
+    <p>このページは閲覧できません。</p>
+    <p>You don't have access to this page.</p>
+  </body>
+</html>

@@ -28,13 +28,13 @@ PR 1: ドメインの付け替え（`packages/infra` のみ）
 
 PR 2: Signed Cookie 閲覧認証（`packages/infra` と `packages/web`）
 
-- [ ] `PagesViewerAuth` Construct（`constructs/pages-viewer-auth.ts`）。SSM の公開鍵から `PublicKey` と `KeyGroup`、発行 Lambda（`lambda/pages-cookie/`、`NodejsFunction`、arm64）、Function URL（Lambda OAC）。秘密鍵のパラメータへの `ssm:GetParameter` を Lambda に付与
-- [ ] 発行 Lambda。JSON ボディの `idToken` を `aws-jwt-verify` で検証し、`@aws-sdk/cloudfront-signer` の `getSignedCookies` でカスタムポリシー（`https://<pages>/p/*`、24 時間）に署名、`Domain=<サービスドメイン>; Path=/p; Secure; HttpOnly; SameSite=Lax; Max-Age=86400` で 3 つの Cookie を返す。検証失敗は 401、ボディ不正は 400。成功・失敗をログに出す（トークンは出さない）
-- [ ] `AppDelivery` に `/auth/*` ビヘイビアを足すメソッド（`allowedMethods: ALLOW_ALL`、キャッシュ無効、`x-amz-content-sha256` を含めて全ヘッダを転送する origin request policy）。スタックで `PagesViewerAuth` があるときだけ呼ぶ
-- [ ] `PagesDelivery` に `viewerAuth?: { keyGroup }` を足し、デフォルトビヘイビアの `trustedKeyGroups` と 403 → `/errors/403.html` のカスタムエラーレスポンスを、渡されたときだけ設定する。`/s/*` と `/errors/*` には付けない
-- [ ] `static/errors/403.html`。`/p/` で始まるパスだけ `https://<app>/pages-login?return=<元URL>` へ飛ばす。60 秒以内に飛ばした直後なら固定文言。app の URL は `BucketDeployment` の `Source.data` で埋める（404.html と同じ `errors/` に置く）
-- [ ] web に `/pages-login` ルート。`return` を検証（`VITE_PAGES_BASE_URL` と同じ origin、`/p/` 始まり）し、`POST /auth/pages-cookie`（`x-amz-content-sha256` 付き）してから `location.replace(return)`。表示は LoadingShell。`/callback` がログイン前の `/pages-login?return=...` を復元できるようにする
-- [ ] snapshot（ドメインあり）に Key Group・`/auth/*`・403 を足し、ドメイン無しでは存在しないことをアサートする。Lambda は JWT 検証と署名を差し替えて単体テストする
+- [x] `PagesViewerAuth` Construct（`constructs/pages-viewer-auth.ts`）。SSM の公開鍵から `PublicKey` と `KeyGroup`、発行 Lambda（`lambda/pages-cookie/`、`NodejsFunction`、arm64）、Function URL（Lambda OAC）。秘密鍵のパラメータへの `ssm:GetParameter` を Lambda に付与
+- [x] 発行 Lambda。JSON ボディの `idToken` を `aws-jwt-verify` で検証し、`@aws-sdk/cloudfront-signer` の `getSignedCookies` でカスタムポリシー（`https://<pages>/p/*`、24 時間）に署名、`Domain=<サービスドメイン>; Path=/p; Secure; HttpOnly; SameSite=Lax; Max-Age=86400` で 3 つの Cookie を返す。検証失敗は 401、ボディ不正は 400。成功・失敗をログに出す（トークンは出さない）
+- [x] `AppDelivery` に `/auth/*` ビヘイビアを足すメソッド（`allowedMethods: ALLOW_ALL`、キャッシュ無効、`x-amz-content-sha256` を含めて全ヘッダを転送する origin request policy）。スタックで `PagesViewerAuth` があるときだけ呼ぶ
+- [x] `PagesDelivery` に `viewerAuth?: { keyGroup }` を足し、デフォルトビヘイビアの `trustedKeyGroups` と 403 → `/errors/403.html` のカスタムエラーレスポンスを、渡されたときだけ設定する。`/s/*` と `/errors/*` には付けない
+- [x] `static/errors/403.html`。`/p/` で始まるパスだけ `https://<app>/pages-login?return=<元URL>` へ飛ばす。60 秒以内に飛ばした直後なら固定文言。app の URL は `BucketDeployment` の `Source.data` で埋める（404.html と同じ `errors/` に置く）
+- [x] web に `/pages-login` ルート。`return` を検証（`VITE_PAGES_BASE_URL` と同じ origin、`/p/` 始まり）し、`POST /auth/pages-cookie`（`x-amz-content-sha256` 付き）してから `location.replace(return)`。表示は LoadingShell。`/callback` がログイン前の `/pages-login?return=...` を復元できるようにする
+- [x] snapshot（ドメインあり）に Key Group・`/auth/*`・403 を足し、ドメイン無しでは存在しないことをアサートする。Lambda は JWT 検証と署名を差し替えて単体テストする
 
 受け入れ: 未ログインで pages の URL を開くとログインへ誘導され、ログイン後に元のページが表示される。Cookie 発行後 24 時間は再ログインなしで別ページも見られる。`/s/*` は Cookie なしで今までどおり見られる。ドメイン無しの synth・deploy は変わらない。
 

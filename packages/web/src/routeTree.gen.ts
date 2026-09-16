@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CallbackRouteImport } from './routes/callback'
+import { Route as PagesLoginRouteImport } from './routes/pages-login'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const CallbackRoute = CallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PagesLoginRoute = PagesLoginRouteImport.update({
+  id: '/pages-login',
+  path: '/pages-login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
+  '/pages-login': typeof PagesLoginRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
+  '/pages-login': typeof PagesLoginRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
+  '/pages-login': typeof PagesLoginRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/callback'
+  fullPaths: '/' | '/callback' | '/pages-login'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/callback'
-  id: '__root__' | '/' | '/callback'
+  to: '/' | '/callback' | '/pages-login'
+  id: '__root__' | '/' | '/callback' | '/pages-login'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CallbackRoute: typeof CallbackRoute
+  PagesLoginRoute: typeof PagesLoginRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pages-login': {
+      id: '/pages-login'
+      path: '/pages-login'
+      fullPath: '/pages-login'
+      preLoaderRoute: typeof PagesLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CallbackRoute: CallbackRoute,
+  PagesLoginRoute: PagesLoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

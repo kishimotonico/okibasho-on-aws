@@ -94,6 +94,10 @@ export const messages = {
   loginFailed: 'ログインに失敗しました',
   loginErrorTitle: 'ログインエラー',
 
+  /** 内部ページの閲覧（/pages-login） */
+  pagesLoginFailed: 'ページを開く準備に失敗しました',
+  pagesLoginErrorTitle: 'ページを開けませんでした',
+
   /** 読み込み中の画面（LoadingShell） */
   loadingLead: '読み込み中',
 
