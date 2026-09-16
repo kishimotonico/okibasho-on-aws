@@ -13,13 +13,16 @@ export interface OkibashoStackProps extends StackProps {
   readonly emailDomain: string;
   /** 未設定なら CloudFront のデフォルトドメインで構築する */
   readonly serviceDomain?: ServiceDomainProps;
+  /** 未設定なら Google IdP を作らず、ローカルユーザーだけでログインする */
+  readonly googleClientId?: string;
 }
 
 /**
  * 構築するリソース:
  *   - S3 (private, Public Access Block)
  *   - CloudFront x2 (app / pages) + OAC
- *   - Cognito User Pool + Identity Pool (Web/CLI の 2 App Client)
+ *   - Cognito User Pool + Identity Pool (Web/CLI の 2 App Client) + PreSignUp Lambda
+ *     + Google IdP（googleClientId 設定時のみ）
  *   - CloudFront KeyValueStore + PageMaintenance Lambda（外部共有(/s/*)のエッジ投影に加え、
  *     期限切れページの削除も担う。別のcleanup Lambdaは作らない）
  *   - EventBridge Rule（1時間ごとの安全網 + cleanup）+ S3通知（metadataの作成・削除で即時起動）
@@ -43,6 +46,8 @@ export class OkibashoStack extends Stack {
     const auth = new Auth(this, 'Auth', {
       appDomainName: appDelivery.domainName,
       pagesBucket: pagesStorage.bucket,
+      emailDomain: props.emailDomain,
+      googleClientId: props.googleClientId,
     });
 
     // cloudfront.net には親ドメイン Cookie を置けないので、閲覧認証は独自ドメインがあるときだけ

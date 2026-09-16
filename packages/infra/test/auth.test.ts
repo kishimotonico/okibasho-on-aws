@@ -1,16 +1,21 @@
 import { App, Stack } from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
 import { describe, expect, it } from 'vitest';
-import { Auth } from '../lib/constructs/auth.js';
+import { Auth, GOOGLE_CLIENT_SECRET_NAME } from '../lib/constructs/auth.js';
 
-function synthAuth(): Template {
-  const app = new App();
+function synthAuth(googleClientId?: string): Template {
+  const app = new App({ context: { 'aws:cdk:bundling-stacks': [] } });
   const stack = new Stack(app, 'TestStack');
   const pagesBucket = new Bucket(stack, 'PagesBucket', {
     blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
   });
-  new Auth(stack, 'Auth', { appDomainName: 'app.okibasho.example.com', pagesBucket });
+  new Auth(stack, 'Auth', {
+    appDomainName: 'app.okibasho.example.com',
+    pagesBucket,
+    emailDomain: 'example.jp',
+    googleClientId,
+  });
   return Template.fromStack(stack);
 }
 
@@ -50,6 +55,51 @@ describe('Auth', () => {
       'http://127.0.0.1:8977/callback',
       'http://127.0.0.1:8978/callback',
     ]);
+  });
+
+  it('PreSignUp トリガーは Google の有無に関係なく常に付き、メールドメインを渡す', () => {
+    const template = synthAuth();
+
+    template.hasResourceProperties('AWS::Cognito::UserPool', {
+      LambdaConfig: { PreSignUp: Match.anyValue() },
+    });
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: { Variables: { EMAIL_DOMAIN: 'example.jp' } },
+    });
+  });
+
+  it('GOOGLE_CLIENT_ID が無ければ Google IdP を作らず、App Client は COGNITO だけ', () => {
+    const template = synthAuth();
+
+    template.resourceCountIs('AWS::Cognito::UserPoolIdentityProvider', 0);
+    template.allResourcesProperties('AWS::Cognito::UserPoolClient', {
+      SupportedIdentityProviders: ['COGNITO'],
+    });
+  });
+
+  it('GOOGLE_CLIENT_ID があれば Google IdP を作り、secret は Secrets Manager から参照する', () => {
+    const template = synthAuth('google-client-id');
+
+    template.hasResourceProperties('AWS::Cognito::UserPoolIdentityProvider', {
+      ProviderName: 'Google',
+      ProviderType: 'Google',
+      ProviderDetails: {
+        client_id: 'google-client-id',
+        client_secret: `{{resolve:secretsmanager:${GOOGLE_CLIENT_SECRET_NAME}:SecretString:::}}`,
+        authorize_scopes: 'openid email profile',
+      },
+      AttributeMapping: { email: 'email', email_verified: 'email_verified' },
+    });
+
+    const [providerId] = Object.keys(
+      template.findResources('AWS::Cognito::UserPoolIdentityProvider'),
+    );
+    const clients = Object.values(template.findResources('AWS::Cognito::UserPoolClient'));
+    expect(clients).toHaveLength(2);
+    for (const client of clients) {
+      expect(client.Properties?.SupportedIdentityProviders).toEqual(['COGNITO', 'Google']);
+      expect(client.DependsOn).toContain(providerId);
+    }
   });
 
   it('Identity Pool は unauthenticated を無効にし、authenticated role に TagSession と pages prefix ポリシーがある', () => {

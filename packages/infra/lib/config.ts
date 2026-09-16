@@ -7,6 +7,8 @@ export interface Config {
   emailDomain: string;
   /** 未設定なら CloudFront のデフォルトドメインで構築する */
   serviceDomain?: ServiceDomainConfig;
+  /** 未設定なら Google IdP を作らない。client secret は Secrets Manager に置く */
+  googleClientId?: string;
 }
 
 export interface ServiceDomainConfig {
@@ -27,6 +29,7 @@ export function loadConfig(): Config {
     SERVICE_DOMAIN: domainName,
     HOSTED_ZONE_ID: hostedZoneId,
     HOSTED_ZONE_NAME: hostedZoneName,
+    GOOGLE_CLIENT_ID: googleClientId,
   } = process.env;
 
   if (!emailDomain) {
@@ -34,8 +37,9 @@ export function loadConfig(): Config {
       'EMAIL_DOMAIN が未設定です。packages/infra/.env.example を .env にコピーして埋めてください',
     );
   }
+  const config: Config = { emailDomain, googleClientId };
   if (!domainName && !hostedZoneId && !hostedZoneName) {
-    return { emailDomain };
+    return config;
   }
   if (!domainName || !hostedZoneId || !hostedZoneName) {
     throw new Error(
@@ -44,7 +48,7 @@ export function loadConfig(): Config {
   }
 
   return {
-    emailDomain,
+    ...config,
     serviceDomain: { domainName, hostedZone: { id: hostedZoneId, name: hostedZoneName } },
   };
 }

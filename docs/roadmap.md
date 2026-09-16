@@ -20,10 +20,10 @@ Google IdP とメールドメイン制限:
 
 設計は [architecture.md](architecture.md) の「認証」節にある。1 PR で入れる。
 
-- [ ] `GOOGLE_CLIENT_ID` を `config.ts` と `.env.example` に足し、設定時だけ Google IdP を作って App Client に `GOOGLE` を足す（client secret は Secrets Manager から参照）
-- [ ] PreSignUp トリガーを常に置き、ドメイン・大文字・`+`・（Google のときの）`email_verified` を検証する
-- [ ] snapshot は Google 無し・Google ありの両方で合成する
-- [ ] [deploy.md](deploy.md) に GCP の手順、シークレットの登録、デバッグ用ユーザーの作り方を書く
+- [x] `GOOGLE_CLIENT_ID` を `config.ts` と `.env.example` に足し、設定時だけ Google IdP を作って App Client に `GOOGLE` を足す（client secret は Secrets Manager から参照）
+- [x] PreSignUp トリガーを常に置き、ドメイン・大文字・`+`・（Google のときの）`email_verified` を検証する
+- [x] snapshot は Google 無し・Google ありの両方で合成する
+- [x] [deploy.md](deploy.md) に GCP の手順、シークレットの登録、デバッグ用ユーザーの作り方を書く
 
 受け入れ: Google ありでデプロイすると、Managed Login に Google の入口が出て、組織のアカウントでログインでき、同じメールのローカルユーザーが作ったページが一覧に出る。組織外のアカウントは弾かれる。`+` 付きや別ドメインのローカルユーザーは `admin-create-user` の時点で失敗する。CLI も Google でログインでき、refresh token で再ログインせずに使える。`GOOGLE_CLIENT_ID` 未設定なら今までどおりデプロイでき、ローカルユーザーだけで使える。
 

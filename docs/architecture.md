@@ -555,7 +555,7 @@ bin/app.ts                 2 つのスタックを組む。証明書スタック
 lib/
   okibasho-stack.ts        各 Construct の組み立てだけ
   certificate-stack.ts     us-east-1 の ACM 証明書（DNS 検証）
-  config.ts                  環境変数から emailDomain / serviceDomain を読む
+  config.ts                  環境変数から emailDomain / serviceDomain / googleClientId を読む
   constructs/
     auth.ts                  UserPool / Managed Login / App Client x2 / Google IdP（設定時のみ）/
                              PreSignUp Lambda / IdentityPool / authenticated role / principal tag

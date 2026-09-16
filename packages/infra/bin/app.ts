@@ -28,6 +28,7 @@ const okibasho = new OkibashoStack(app, 'Okibasho', {
   },
   emailDomain: config.emailDomain,
   serviceDomain: certificateStack?.serviceDomain,
+  googleClientId: config.googleClientId,
 });
 if (certificateStack) {
   okibasho.addStackDependency(certificateStack);

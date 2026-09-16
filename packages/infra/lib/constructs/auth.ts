@@ -1,18 +1,28 @@
-import { Duration, Lazy, RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Duration, Lazy, RemovalPolicy, SecretValue, Stack } from 'aws-cdk-lib';
 import { CfnIdentityPoolPrincipalTag } from 'aws-cdk-lib/aws-cognito';
 import { IdentityPool, UserPoolAuthenticationProvider } from 'aws-cdk-lib/aws-cognito-identitypool';
 import {
   AccountRecovery,
   Mfa,
   OAuthScope,
+  ProviderAttribute,
   UserPool,
   UserPoolClient,
   UserPoolClientIdentityProvider,
   UserPoolDomain,
+  UserPoolIdentityProviderGoogle,
+  UserPoolOperation,
 } from 'aws-cdk-lib/aws-cognito';
 import { Effect, FederatedPrincipal, PolicyStatement, Role } from 'aws-cdk-lib/aws-iam';
+import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import type { IBucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+
+/** Google OAuth クライアントの secret を手で置く Secrets Manager のシークレット名 */
+export const GOOGLE_CLIENT_SECRET_NAME = 'okibasho/google-client-secret';
 
 /**
  * CLIの127.0.0.1コールバックで使うポート。
@@ -29,11 +39,15 @@ export interface AuthProps {
   readonly appDomainName: string;
   /** pages bucket。authenticated role の S3 ポリシーに使う */
   readonly pagesBucket: IBucket;
+  /** メンバーのメールドメイン。PreSignUp でこれ以外のアドレスを拒否する */
+  readonly emailDomain: string;
+  /** Google OAuth クライアントの ID。未設定なら Google IdP を作らず、ローカルユーザーだけになる */
+  readonly googleClientId?: string;
 }
 
 /**
  * Cognito User Pool + Identity Pool + Hosted UI。
- * 当面はローカルユーザー(管理者作成)で運用し、Google IdPは後付けする。
+ * Google IdP（設定時のみ）とローカルユーザー（管理者作成。デバッグ用）を併用する。
  */
 export class Auth extends Construct {
   readonly userPool: UserPool;
@@ -54,7 +68,7 @@ export class Auth extends Construct {
       standardAttributes: {
         email: { required: true, mutable: true },
       },
-      // 当面のローカルユーザーは繋ぎ。本来の認証はGoogle IdPに寄せる予定のためMFAは無効
+      // ローカルユーザーはデバッグ用。本来の認証はGoogle IdPに寄せるためMFAは無効
       mfa: Mfa.OFF,
       passwordPolicy: {
         minLength: 12,
@@ -67,6 +81,44 @@ export class Auth extends Construct {
       // 使わなくなったときにスタックごと消せるようにする。作り直しは想定しない
       removalPolicy: RemovalPolicy.DESTROY,
     });
+
+    const here = dirname(fileURLToPath(import.meta.url));
+    const preSignUp = new NodejsFunction(this, 'PreSignUpFunction', {
+      entry: join(here, '../lambda/pre-sign-up/index.ts'),
+      handler: 'handler',
+      runtime: Runtime.NODEJS_22_X,
+      architecture: Architecture.ARM_64,
+      timeout: Duration.seconds(5),
+      environment: {
+        EMAIL_DOMAIN: props.emailDomain,
+      },
+      bundling: {
+        // PageMaintenance と同じく、リポジトリ直下から esbuild が見えるようにする
+        environment: {
+          PATH: `${join(here, '../../node_modules/.bin')}:${process.env.PATH ?? ''}`,
+        },
+      },
+      description: 'auth: EMAIL_DOMAIN 外や揺れのあるメールアドレスのサインアップを拒否する',
+    });
+    this.userPool.addTrigger(UserPoolOperation.PRE_SIGN_UP, preSignUp);
+
+    const google =
+      props.googleClientId &&
+      new UserPoolIdentityProviderGoogle(this, 'Google', {
+        userPool: this.userPool,
+        clientId: props.googleClientId,
+        clientSecretValue: SecretValue.secretsManager(GOOGLE_CLIENT_SECRET_NAME),
+        scopes: ['openid', 'email', 'profile'],
+        attributeMapping: {
+          email: ProviderAttribute.GOOGLE_EMAIL,
+          // 明示しないと PreSignUp に email_verified が届かない
+          emailVerified: ProviderAttribute.GOOGLE_EMAIL_VERIFIED,
+        },
+      });
+    const supportedIdentityProviders = [
+      UserPoolClientIdentityProvider.COGNITO,
+      ...(google ? [UserPoolClientIdentityProvider.GOOGLE] : []),
+    ];
 
     const oauthScopes = [OAuthScope.OPENID, OAuthScope.EMAIL, OAuthScope.PROFILE];
     const tokenValidity = {
@@ -81,7 +133,7 @@ export class Auth extends Construct {
 
     this.webClient = this.userPool.addClient('WebClient', {
       generateSecret: false,
-      supportedIdentityProviders: [UserPoolClientIdentityProvider.COGNITO],
+      supportedIdentityProviders,
       oAuth: {
         flows: {
           authorizationCodeGrant: true,
@@ -98,7 +150,7 @@ export class Auth extends Construct {
 
     this.cliClient = this.userPool.addClient('CliClient', {
       generateSecret: false,
-      supportedIdentityProviders: [UserPoolClientIdentityProvider.COGNITO],
+      supportedIdentityProviders,
       oAuth: {
         flows: {
           authorizationCodeGrant: true,
@@ -109,6 +161,12 @@ export class Auth extends Construct {
       },
       ...tokenValidity,
     });
+
+    // App Client は IdP を名前の文字列で参照するため、CloudFormation の依存が自動では付かない
+    if (google) {
+      this.webClient.node.addDependency(google);
+      this.cliClient.node.addDependency(google);
+    }
 
     const webPoolProvider = new UserPoolAuthenticationProvider({
       userPool: this.userPool,

@@ -97,6 +97,14 @@ describe('OkibashoStack', () => {
     expect(normalizedJson(synth())).toMatchSnapshot();
   });
 
+  it('Google IdP ありのテンプレートが意図せず変化していない', () => {
+    const stack = new OkibashoStack(newApp(), 'Okibasho', {
+      emailDomain: 'example.jp',
+      googleClientId: 'google-client-id',
+    });
+    expect(normalizedJson(Template.fromStack(stack))).toMatchSnapshot();
+  });
+
   it('独自ドメインありのテンプレートが意図せず変化していない', () => {
     const { main, certificate } = synthWithDomain(SERVICE_DOMAIN);
     expect(normalizedJson(certificate)).toMatchSnapshot();
@@ -549,7 +557,7 @@ describe('OkibashoStack', () => {
       const template = synth();
 
       // PageMaintenance(share投影 + cleanup)本体Lambdaに加えて、S3通知配線用のCDK管理Lambda(BucketNotificationsHandler)が1つ増える
-      template.resourceCountIs('AWS::Lambda::Function', 4);
+      template.resourceCountIs('AWS::Lambda::Function', 5);
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs22.x',
         Architectures: ['arm64'],
