@@ -6,36 +6,11 @@
 
 CloudFront のデフォルトドメインで初回デプロイ済み。web / CLI から Cognito ローカルユーザーでログインし、Identity Pool の一時クレデンシャルで S3 に直接 PutObject / GetObject / DeleteObject / ListObjectsV2 する構成が動いている。`/p/<user>/<slug>/` の内部配信と `/s/<tag><share-id>/` の外部共有配信もどちらも実装済みで、KVS への投影と期限切れページの削除は PageMaintenance Lambda が 1 時間ごとのスケジュールで行う（S3 イベントによる該当ページだけの即時投影も別経路で動く）。
 
-独自ドメインと Signed Cookie による閲覧認証はコード上は入っている（実デプロイは未確認）。まだ入っていないのは、Google IdP、CLI の npm 配布、CI である。
+独自ドメインと Signed Cookie による閲覧認証も実装・デプロイ済み。証明書と鍵ペアも CDK が作る（手順は [deploy.md](deploy.md)）。まだ入っていないのは、Google IdP、CLI の npm 配布、CI である。管理 UI の配置は `cdk deploy` とは別に手でアップロードしており、CDK に寄せるかは未決。
 
 ## 残っている作業
 
-### 独自ドメインと閲覧認証
-
-設計は [architecture.md](architecture.md) の「独自ドメイン」「内部ページの閲覧（Signed Cookie）」「CDK」節に決めてある。ドメインの付け替え（PR 1）と Signed Cookie 閲覧認証（PR 2）は実装済み。残るのは、手作業だった証明書と鍵ペアを CDK に取り込む PR 3 と、実デプロイでの確認。ドメイン無しでも synth・deploy できることは保つ。
-
-PR 3: 証明書と鍵ペアの IaC 化（`packages/infra` のみ）
-
-- [x] `config.ts`: `CERTIFICATE_ARN` を廃止し、`SERVICE_DOMAIN` / `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` を 3 つそろえて設定する形にする。`.env.example` は更新済み
-- [x] `certificate-stack.ts`（`OkibashoCertificate`、`env.region: 'us-east-1'`）。`Certificate` + `CertificateValidation.fromDns(hostedZone)`、SAN は pages と app。`certificate` を公開する
-- [x] `bin/app.ts`: serviceDomain があるときだけ証明書スタックを作り、`OkibashoStack` に `certificate` を渡す。`okibasho.addStackDependency(certificateStack)`。`cdk.json` に `"@aws-cdk/core:defaultCrossStackReferences": "weak"` を足し、`crossRegionReferences` は使わない
-- [x] `ServiceDomain`: 証明書を props で受け取る形にし、`Certificate.fromCertificateArn` を消す。Hosted Zone は必須になるので `addAliasRecords` の早期 return を消す。`PagesDistributionDomainName` / `AppDistributionDomainName` の Output も不要になるので消す
-- [x] `SigningKeyPair` Construct（`pages-viewer-auth.ts` 内か隣のファイル）。`Provider` + `NodejsFunction`（`lambda/signing-key-pair/`）+ `CustomResource`。Lambda は Create で `crypto.generateKeyPairSync('rsa', 2048)`（公開鍵 spki / 秘密鍵 pkcs8、PEM）を作って SSM に 2 つ置き（`/<スタック名>/pages-signing/public-key` は String、`private-key` は SecureString）、`Data.PublicKeyPem` を返す。Update は SSM の公開鍵を読んで同じ値を返す。Delete で 2 つを消す（無くても成功扱い）。`generation` プロパティを props に持ち、変わったら再生成する。鍵の値は一切ログに出さない
-- [x] `PagesViewerAuth`: `PublicKey.encodedKey` を `keyPair.publicKeyPem`（`getAttString`）にし、`StringParameter.valueForStringParameter` を消す。発行 Lambda には秘密鍵のパラメータ名を渡し、`grantRead` はそのまま
-- [x] snapshot（ドメインあり）を証明書スタック込みで更新し、`Fn::GetStackOutput` で証明書 ARN を受けていること、`AWS::CertificateManager::Certificate` が us-east-1 のスタックにあること、カスタムリソースと Provider が存在することをアサートする。ドメイン無しの snapshot は変えない。鍵ペア Lambda は SSM 呼び出しを差し替えて Create / Update / Delete を単体テストする
-
-受け入れ: `.env` に 3 つ書いて `cdk bootstrap`（デプロイ先と us-east-1）→ `cdk deploy --all` だけで証明書・DNS 検証・Alias レコード・鍵ペアまで揃い、手順書から AWS CLI の操作が消える。`cdk destroy --all` で証明書と SSM パラメータも消える。
-
-PR 4: 鍵ペアを generation ごとの不変リソースにする（`packages/infra` のみ。Codex のセカンドオピニオンから採用）
-
-- [x] `SigningKeyPair` の SSM パラメータ名を `/<スタック名>/pages-signing/<generation>/{public-key,private-key}` にし、PhysicalResourceId をその generation のプレフィックスにする。`privateKeyParameterName` も generation 込みになる
-- [x] handler: Create は生成、Update は「generation（プレフィックス）が変わったら新しい PhysicalResourceId で Create と同じ処理、同じなら SSM の公開鍵を返す」に単純化し、既存パラメータの上書き（Put の `Overwrite`）と「変わったか比較して作り直す」分岐を消す。Delete はその PhysicalResourceId の 2 つを消す（無くても成功）。旧 generation の削除は CloudFormation が送る Delete に任せる
-- [x] Lambda の IAM は `/<スタック名>/pages-signing/*` 配下のまま（generation をまたぐため）
-- [x] 単体テストと snapshot を更新する
-
-受け入れ: `generation` を進めてデプロイすると新しいパラメータが作られ、旧 generation は CloudFormation の Delete で消える。ロールバックすると旧 generation のパラメータがそのまま使われる。
-
-デプロイ後に確認する点:
+独自ドメインと閲覧認証で、実機でまだ確かめていない点:
 
 - Lambda OAC 越しの POST が通ること（`x-amz-content-sha256` が無いと 403 になるはず。`Authorization` は CloudFront が上書きするためボディで渡す設計にしている）
 - viewer-request の CloudFront Function と Signed Cookie の検証のどちらが先か。Cookie 無しで `/` を開いたとき、302 で app へ行くか、403 ページ経由で app へ行くか

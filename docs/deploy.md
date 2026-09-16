@@ -108,6 +108,6 @@ aws logs tail "$(aws logs describe-log-groups --log-group-name-prefix /aws/lambd
 
 ## 7. 運用
 
-- **鍵の作り直し**: `SigningKeyPair` の `generation` を進めて `cdk deploy`。古い Cookie は 403 になって再ログインが走るだけで済む
+- **鍵の作り直し**: `pages-viewer-auth.ts` の `generation` を 1 増やして `cdk deploy`。新しい世代の鍵ペアが作られ、旧世代は消える。発行済みの Cookie は無効になり、再ログインが走る
 - **証明書**: DNS 検証のレコードが残っている限り ACM が自動更新する
 - **撤去**: `pnpm --filter @okibasho/infra exec cdk destroy --all`。pages バケットは残るので、不要なら手で空にして消す。詳細は [architecture.md](architecture.md) の「スタック削除」
