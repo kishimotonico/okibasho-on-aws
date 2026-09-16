@@ -3,8 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { RemovalPolicy } from 'aws-cdk-lib';
 import { Effect, type IRole, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket, BucketEncryption, HttpMethods } from 'aws-cdk-lib/aws-s3';
+import { LogGroup } from 'aws-cdk-lib/aws-logs';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { Construct } from 'constructs';
+import { LOG_GROUP_OPTIONS } from '../log-retention.js';
 
 /** ページオブジェクトの S3 prefix。owner 単位のキー空間のルート */
 export const PAGES_PREFIX = 'pages/';
@@ -47,6 +49,7 @@ export class PagesStorage extends Construct {
       ],
       destinationBucket: this.bucket,
       destinationKeyPrefix: ERRORS_PREFIX,
+      logGroup: new LogGroup(this, 'ErrorPagesDeploymentLogs', LOG_GROUP_OPTIONS),
     });
     this.denyDeploymentRoleOutsideErrors(deployment.handlerRole);
     return deployment;

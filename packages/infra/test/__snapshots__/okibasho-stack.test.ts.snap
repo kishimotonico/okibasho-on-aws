@@ -806,6 +806,11 @@ function handler(event) {
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "AuthPreSignUpFunctionLogsA970770A",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "AuthPreSignUpFunctionServiceRole177F00C8",
@@ -816,6 +821,14 @@ function handler(event) {
         "Timeout": 5,
       },
       "Type": "AWS::Lambda::Function",
+    },
+    "AuthPreSignUpFunctionLogsA970770A": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "AuthPreSignUpFunctionServiceRole177F00C8": {
       "Properties": {
@@ -1265,6 +1278,11 @@ def sort_filter_rules(json_obj):
             "Ref": "PagesStorageErrorPagesDeploymentAwsCliLayer489B7929",
           },
         ],
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesStorageErrorPagesDeploymentLogsE2AD2D6B",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265",
@@ -1489,6 +1507,11 @@ def sort_filter_rules(json_obj):
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PageMaintenanceMaintenanceFunctionLogsEBB495AC",
+          },
+        },
         "MemorySize": 1024,
         "ReservedConcurrentExecutions": 1,
         "Role": {
@@ -1512,6 +1535,14 @@ def sort_filter_rules(json_obj):
         "Qualifier": "$LATEST",
       },
       "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "PageMaintenanceMaintenanceFunctionLogsEBB495AC": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "PageMaintenanceMaintenanceFunctionServiceRole249912DC": {
       "Properties": {
@@ -2614,6 +2645,14 @@ function buildQueryString(querystring) {
         "WaitForDistributionInvalidation": true,
       },
       "Type": "Custom::CDKBucketDeployment",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesStorageErrorPagesDeploymentLogsE2AD2D6B": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
       "UpdateReplacePolicy": "Delete",
     },
   },
@@ -3434,6 +3473,11 @@ function handler(event) {
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "AuthPreSignUpFunctionLogsA970770A",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "AuthPreSignUpFunctionServiceRole177F00C8",
@@ -3444,6 +3488,14 @@ function handler(event) {
         "Timeout": 5,
       },
       "Type": "AWS::Lambda::Function",
+    },
+    "AuthPreSignUpFunctionLogsA970770A": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "AuthPreSignUpFunctionServiceRole177F00C8": {
       "Properties": {
@@ -3885,6 +3937,11 @@ def sort_filter_rules(json_obj):
             "Ref": "PagesStorageErrorPagesDeploymentAwsCliLayer489B7929",
           },
         ],
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesStorageErrorPagesDeploymentLogsE2AD2D6B",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265",
@@ -4109,6 +4166,11 @@ def sort_filter_rules(json_obj):
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PageMaintenanceMaintenanceFunctionLogsEBB495AC",
+          },
+        },
         "MemorySize": 1024,
         "ReservedConcurrentExecutions": 1,
         "Role": {
@@ -4132,6 +4194,14 @@ def sort_filter_rules(json_obj):
         "Qualifier": "$LATEST",
       },
       "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "PageMaintenanceMaintenanceFunctionLogsEBB495AC": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "PageMaintenanceMaintenanceFunctionServiceRole249912DC": {
       "Properties": {
@@ -5234,6 +5304,14 @@ function buildQueryString(querystring) {
         "WaitForDistributionInvalidation": true,
       },
       "Type": "Custom::CDKBucketDeployment",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesStorageErrorPagesDeploymentLogsE2AD2D6B": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
       "UpdateReplacePolicy": "Delete",
     },
   },
@@ -6214,6 +6292,11 @@ function handler(event) {
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "AuthPreSignUpFunctionLogsA970770A",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "AuthPreSignUpFunctionServiceRole177F00C8",
@@ -6224,6 +6307,14 @@ function handler(event) {
         "Timeout": 5,
       },
       "Type": "AWS::Lambda::Function",
+    },
+    "AuthPreSignUpFunctionLogsA970770A": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "AuthPreSignUpFunctionServiceRole177F00C8": {
       "Properties": {
@@ -6622,6 +6713,11 @@ def sort_filter_rules(json_obj):
             "Ref": "PagesStorageErrorPagesDeploymentAwsCliLayer489B7929",
           },
         ],
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesStorageErrorPagesDeploymentLogsE2AD2D6B",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265",
@@ -6835,6 +6931,11 @@ def sort_filter_rules(json_obj):
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PageMaintenanceMaintenanceFunctionLogsEBB495AC",
+          },
+        },
         "MemorySize": 1024,
         "ReservedConcurrentExecutions": 1,
         "Role": {
@@ -6858,6 +6959,14 @@ def sort_filter_rules(json_obj):
         "Qualifier": "$LATEST",
       },
       "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "PageMaintenanceMaintenanceFunctionLogsEBB495AC": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "PageMaintenanceMaintenanceFunctionServiceRole249912DC": {
       "Properties": {
@@ -7934,6 +8043,14 @@ function buildQueryString(querystring) {
       "Type": "Custom::CDKBucketDeployment",
       "UpdateReplacePolicy": "Delete",
     },
+    "PagesStorageErrorPagesDeploymentLogsE2AD2D6B": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
     "PagesViewerAuthCookieIssuerFunction2CE09860": {
       "DependsOn": [
         "PagesViewerAuthCookieIssuerFunctionServiceRoleDefaultPolicyBBA8F934",
@@ -7964,6 +8081,11 @@ function buildQueryString(querystring) {
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesViewerAuthCookieIssuerFunctionLogs2082B6B0",
+          },
+        },
         "MemorySize": 512,
         "Role": {
           "Fn::GetAtt": [
@@ -7987,6 +8109,14 @@ function buildQueryString(querystring) {
         },
       },
       "Type": "AWS::Lambda::Url",
+    },
+    "PagesViewerAuthCookieIssuerFunctionLogs2082B6B0": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "PagesViewerAuthCookieIssuerFunctionServiceRoleC0D8DAC6": {
       "Properties": {
@@ -8114,6 +8244,11 @@ function buildQueryString(querystring) {
         },
         "Description": "pages: Signed Cookie の鍵ペアを生成して SSM に置く",
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesViewerAuthSigningKeyPairFunctionLogsBB55202D",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "PagesViewerAuthSigningKeyPairFunctionServiceRole1E69C3AE",
@@ -8124,6 +8259,14 @@ function buildQueryString(querystring) {
         "Timeout": 30,
       },
       "Type": "AWS::Lambda::Function",
+    },
+    "PagesViewerAuthSigningKeyPairFunctionLogsBB55202D": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "PagesViewerAuthSigningKeyPairFunctionServiceRole1E69C3AE": {
       "Properties": {
@@ -8192,6 +8335,14 @@ function buildQueryString(querystring) {
       },
       "Type": "AWS::IAM::Policy",
     },
+    "PagesViewerAuthSigningKeyPairProviderLogs7583B073": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
     "PagesViewerAuthSigningKeyPairProviderframeworkonEvent795FBD1A": {
       "DependsOn": [
         "PagesViewerAuthSigningKeyPairProviderframeworkonEventServiceRoleDefaultPolicy23603E7F",
@@ -8217,6 +8368,9 @@ function buildQueryString(querystring) {
         "LoggingConfig": {
           "ApplicationLogLevel": "FATAL",
           "LogFormat": "JSON",
+          "LogGroup": {
+            "Ref": "PagesViewerAuthSigningKeyPairProviderLogs7583B073",
+          },
         },
         "Role": {
           "Fn::GetAtt": [

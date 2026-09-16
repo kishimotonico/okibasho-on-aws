@@ -8,8 +8,10 @@ import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { S3EventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { LogGroup } from 'aws-cdk-lib/aws-logs';
 import { EventType, type Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { LOG_GROUP_OPTIONS } from '../log-retention.js';
 
 export interface PageMaintenanceProps {
   /** pages bucket。Lambdaがmeta/配下のmetadataを読み、期限切れのpages/配下を削除する */
@@ -44,6 +46,7 @@ export class PageMaintenance extends Construct {
     this.maintenanceFunction = new NodejsFunction(this, 'MaintenanceFunction', {
       entry: join(dirname(fileURLToPath(import.meta.url)), '../lambda/page-maintenance/index.ts'),
       handler: 'handler',
+      logGroup: new LogGroup(this, 'MaintenanceFunctionLogs', LOG_GROUP_OPTIONS),
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
       timeout: Duration.minutes(1),

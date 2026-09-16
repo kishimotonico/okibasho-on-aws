@@ -661,6 +661,8 @@ CloudFront の Geo restriction を日本に絞る。無料である。WAF は月
 
 CloudWatch Logs に最低限、Signed Cookie 発行の成功/失敗、PageMaintenance の削除件数、authorization 失敗を記録する。JWT と refresh token はログに出さない。
 
+ロググループは保持期間 90 日、スタック削除で一緒に消す。CDK が内部で作る Lambda（S3 通知と `autoDeleteObjects`）と CloudFront Functions のロググループは CDK から指定する口が無いため、この設定の対象外になる。
+
 PageMaintenance の定期処理は削除した prefix を残し、誤削除の調査に使えるようにする。
 
 share-id・tag は credential として扱い、ログに全体を出さない。PageMaintenance は監査用に put・delete ごとに prefix と tag の先頭 4 文字 + `…` を出す。
