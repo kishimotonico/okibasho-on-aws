@@ -3,7 +3,7 @@ import { useRouterState } from '@tanstack/react-router';
 
 import { useAuth } from '~/auth/auth-context';
 import { LoadingShell } from '~/components/LoadingShell';
-import { UtilityMenu } from '~/components/UtilityMenu';
+import { UtilityMenu, UtilityMenuPlaceholder } from '~/components/UtilityMenu';
 
 // 管理UIはチーム内専用でIAMがセキュリティ境界のため、未ログインで見せる画面は用意しない
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -35,14 +35,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {isLoading ? (
-        // モバイル幅では UtilityMenu が行を取るため、同じ寸法のプレースホルダーで場所を空けておく
-        <div className="utility-menu" aria-hidden>
-          <span className="utility-menu__placeholder" />
-        </div>
-      ) : (
-        <UtilityMenu />
-      )}
+      {/* /callback で見せるのはログイン失敗の画面だけなので、メニューは出さず場所だけ空ける */}
+      {isLoading || isCallback ? <UtilityMenuPlaceholder /> : <UtilityMenu />}
       <main className="main">{isLoading ? <LoadingShell /> : children}</main>
     </>
   );

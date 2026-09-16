@@ -358,7 +358,8 @@ components/CopyButton.tsx   URLコピーの共通部品（UploadResult / PageRow
 components/BoxBubble.tsx    箱の直下の吹き出し（error / confirm / success）。
                             success は onCopy を渡すとクリックで公開URLをコピーする
 components/{AlertDialog,Menu,Tooltip}.tsx  radix-ui のラッパー
-components/UtilityMenu.tsx  右上のログアウトメニュー
+components/UtilityMenu.tsx  右上のログアウトメニューと、読み込み中に同じ場所を空けるプレースホルダー。
+                            どちらを出すかは AuthGate が決める
 hooks/useUploadFlow.ts     アップロードの状態機械（useReducer）
 hooks/useWindowFileDrag.ts ウィンドウ全体のドラッグ監視。isDragging だけ返す
 hooks/useCopyToClipboard.ts クリップボードへのコピーと一時表示状態（2秒で idle に戻る）
