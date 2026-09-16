@@ -6,14 +6,13 @@ import { PagesDelivery } from './constructs/pages-delivery.js';
 import { PageMaintenance } from './constructs/page-maintenance.js';
 import { PagesStorage } from './constructs/pages-storage.js';
 import { PagesViewerAuth } from './constructs/pages-viewer-auth.js';
-import { ServiceDomain } from './constructs/service-domain.js';
-import type { ServiceDomainConfig } from './config.js';
+import { ServiceDomain, type ServiceDomainProps } from './constructs/service-domain.js';
 
 export interface OkibashoStackProps extends StackProps {
   /** メールドメイン。CloudFront Function が URL の user を S3 キーへ展開するときに補う */
   readonly emailDomain: string;
   /** 未設定なら CloudFront のデフォルトドメインで構築する */
-  readonly serviceDomain?: ServiceDomainConfig;
+  readonly serviceDomain?: ServiceDomainProps;
 }
 
 /**
@@ -24,7 +23,7 @@ export interface OkibashoStackProps extends StackProps {
  *   - CloudFront KeyValueStore + PageMaintenance Lambda（外部共有(/s/*)のエッジ投影に加え、
  *     期限切れページの削除も担う。別のcleanup Lambdaは作らない）
  *   - EventBridge Rule（1時間ごとの安全網 + cleanup）+ S3通知（metadataの作成・削除で即時起動）
- *   - ACM 証明書の参照 / Route 53 の Alias レコード（serviceDomain 設定時のみ）
+ *   - Route 53 の Alias レコード（serviceDomain 設定時のみ。証明書は CertificateStack）
  *   - /p/* の Signed Cookie 閲覧認証（Key Group + 発行 Lambda。serviceDomain 設定時のみ）
  */
 export class OkibashoStack extends Stack {
@@ -74,17 +73,6 @@ export class OkibashoStack extends Stack {
     new CfnOutput(this, 'PagesBaseUrl', {
       value: `https://${pagesDelivery.domainName}`,
       description: 'pages 閲覧URLのベース（CLI / Web 設定用）',
-    });
-
-    // Hosted Zone を渡さないときに外部 DNS へ登録する CNAME / ALIAS の向き先
-    new CfnOutput(this, 'PagesDistributionDomainName', {
-      value: pagesDelivery.distribution.distributionDomainName,
-      description: 'pages Distribution のドメイン',
-    });
-
-    new CfnOutput(this, 'AppDistributionDomainName', {
-      value: appDelivery.distribution.distributionDomainName,
-      description: '管理UI Distribution のドメイン',
     });
 
     new CfnOutput(this, 'PagesBucketName', {

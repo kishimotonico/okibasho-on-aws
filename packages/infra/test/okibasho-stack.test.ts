@@ -1,26 +1,54 @@
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
+import { CertificateStack } from '../lib/certificate-stack.js';
 import type { ServiceDomainConfig } from '../lib/config.js';
 import { OkibashoStack } from '../lib/okibasho-stack.js';
 
 const SERVICE_DOMAIN: ServiceDomainConfig = {
   domainName: 'okibasho.example.com',
-  certificateArn:
-    'arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000',
   hostedZone: { id: 'Z0123456789ABCDEFGHIJ', name: 'example.com' },
 };
+const ACCOUNT = '123456789012';
+
+function newApp(): App {
+  // cdk.json は読まれないので、弱参照の設定だけ同じにする
+  return new App({
+    context: {
+      'aws:cdk:bundling-stacks': [],
+      '@aws-cdk/core:defaultCrossStackReferences': 'weak',
+    },
+  });
+}
 
 /**
  * スタック全体のsnapshot。
  *
  * env / serviceDomain が未設定でも synth が通ることを担保する意図もあるため、
- * .env や環境変数は読まず、env なし（region-agnostic）で合成する。
+ * .env や環境変数は読まず、ドメイン無しは env なし（region-agnostic）で合成する。
  */
 function synth(serviceDomain?: ServiceDomainConfig): Template {
-  const app = new App({ context: { 'aws:cdk:bundling-stacks': [] } });
-  const stack = new OkibashoStack(app, 'Okibasho', { emailDomain: 'example.jp', serviceDomain });
+  if (serviceDomain) {
+    return synthWithDomain(serviceDomain).main;
+  }
+  const stack = new OkibashoStack(newApp(), 'Okibasho', { emailDomain: 'example.jp' });
   return Template.fromStack(stack);
+}
+
+// Fn::GetStackOutput のリージョンを決めるため、両スタックとも env を固定する
+function synthWithDomain(serviceDomain: ServiceDomainConfig) {
+  const app = newApp();
+  const certificateStack = new CertificateStack(app, 'OkibashoCertificate', {
+    env: { account: ACCOUNT, region: 'us-east-1' },
+    serviceDomain,
+  });
+  const main = new OkibashoStack(app, 'Okibasho', {
+    env: { account: ACCOUNT, region: 'ap-northeast-1' },
+    emailDomain: 'example.jp',
+    serviceDomain: certificateStack.serviceDomain,
+  });
+  main.addStackDependency(certificateStack);
+  return { main: Template.fromStack(main), certificate: Template.fromStack(certificateStack) };
 }
 
 // テストでは bundling を飛ばすため、Lambda アセットのハッシュはリポジトリ直下の
@@ -70,7 +98,42 @@ describe('OkibashoStack', () => {
   });
 
   it('独自ドメインありのテンプレートが意図せず変化していない', () => {
-    expect(normalizedJson(synth(SERVICE_DOMAIN))).toMatchSnapshot();
+    const { main, certificate } = synthWithDomain(SERVICE_DOMAIN);
+    expect(normalizedJson(certificate)).toMatchSnapshot();
+    expect(normalizedJson(main)).toMatchSnapshot();
+  });
+
+  describe('CertificateStack', () => {
+    it('us-east-1 のスタックで pages と app の証明書を DNS 検証する', () => {
+      const { certificate } = synthWithDomain(SERVICE_DOMAIN);
+
+      certificate.resourceCountIs('AWS::CertificateManager::Certificate', 1);
+      certificate.hasResourceProperties('AWS::CertificateManager::Certificate', {
+        DomainName: 'okibasho.example.com',
+        SubjectAlternativeNames: ['app.okibasho.example.com'],
+        ValidationMethod: 'DNS',
+        DomainValidationOptions: Match.arrayWith([
+          { DomainName: 'okibasho.example.com', HostedZoneId: SERVICE_DOMAIN.hostedZone.id },
+        ]),
+      });
+    });
+
+    it('メインスタックは証明書を持たず、ARN を Fn::GetStackOutput で受ける', () => {
+      const { main } = synthWithDomain(SERVICE_DOMAIN);
+
+      main.resourceCountIs('AWS::CertificateManager::Certificate', 0);
+      const distributions = Object.values(main.findResources('AWS::CloudFront::Distribution'));
+      for (const distribution of distributions) {
+        expect(
+          distribution.Properties?.DistributionConfig?.ViewerCertificate?.AcmCertificateArn,
+        ).toEqual({
+          'Fn::GetStackOutput': expect.objectContaining({
+            StackName: 'OkibashoCertificate',
+            Region: 'us-east-1',
+          }),
+        });
+      }
+    });
   });
 
   describe('ServiceDomain', () => {
@@ -98,7 +161,6 @@ describe('OkibashoStack', () => {
             Comment: comment,
             Aliases: [alias],
             ViewerCertificate: Match.objectLike({
-              AcmCertificateArn: SERVICE_DOMAIN.certificateArn,
               SslSupportMethod: 'sni-only',
             }),
           }),
@@ -118,7 +180,7 @@ describe('OkibashoStack', () => {
         'AAAA app.okibasho.example.com.',
       ]);
       template.allResourcesProperties('AWS::Route53::RecordSet', {
-        HostedZoneId: SERVICE_DOMAIN.hostedZone!.id,
+        HostedZoneId: SERVICE_DOMAIN.hostedZone.id,
       });
     });
 
@@ -146,6 +208,30 @@ describe('OkibashoStack', () => {
   });
 
   describe('PagesViewerAuth', () => {
+    it('鍵ペアはカスタムリソースで作り、公開鍵をその属性から PublicKey に渡す', () => {
+      const template = synth(SERVICE_DOMAIN);
+
+      const keyPairs = template.findResources('Custom::SigningKeyPair');
+      expect(Object.values(keyPairs)).toHaveLength(1);
+      const [keyPairId, keyPair] = Object.entries(keyPairs)[0]!;
+      expect(keyPair.Properties).toMatchObject({
+        ParameterPrefix: '/Okibasho/pages-signing',
+        Generation: '1',
+      });
+      // Provider フレームワークの onEvent 関数
+      expect(JSON.stringify(keyPair.Properties.ServiceToken)).toContain('framework');
+
+      template.hasResourceProperties('AWS::CloudFront::PublicKey', {
+        PublicKeyConfig: Match.objectLike({
+          EncodedKey: { 'Fn::GetAtt': [keyPairId, 'PublicKeyPem'] },
+        }),
+      });
+      // 鍵は Lambda が SSM に置くので、テンプレートに SSM パラメータの参照は無い
+      expect(Object.keys(template.toJSON().Parameters ?? {})).not.toContainEqual(
+        expect.stringMatching(/pagessigning/),
+      );
+    });
+
     it('独自ドメインが無ければ Key Group・/auth/*・403 ページを作らない', () => {
       const template = synth();
 
@@ -353,7 +439,7 @@ describe('OkibashoStack', () => {
         }),
       });
 
-      // error-scrubberを廃止したのでviewer-responseの関連付けはもう無い
+      // viewer-responseの関連付けは無い
       const defaultFunctionAssociations =
         pagesDistribution?.Properties?.DistributionConfig?.DefaultCacheBehavior
           ?.FunctionAssociations;
