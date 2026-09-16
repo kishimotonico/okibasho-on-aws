@@ -213,10 +213,10 @@ pages Distribution のデフォルトビヘイビア（`/p/*`）に Trusted Key 
 
 | パラメータ | 種類 | 使う場所 |
 | --- | --- | --- |
-| `/<スタック名>/pages-signing/public-key` | String（PEM） | Update 時に同じ公開鍵を返すために保持する。`PublicKey` の `encodedKey` には Create / Update の戻り値（`getAttString`）を渡す |
-| `/<スタック名>/pages-signing/private-key` | SecureString（PEM） | 発行 Lambda がコールドスタート時に `GetParameter`（復号あり）で読む |
+| `/<スタック名>/pages-signing/<generation>/public-key` | String（PEM） | Update で同じ公開鍵を返すために保持する。`PublicKey` の `encodedKey` には Create / Update の戻り値（`getAttString`）を渡す |
+| `/<スタック名>/pages-signing/<generation>/private-key` | SecureString（PEM） | 発行 Lambda がコールドスタート時に `GetParameter`（復号あり）で読む |
 
-Create で生成、Update は何もせず同じ公開鍵を返す、Delete で 2 つのパラメータを消す。鍵を作り直したいときはカスタムリソースの `generation` プロパティを進めて再デプロイする。公開鍵が変わって `PublicKey` が置き換わり、古い Cookie は 403 になって再ログインが走るだけで済む。
+鍵ペアは generation ごとに不変で、PhysicalResourceId はその generation のパラメータのプレフィックスである。Create で生成し、Delete でその generation の 2 つを消す。`generation` を進めると Update は新しい PhysicalResourceId で新しい鍵ペアを作り、旧 generation の削除は CloudFormation が送る Delete に任せる（Rollback も同じ仕組みで元の generation に戻る）。handler は既存のパラメータを上書きしない。公開鍵が変わって `PublicKey` が置き換わり、古い Cookie は 403 になって再ログインが走るだけで済む。新旧の公開鍵を Key Group に併存させる無停止ローテーションは持たない。
 
 発行するのは `/auth/*` の Lambda 1 つ。Function URL を Lambda OAC 付きで app Distribution の `/auth/*` ビヘイビアに紐づけ、CloudFront 経由でしか呼べないようにする。
 

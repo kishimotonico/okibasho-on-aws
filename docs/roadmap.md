@@ -26,6 +26,15 @@ PR 3: 証明書と鍵ペアの IaC 化（`packages/infra` のみ）
 
 受け入れ: `.env` に 3 つ書いて `cdk bootstrap`（デプロイ先と us-east-1）→ `cdk deploy --all` だけで証明書・DNS 検証・Alias レコード・鍵ペアまで揃い、手順書から AWS CLI の操作が消える。`cdk destroy --all` で証明書と SSM パラメータも消える。
 
+PR 4: 鍵ペアを generation ごとの不変リソースにする（`packages/infra` のみ。Codex のセカンドオピニオンから採用）
+
+- [ ] `SigningKeyPair` の SSM パラメータ名を `/<スタック名>/pages-signing/<generation>/{public-key,private-key}` にし、PhysicalResourceId をその generation のプレフィックスにする。`privateKeyParameterName` も generation 込みになる
+- [ ] handler: Create は生成、Update は「generation（プレフィックス）が変わったら新しい PhysicalResourceId で Create と同じ処理、同じなら SSM の公開鍵を返す」に単純化し、既存パラメータの上書き（Put の `Overwrite`）と「変わったか比較して作り直す」分岐を消す。Delete はその PhysicalResourceId の 2 つを消す（無くても成功）。旧 generation の削除は CloudFormation が送る Delete に任せる
+- [ ] Lambda の IAM は `/<スタック名>/pages-signing/*` 配下のまま（generation をまたぐため）
+- [ ] 単体テストと snapshot を更新する
+
+受け入れ: `generation` を進めてデプロイすると新しいパラメータが作られ、旧 generation は CloudFormation の Delete で消える。ロールバックすると旧 generation のパラメータがそのまま使われる。
+
 デプロイ後に確認する点:
 
 - Lambda OAC 越しの POST が通ること（`x-amz-content-sha256` が無いと 403 になるはず。`Authorization` は CloudFront が上書きするためボディで渡す設計にしている）

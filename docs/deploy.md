@@ -85,10 +85,12 @@ aws cloudfront create-invalidation --paths '/*' --distribution-id \
 
 ```bash
 curl -sI https://okibasho.example.com/            | head -1     # 302（app へ）
-curl -sI https://okibasho.example.com/p/x/y/      | head -1     # 403（Cookie 無し。本文は errors/403.html）
+curl -s  https://okibasho.example.com/p/x/y/      | rg -c pages-login   # 1（Cookie 無しの 403 が errors/403.html で返っている）
 curl -sI https://okibasho.example.com/nothing     | head -1     # 404
 curl -sI https://app.okibasho.example.com/        | head -1     # 200
 ```
+
+2 行目が 0 なら CloudFront 標準の 403 が返っていて、署名検証の 403 にカスタムエラーレスポンスが効いていない。
 
 ブラウザで確認すること:
 
