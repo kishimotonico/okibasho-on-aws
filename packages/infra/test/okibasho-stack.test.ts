@@ -214,10 +214,7 @@ describe('OkibashoStack', () => {
       const keyPairs = template.findResources('Custom::SigningKeyPair');
       expect(Object.values(keyPairs)).toHaveLength(1);
       const [keyPairId, keyPair] = Object.entries(keyPairs)[0]!;
-      expect(keyPair.Properties).toMatchObject({
-        ParameterPrefix: '/Okibasho/pages-signing',
-        Generation: '1',
-      });
+      expect(keyPair.Properties).toMatchObject({ ParameterPrefix: '/Okibasho/pages-signing/1' });
       // Provider フレームワークの onEvent 関数
       expect(JSON.stringify(keyPair.Properties.ServiceToken)).toContain('framework');
 
@@ -226,6 +223,20 @@ describe('OkibashoStack', () => {
           EncodedKey: { 'Fn::GetAtt': [keyPairId, 'PublicKeyPem'] },
         }),
       });
+      // 発行 Lambda は generation 込みの秘密鍵を読み、鍵ペア Lambda は generation をまたいで操作できる
+      const statements = Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
+        (policy) => policy.Properties.PolicyDocument.Statement as Array<Record<string, unknown>>,
+      );
+      const ssmResources = statements
+        .filter((st) => JSON.stringify(st.Action).includes('ssm:'))
+        .map((st) => JSON.stringify(st.Resource));
+      expect(ssmResources).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(':parameter/Okibasho/pages-signing/*'),
+          expect.stringContaining(':parameter/Okibasho/pages-signing/1/private-key'),
+        ]),
+      );
+
       // 鍵は Lambda が SSM に置くので、テンプレートに SSM パラメータの参照は無い
       expect(Object.keys(template.toJSON().Parameters ?? {})).not.toContainEqual(
         expect.stringMatching(/pagessigning/),
