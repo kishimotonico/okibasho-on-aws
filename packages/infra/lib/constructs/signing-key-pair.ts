@@ -10,7 +10,7 @@ import { Construct } from 'constructs';
 export interface SigningKeyPairProps {
   /** SSM パラメータ名のプレフィックス。`/` で始める */
   readonly parameterPrefix: string;
-  /** 進めると鍵ペアを作り直す */
+  /** 鍵ペアの世代。値を変えると CloudFormation がこのリソースを置き換え、新しい鍵ペアを作って古い世代を消す */
   readonly generation: number;
 }
 

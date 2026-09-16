@@ -36,7 +36,7 @@ export class PagesViewerAuth extends Construct {
 
     const keyPair = new SigningKeyPair(this, 'SigningKeyPair', {
       parameterPrefix: `/${Stack.of(this).stackName}/pages-signing`,
-      // 鍵を作り直すときは進める。古い Cookie は 403 になって再ログインが走るだけ
+      // 秘密鍵が漏れた疑いがあるときなど、鍵を作り直したいときだけ 1 増やす。発行済みの Cookie は無効になる
       generation: 1,
     });
     const publicKey = new PublicKey(this, 'PublicKey', {
