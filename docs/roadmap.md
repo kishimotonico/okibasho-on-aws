@@ -16,13 +16,13 @@ CloudFront のデフォルトドメインで初回デプロイ済み。web / CLI
 
 PR 1: ドメインの付け替え（`packages/infra` のみ）
 
-- [ ] `config.ts` を `SERVICE_DOMAIN` / `CERTIFICATE_ARN` / `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` に置き換える。pages と app のホスト名は導出し、組み合わせの不備は synth で止める。`.env.example` は更新済み
-- [ ] `ServiceDomain` Construct（`constructs/service-domain.ts`）。`Certificate.fromCertificateArn`、`HostedZone.fromHostedZoneAttributes`（渡されたときだけ）、pages / app の `{ domainName, certificate }`、Distribution を受け取って Alias レコード（pages は A のみ。IPv6 を無効にしているため。app は A と AAAA）を作るメソッド
-- [ ] `PagesDelivery` / `AppDelivery` に `customDomain?: { domainName, certificate }` を足し、`domainName`（独自ドメインか Distribution ドメイン）を公開する。Distribution の `domainNames` / `certificate` は props の spread で渡すだけにする
-- [ ] `Auth` の `appDomain` / `appDistributionDomain` を `appDomainName` 1 つにまとめる。CfnOutput（`PagesBaseUrl` / `AppUrl`）と CORS の許可 origin も `domainName` から組み立てる。Hosted Zone を渡さないときのために `PagesDistributionDomainName` / `AppDistributionDomainName` を Output に足す
-- [ ] `pages-router.js` に app の URL を埋め込み、`/` を app へ 302 する（ドメインの有無に関係なく常に）。`pages-router.test.ts` に追加
-- [ ] snapshot テストにドメインあり（固定の ARN・Hosted Zone）を追加し、alias・証明書・Alias レコードをアサートする
-- [ ] `packages/cli/src/config.ts` と `constructs/auth.ts` に残る `share.example.jp` の例を `okibasho.example.com` に直す
+- [x] `config.ts` を `SERVICE_DOMAIN` / `CERTIFICATE_ARN` / `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` に置き換える。pages と app のホスト名は導出し、組み合わせの不備は synth で止める。`.env.example` は更新済み
+- [x] `ServiceDomain` Construct（`constructs/service-domain.ts`）。`Certificate.fromCertificateArn`、`HostedZone.fromHostedZoneAttributes`（渡されたときだけ）、pages / app の `{ domainName, certificate }`、Distribution を受け取って Alias レコード（pages は A のみ。IPv6 を無効にしているため。app は A と AAAA）を作るメソッド
+- [x] `PagesDelivery` / `AppDelivery` に `customDomain?: { domainName, certificate }` を足し、`domainName`（独自ドメインか Distribution ドメイン）を公開する。Distribution の `domainNames` / `certificate` は props の spread で渡すだけにする
+- [x] `Auth` の `appDomain` / `appDistributionDomain` を `appDomainName` 1 つにまとめる。CfnOutput（`PagesBaseUrl` / `AppUrl`）と CORS の許可 origin も `domainName` から組み立てる。Hosted Zone を渡さないときのために `PagesDistributionDomainName` / `AppDistributionDomainName` を Output に足す
+- [x] `pages-router.js` に app の URL を埋め込み、`/` を app へ 302 する（ドメインの有無に関係なく常に）。`pages-router.test.ts` に追加
+- [x] snapshot テストにドメインあり（固定の ARN・Hosted Zone）を追加し、alias・証明書・Alias レコードをアサートする
+- [x] `packages/cli/src/config.ts` と `constructs/auth.ts` に残る `share.example.jp` の例を `okibasho.example.com` に直す
 
 受け入れ: `SERVICE_DOMAIN` 未設定で今までどおり synth・deploy でき、設定すると `PagesBaseUrl` が `https://okibasho.example.com`、`AppUrl` が `https://app.okibasho.example.com/` になり、ブラウザで両方開ける。apex の `/` は app へ飛ぶ。
 

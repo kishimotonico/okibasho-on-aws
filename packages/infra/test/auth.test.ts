@@ -4,13 +4,13 @@ import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
 import { describe, expect, it } from 'vitest';
 import { Auth } from '../lib/constructs/auth.js';
 
-function synthAuth(props: { appDomain?: string; appDistributionDomain?: string } = {}): Template {
+function synthAuth(): Template {
   const app = new App();
   const stack = new Stack(app, 'TestStack');
   const pagesBucket = new Bucket(stack, 'PagesBucket', {
     blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
   });
-  new Auth(stack, 'Auth', { ...props, pagesBucket });
+  new Auth(stack, 'Auth', { appDomainName: 'app.okibasho.example.com', pagesBucket });
   return Template.fromStack(stack);
 }
 
@@ -24,53 +24,19 @@ function findClientByCallback(
 }
 
 describe('Auth', () => {
-  it('appDomain未設定でもsynthが通る', () => {
-    const template = synthAuth();
-
-    template.resourceCountIs('AWS::Cognito::UserPool', 1);
-    template.resourceCountIs('AWS::Cognito::UserPoolClient', 2);
-    template.resourceCountIs('AWS::Cognito::IdentityPool', 1);
-  });
-
-  it('appDomain未設定のときWebクライアントのコールバックはlocalhostのみ', () => {
+  it('Webクライアントのコールバックはlocalhostと管理UIのホスト名', () => {
     const template = synthAuth();
     const clients = template.findResources('AWS::Cognito::UserPoolClient');
     const webClient = findClientByCallback(clients, 'http://localhost:3000/callback');
 
-    expect(webClient?.Properties?.CallbackURLs).toEqual(['http://localhost:3000/callback']);
-    expect(webClient?.Properties?.LogoutURLs).toEqual(['http://localhost:3000']);
-  });
-
-  it('appDomain指定時はWebクライアントのコールバックに本番URLが追加される', () => {
-    const template = synthAuth({ appDomain: 'app.share.example.jp' });
-    const clients = template.findResources('AWS::Cognito::UserPoolClient');
-    const webClient = findClientByCallback(clients, 'http://localhost:3000/callback');
-
-    expect(webClient?.Properties?.CallbackURLs).toEqual(
-      expect.arrayContaining([
-        'http://localhost:3000/callback',
-        'https://app.share.example.jp/callback',
-      ]),
-    );
-    expect(webClient?.Properties?.LogoutURLs).toEqual(
-      expect.arrayContaining(['http://localhost:3000', 'https://app.share.example.jp']),
-    );
-  });
-
-  it('appDistributionDomain指定時はWebクライアントのコールバックにDistributionドメインが追加される', () => {
-    const template = synthAuth({ appDistributionDomain: 'd111111abcdef8.cloudfront.net' });
-    const clients = template.findResources('AWS::Cognito::UserPoolClient');
-    const webClient = findClientByCallback(clients, 'http://localhost:3000/callback');
-
-    expect(webClient?.Properties?.CallbackURLs).toEqual(
-      expect.arrayContaining([
-        'http://localhost:3000/callback',
-        'https://d111111abcdef8.cloudfront.net/callback',
-      ]),
-    );
-    expect(webClient?.Properties?.LogoutURLs).toEqual(
-      expect.arrayContaining(['http://localhost:3000', 'https://d111111abcdef8.cloudfront.net']),
-    );
+    expect(webClient?.Properties?.CallbackURLs).toEqual([
+      'http://localhost:3000/callback',
+      'https://app.okibasho.example.com/callback',
+    ]);
+    expect(webClient?.Properties?.LogoutURLs).toEqual([
+      'http://localhost:3000',
+      'https://app.okibasho.example.com',
+    ]);
   });
 
   it('CLIコールバックは127.0.0.1の3ポート', () => {

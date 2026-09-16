@@ -147,7 +147,7 @@ export async function resolveConfig(options: ResolveConfigOptions = {}): Promise
       '  "userPoolId": "...",',
       '  "region": "ap-northeast-1",',
       '  "bucket": "...",',
-      '  "pagesBaseUrl": "https://pages.share.example.jp"',
+      '  "pagesBaseUrl": "https://okibasho.example.com"',
       '}',
     ];
     throw new ConfigError(lines.join('\n'));

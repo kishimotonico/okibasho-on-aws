@@ -1,8 +1,20 @@
 const EMAIL_DOMAIN = '__EMAIL_DOMAIN__';
+const APP_ORIGIN = '__APP_ORIGIN__';
 
 function handler(event) {
   var request = event.request;
   var uri = request.uri;
+
+  // pages のトップに置くものは無いので管理UIへ案内する
+  if (uri === '/') {
+    return {
+      statusCode: 302,
+      statusDescription: 'Found',
+      headers: {
+        location: { value: APP_ORIGIN + '/' },
+      },
+    };
+  }
 
   if (uri.indexOf('%2f') !== -1 || uri.indexOf('%2F') !== -1) {
     return notFound();
