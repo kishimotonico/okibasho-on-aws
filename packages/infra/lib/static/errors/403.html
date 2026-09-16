@@ -9,6 +9,11 @@
       (function () {
         var APP_ORIGIN = '__APP_ORIGIN__';
         var KEY = 'okibasho:pages-login:redirectedAt';
+        // 署名検証が pages-router より先に走ると / もここに来る
+        if (location.pathname === '/') {
+          location.replace(APP_ORIGIN + '/');
+          return;
+        }
         if (location.pathname.indexOf('/p/') !== 0) {
           return;
         }
