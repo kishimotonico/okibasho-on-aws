@@ -20,6 +20,7 @@ import {
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import type { IBucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import type { CustomDomain } from './service-domain.js';
 
 export interface PagesDeliveryProps {
   readonly bucket: IBucket;
@@ -27,6 +28,10 @@ export interface PagesDeliveryProps {
   readonly emailDomain: string;
   /** 外部共有(/s/*)のエッジ投影先KVS。share-router.jsがここを参照する */
   readonly shareKeyValueStore: IKeyValueStore;
+  /** 管理UIの origin (例: https://app.okibasho.example.com)。`/` をここへ飛ばす */
+  readonly appOrigin: string;
+  /** 未指定なら CloudFront のデフォルトドメインで配信する */
+  readonly customDomain?: CustomDomain;
 }
 
 /**
@@ -34,6 +39,8 @@ export interface PagesDeliveryProps {
  */
 export class PagesDelivery extends Construct {
   readonly distribution: Distribution;
+  /** pages のホスト名。独自ドメインか Distribution のデフォルトドメイン */
+  readonly domainName: string;
 
   constructor(scope: Construct, id: string, props: PagesDeliveryProps) {
     super(scope, id);
@@ -41,7 +48,9 @@ export class PagesDelivery extends Construct {
     const routerSource = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), '../functions/pages-router.js'),
       'utf-8',
-    ).replaceAll('__EMAIL_DOMAIN__', props.emailDomain);
+    )
+      .replaceAll('__EMAIL_DOMAIN__', props.emailDomain)
+      .replaceAll('__APP_ORIGIN__', props.appOrigin);
 
     const routerFunction = new Function(this, 'RouterFunction', {
       code: FunctionCode.fromInline(routerSource),
@@ -104,6 +113,10 @@ export class PagesDelivery extends Construct {
       geoRestriction: GeoRestriction.allowlist('JP'),
       // IPv4完全一致でのIP制限(share-router.js)を確実に効かせるためIPv6は無効化する
       enableIpv6: false,
+      ...(props.customDomain && {
+        domainNames: [props.customDomain.domainName],
+        certificate: props.customDomain.certificate,
+      }),
       defaultBehavior: {
         origin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -152,5 +165,6 @@ export class PagesDelivery extends Construct {
         },
       ],
     });
+    this.domainName = props.customDomain?.domainName ?? this.distribution.distributionDomainName;
   }
 }

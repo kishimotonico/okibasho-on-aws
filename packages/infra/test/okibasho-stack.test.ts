@@ -1,22 +1,34 @@
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
+import type { ServiceDomainConfig } from '../lib/config.js';
 import { OkibashoStack } from '../lib/okibasho-stack.js';
+
+const SERVICE_DOMAIN: ServiceDomainConfig = {
+  domainName: 'okibasho.example.com',
+  certificateArn:
+    'arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000',
+  hostedZone: { id: 'Z0123456789ABCDEFGHIJ', name: 'example.com' },
+};
 
 /**
  * スタック全体のsnapshot。
  *
- * env / domains が未設定でも synth が通ることを担保する意図もあるため、
+ * env / serviceDomain が未設定でも synth が通ることを担保する意図もあるため、
  * .env や環境変数は読まず、env なし（region-agnostic）で合成する。
  */
-function synth(): Template {
+function synth(serviceDomain?: ServiceDomainConfig): Template {
   const app = new App({ context: { 'aws:cdk:bundling-stacks': [] } });
-  const stack = new OkibashoStack(app, 'Okibasho', { emailDomain: 'example.jp' });
+  const stack = new OkibashoStack(app, 'Okibasho', { emailDomain: 'example.jp', serviceDomain });
   return Template.fromStack(stack);
 }
 
-function synthJson(): Record<string, unknown> {
-  return synth().toJSON() as Record<string, unknown>;
+// テストでは bundling を飛ばすため、Lambda アセットのハッシュはリポジトリ直下の
+// ソースハッシュになり、無関係なファイルの変化でも揺れる。snapshot からは外す
+function normalizedJson(template: Template): unknown {
+  return JSON.parse(
+    JSON.stringify(template.toJSON()).replace(/[0-9a-f]{64}\.zip/g, '<asset-hash>.zip'),
+  );
 }
 
 type DistributionResource = {
@@ -54,12 +66,83 @@ function findDistributionByComment(
 
 describe('OkibashoStack', () => {
   it('テンプレートが意図せず変化していない', () => {
-    // テストでは bundling を飛ばすため、Lambda アセットのハッシュはリポジトリ直下の
-    // ソースハッシュになり、無関係なファイルの変化でも揺れる。snapshot からは外す
-    const normalized = JSON.parse(
-      JSON.stringify(synthJson()).replace(/[0-9a-f]{64}\.zip/g, '<asset-hash>.zip'),
-    );
-    expect(normalized).toMatchSnapshot();
+    expect(normalizedJson(synth())).toMatchSnapshot();
+  });
+
+  it('独自ドメインありのテンプレートが意図せず変化していない', () => {
+    expect(normalizedJson(synth(SERVICE_DOMAIN))).toMatchSnapshot();
+  });
+
+  describe('ServiceDomain', () => {
+    it('未設定なら alias・証明書・Route 53 レコードを作らない', () => {
+      const template = synth();
+
+      template.resourceCountIs('AWS::Route53::RecordSet', 0);
+      for (const distribution of Object.values(
+        template.findResources('AWS::CloudFront::Distribution'),
+      )) {
+        expect(distribution.Properties?.DistributionConfig?.Aliases).toBeUndefined();
+        expect(distribution.Properties?.DistributionConfig?.ViewerCertificate).toBeUndefined();
+      }
+    });
+
+    it('pages は apex、app は app. に alias と証明書を付ける', () => {
+      const template = synth(SERVICE_DOMAIN);
+
+      for (const [comment, alias] of [
+        ['pages配信', 'okibasho.example.com'],
+        ['trusted 管理UI配信', 'app.okibasho.example.com'],
+      ] as const) {
+        template.hasResourceProperties('AWS::CloudFront::Distribution', {
+          DistributionConfig: Match.objectLike({
+            Comment: comment,
+            Aliases: [alias],
+            ViewerCertificate: Match.objectLike({
+              AcmCertificateArn: SERVICE_DOMAIN.certificateArn,
+              SslSupportMethod: 'sni-only',
+            }),
+          }),
+        });
+      }
+    });
+
+    it('Alias レコードは pages に A、app に A と AAAA', () => {
+      const template = synth(SERVICE_DOMAIN);
+
+      const records = Object.values(template.findResources('AWS::Route53::RecordSet')).map(
+        (record) => `${record.Properties?.Type} ${record.Properties?.Name}`,
+      );
+      expect(records.sort()).toEqual([
+        'A app.okibasho.example.com.',
+        'A okibasho.example.com.',
+        'AAAA app.okibasho.example.com.',
+      ]);
+      template.allResourcesProperties('AWS::Route53::RecordSet', {
+        HostedZoneId: SERVICE_DOMAIN.hostedZone!.id,
+      });
+    });
+
+    it('URL の Output・CORS・Cognito コールバックは独自ドメインから組み立てる', () => {
+      const template = synth(SERVICE_DOMAIN);
+
+      template.hasOutput('PagesBaseUrl', { Value: 'https://okibasho.example.com' });
+      template.hasOutput('AppUrl', { Value: 'https://app.okibasho.example.com/' });
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        CorsConfiguration: {
+          CorsRules: [
+            Match.objectLike({
+              AllowedOrigins: ['https://app.okibasho.example.com', 'http://localhost:3000'],
+            }),
+          ],
+        },
+      });
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        CallbackURLs: [
+          'http://localhost:3000/callback',
+          'https://app.okibasho.example.com/callback',
+        ],
+      });
+    });
   });
 
   describe('PagesStorage', () => {

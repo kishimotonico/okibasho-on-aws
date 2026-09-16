@@ -31,12 +31,15 @@ const functionPath = join(
 );
 
 const EMAIL_DOMAIN = 'example.jp';
+const APP_ORIGIN = 'https://app.okibasho.example.com';
 const USER = 'tanaka';
 const SLUG = 'q3-report';
 
 function loadHandler(): (event: { request: CloudFrontRequest }) => HandlerResult {
   let source = readFileSync(functionPath, 'utf-8');
-  source = source.replaceAll('__EMAIL_DOMAIN__', EMAIL_DOMAIN);
+  source = source
+    .replaceAll('__EMAIL_DOMAIN__', EMAIL_DOMAIN)
+    .replaceAll('__APP_ORIGIN__', APP_ORIGIN);
 
   const sandbox: { handler?: (event: { request: CloudFrontRequest }) => HandlerResult } = {};
   runInNewContext(source, sandbox);
@@ -59,6 +62,16 @@ function makeEvent(uri: string, querystring: Record<string, CloudFrontQueryEntry
 
 describe('pages-router', () => {
   const handler = loadHandler();
+
+  it('/ は管理UIへ 302 redirect する', () => {
+    const result = handler(makeEvent('/'));
+    expect(result).toMatchObject({
+      statusCode: 302,
+      headers: {
+        location: { value: `${APP_ORIGIN}/` },
+      },
+    });
+  });
 
   it('/p/<user>/<slug>/ を pages/<user>@<domain>/<slug>/index.html に rewrite する', () => {
     const result = handler(makeEvent(`/p/${USER}/${SLUG}/`));

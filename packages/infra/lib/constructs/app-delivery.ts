@@ -18,6 +18,12 @@ import {
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import type { CustomDomain } from './service-domain.js';
+
+export interface AppDeliveryProps {
+  /** 未指定なら CloudFront のデフォルトドメインで配信する */
+  readonly customDomain?: CustomDomain;
+}
 
 /**
  * trusted 管理UIを CloudFront + OAC 経由で配信する Distribution。
@@ -26,8 +32,10 @@ import { Construct } from 'constructs';
 export class AppDelivery extends Construct {
   readonly bucket: Bucket;
   readonly distribution: Distribution;
+  /** 管理UIのホスト名。独自ドメインか Distribution のデフォルトドメイン */
+  readonly domainName: string;
 
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, props: AppDeliveryProps = {}) {
     super(scope, id);
 
     this.bucket = new Bucket(this, 'Bucket', {
@@ -89,6 +97,10 @@ export class AppDelivery extends Construct {
       defaultRootObject: '_shell.html',
       priceClass: PriceClass.PRICE_CLASS_200,
       httpVersion: HttpVersion.HTTP2_AND_3,
+      ...(props.customDomain && {
+        domainNames: [props.customDomain.domainName],
+        certificate: props.customDomain.certificate,
+      }),
       defaultBehavior: {
         origin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -110,5 +122,6 @@ export class AppDelivery extends Construct {
         },
       },
     });
+    this.domainName = props.customDomain?.domainName ?? this.distribution.distributionDomainName;
   }
 }

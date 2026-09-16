@@ -25,10 +25,8 @@ const WEB_LOCAL_CALLBACK_URL = 'http://localhost:3000/callback';
 const WEB_LOCAL_LOGOUT_URL = 'http://localhost:3000';
 
 export interface AuthProps {
-  /** 管理アプリのドメイン (例: app.share.example.jp)。未設定ならlocalhostのみ */
-  readonly appDomain?: string;
-  /** 管理UI用 CloudFront のデフォルトドメイン。Hosted UI のコールバック登録に使う */
-  readonly appDistributionDomain?: string;
+  /** 管理UIのホスト名 (例: app.okibasho.example.com)。Hosted UI のコールバック登録に使う */
+  readonly appDomainName: string;
   /** pages bucket。authenticated role の S3 ポリシーに使う */
   readonly pagesBucket: IBucket;
 }
@@ -78,16 +76,8 @@ export class Auth extends Construct {
       refreshTokenValidity: Duration.days(30),
     };
 
-    const webCallbackUrls = [WEB_LOCAL_CALLBACK_URL];
-    const webLogoutUrls = [WEB_LOCAL_LOGOUT_URL];
-    if (props.appDomain) {
-      webCallbackUrls.push(`https://${props.appDomain}/callback`);
-      webLogoutUrls.push(`https://${props.appDomain}`);
-    }
-    if (props.appDistributionDomain) {
-      webCallbackUrls.push(`https://${props.appDistributionDomain}/callback`);
-      webLogoutUrls.push(`https://${props.appDistributionDomain}`);
-    }
+    const webCallbackUrls = [WEB_LOCAL_CALLBACK_URL, `https://${props.appDomainName}/callback`];
+    const webLogoutUrls = [WEB_LOCAL_LOGOUT_URL, `https://${props.appDomainName}`];
 
     this.webClient = this.userPool.addClient('WebClient', {
       generateSecret: false,

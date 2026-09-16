@@ -1,34 +1,30 @@
 /**
  * デプロイ設定。環境ごとに変わる値はリポジトリに持たず、環境変数から読む。
  * `packages/infra/.env`（git 管理外）に書くか、シェルの環境変数で渡す。項目は `.env.example` を参照。
- *
- * domains はオプショナル。未設定の間はCloudFrontのデフォルトドメインで構築し、
- * 証明書・Route 53・Signed Cookie閲覧認証は作らない。
- * ドメインを用意したら環境変数を埋めるだけで有効化される想定。
- * 分岐はドメイン関連リソースの有無の1箇所に閉じ込め、他の構成には波及させないこと。
  */
 export interface Config {
   /** メールドメイン。S3 キーと CloudFront Function のドメイン補完に使う */
   emailDomain: string;
-  /** 独自ドメイン設定。未設定ならデフォルトドメインで構築する */
-  domains?: DomainsConfig;
+  /** 未設定なら CloudFront のデフォルトドメインで構築する */
+  serviceDomain?: ServiceDomainConfig;
 }
 
-export interface DomainsConfig {
-  /** Route 53 hosted zoneのドメイン (例: example.com)。Signed Cookieの発行スコープにもなる */
-  root: string;
-  /** 管理アプリ (例: app.example.com) */
-  app: string;
-  /** 内部限定の閲覧 (例: pages.example.com) */
-  pages: string;
+export interface ServiceDomainConfig {
+  /** pages を置くサービスドメイン (例: okibasho.example.com)。app は `app.` を付けて導出する */
+  domainName: string;
+  /** us-east-1 の ACM 証明書。SAN に pages と app を含む */
+  certificateArn: string;
+  /** 渡したときだけ Alias レコードを作る。サービスドメインを含む共用のゾーンでよい */
+  hostedZone?: { id: string; name: string };
 }
 
 export function loadConfig(): Config {
   const {
     EMAIL_DOMAIN: emailDomain,
-    ROOT_DOMAIN: root,
-    APP_DOMAIN: app,
-    PAGES_DOMAIN: pages,
+    SERVICE_DOMAIN: domainName,
+    CERTIFICATE_ARN: certificateArn,
+    HOSTED_ZONE_ID: hostedZoneId,
+    HOSTED_ZONE_NAME: hostedZoneName,
   } = process.env;
 
   if (!emailDomain) {
@@ -36,9 +32,28 @@ export function loadConfig(): Config {
       'EMAIL_DOMAIN が未設定です。packages/infra/.env.example を .env にコピーして埋めてください',
     );
   }
+  if (!domainName) {
+    if (certificateArn || hostedZoneId || hostedZoneName) {
+      throw new Error(
+        'CERTIFICATE_ARN / HOSTED_ZONE_ID / HOSTED_ZONE_NAME は SERVICE_DOMAIN と一緒に設定してください',
+      );
+    }
+    return { emailDomain };
+  }
+  if (!certificateArn) {
+    throw new Error('SERVICE_DOMAIN を設定するときは CERTIFICATE_ARN も必要です');
+  }
+  if (Boolean(hostedZoneId) !== Boolean(hostedZoneName)) {
+    throw new Error('HOSTED_ZONE_ID と HOSTED_ZONE_NAME は両方そろえて設定してください');
+  }
 
   return {
     emailDomain,
-    domains: root && app && pages ? { root, app, pages } : undefined,
+    serviceDomain: {
+      domainName,
+      certificateArn,
+      hostedZone:
+        hostedZoneId && hostedZoneName ? { id: hostedZoneId, name: hostedZoneName } : undefined,
+    },
   };
 }
