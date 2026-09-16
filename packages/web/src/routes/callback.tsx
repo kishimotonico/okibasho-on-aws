@@ -13,10 +13,13 @@ export const Route = createFileRoute('/callback')({
 });
 
 async function handleCallback(): Promise<void> {
-  const returnTo = await completeSignInCallbackOnce();
-  // ルートは "/" と "/callback" のみのため、ログイン前のパスは常に "/" 側。
-  // ただし ?slug=... の再アップロード指定だけは復元する。
-  const slug = new URL(returnTo, window.location.origin).searchParams.get('slug');
+  const returnTo = new URL(await completeSignInCallbackOnce(), window.location.origin);
+  // "//evil.example" のような returnTo は origin が変わるので "/" 側へ寄せる
+  if (returnTo.origin === window.location.origin && returnTo.pathname === '/pages-login') {
+    throw redirect({ href: `${returnTo.pathname}${returnTo.search}` });
+  }
+  // それ以外は "/" 側。?slug=... の再アップロード指定だけは復元する
+  const slug = returnTo.searchParams.get('slug');
   throw redirect({ to: '/', search: slug ? { slug } : {} });
 }
 
