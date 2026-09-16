@@ -4,7 +4,7 @@
 
 ## 現状
 
-CloudFront のデフォルトドメインで初回デプロイ済み。web / CLI から Cognito ローカルユーザーでログインし、Identity Pool の一時クレデンシャルで S3 に直接 PutObject / GetObject / DeleteObject / ListObjectsV2 する構成が動いている。`/p/<user>/<slug>/` の内部配信と `/s/<tag><share-id>/` の外部共有配信もどちらも実装済みで、KVS への投影と期限切れページの削除は PageMaintenance Lambda が 1 時間ごとのスケジュールで行う（S3 イベントによる該当ページだけの即時投影も別経路で動く）。
+CloudFront のデフォルトドメインで初回デプロイ済み。web / CLI から Cognito ローカルユーザーでログインし、Identity Pool の一時クレデンシャルで S3 に直接 PutObject / GetObject / DeleteObject / ListObjectsV2 する構成が動いている。`/p/<user>/<slug>/` の内部配信と `/s/<tag><share-id>/` の外部共有配信もどちらも実装済みで、期限切れページの削除は PageMaintenance Lambda が毎時、KVS 全件の突き合わせは日次で行う（S3 イベントによる該当ページだけの即時投影も別経路で動く）。
 
 独自ドメインと Signed Cookie による閲覧認証も実装・デプロイ済み。証明書と鍵ペアも CDK が作る（手順は [deploy.md](deploy.md)）。まだ入っていないのは、Google IdP、CLI の npm 配布、CI である。管理 UI の配置は `cdk deploy` とは別に手でアップロードしており、CDK に寄せるかは未決。
 
@@ -46,17 +46,18 @@ CI:
 
 ## デプロイ後に確認したい点
 
+- pages のアクセスログが S3 に届き、`/s/` のリクエストが記録されていること
 - 存在しないパスで `errors/404.html` が返り、S3 のキーが見えないこと（デプロイ後の確認は未了）
 - 不正な形式（33 文字でない、`/^[A-Za-z0-9_-]{33}$/` に合わない）の id が 404 になること
 - viewer-request の CloudFront Function が `Authorization` ヘッダを読めること（cache policy に含めていなくても）。`Authorization` ヘッダを削除して転送しても OAC の署名が壊れないこと
 - 401 でブラウザの認証ダイアログが出ること
 - `Buffer` / `crypto.createHash` / `Number.isInteger` が CloudFront Functions runtime 2.0 で動き、コードサイズとコンピュート使用率が上限内に収まること
-- `meta/` 配下の JSON の作成・削除・書き換えが数秒〜十数秒で KVS へ反映されること。S3 通知を止めても 1 時間以内の定期処理で追いつくこと
+- `meta/` 配下の JSON の作成・削除・書き換えが数秒〜十数秒で KVS へ反映されること。S3 通知を止めても日次の reconcile で追いつくこと
 - 共有を停止・削除した旧 id が 404 のままであること
 - SigV4A 署名（`@aws-sdk/signature-v4a` の副作用 import）が Lambda 実行環境で通るか
 - `NodejsFunction` の bundling（pnpm workspace 特有の PATH 調整を含む）が CI で動くか
 - CloudWatch Logs Insights で PageMaintenance Lambda の `Init Duration` / `Duration` を集計する。共有を ON にしてから `/s/` が 404 以外を返すまでの時間を curl のループで測り、連続して 2〜3 ページを操作したときの値（スロットルの影響）も見る
-- 存在しない KVS キーへの `UpdateKeys` の delete が実際にどう振る舞うか。`kvs-client.ts` は `ResourceNotFoundException` が起きたときだけ `GetKey` で存在を確かめる実装にしているため、これが実際に必要な分岐かどうかを確認する
+- 存在しない KVS キーへの `UpdateKeys` の delete が実際にどう振る舞うか。`kvs-client.ts` は `ResourceNotFoundException` が起きたときに `GetKey` で存在を確かめる分岐を残しているため、これが実際に必要かどうかを確認する（S3 イベント経由の delete は先に `GetKey` で見るので、この分岐に入るのは reconcile 側だけのはず）
 - 上記の計測でスロットル待ちが残るようなら、`reservedConcurrentExecutions: 1` を外す検討をする（外す場合は「Describe（ETag）→ metadata の Get → UpdateKeys(IfMatch)」の順に処理を組み直す）
 
 ## 見送った案

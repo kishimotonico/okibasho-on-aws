@@ -23,8 +23,8 @@
         ▼
    S3（pages バケット・完全 private・Public Access Block）
         ▲
-        │ meta/配下のJSONの作成・削除で該当ページだけ即時 / 1時間ごとの定期処理で
-        │ 期限切れ削除・KVS全件突き合わせ
+        │ meta/配下のJSONの作成・削除で該当ページだけ即時 / 毎時の期限切れ削除 /
+        │ 日次のKVS全件突き合わせ
    Lambda（PageMaintenance、同時実行1。アラームは持たない）
         │ UpdateKeys（IfMatch）
         ▼
@@ -307,7 +307,7 @@ metadata はページ成果物の prefix（配信対象）の外にあるため�
 ### S3 の設定
 
 - 完全 private + Public Access Block。S3 Website Hosting は使わない
-- バケットバージョニングは有効にしない（「消したら消える」を優先する）
+- バケットバージョニングを有効にし、非現行バージョンは 30 日で消す（誤削除・誤上書きからの復旧余地）。利用者のロールに `s3:DeleteObjectVersion` は与えないので、利用者の操作で旧版まで消えることはない
 - CORS を設定する（ブラウザから直接 PUT / LIST / DELETE するため。忘れると Web UI だけ落ちる）
 
 ```json
@@ -423,11 +423,13 @@ CloudFront KeyValueStore には、正本（metadataの `share`）から導出し
 投影は 2 つの経路から行う。実装は `packages/infra/lib/lambda/page-maintenance/`。
 
 - **S3 イベント（該当ページだけの即時反映）**: `meta/` 配下の JSON の作成・削除で起動する。イベントのキーをデコードして prefix を導出し、その prefix の現在の metadata を S3 から読み直して「あるべき状態」を決め、tag 1 件分だけ put / delete する。既存の KVS 値は読まない。他ページを巻き込まない 1 ページ単位の `UpdateKeys` なので、通常は数秒〜十数秒で反映される
-- **1 時間ごとの定期処理（全件突き合わせ）**: `meta/` 全件と KVS 全件を読み、あるべき状態と実際の差分だけを put / delete する。S3 通知の取りこぼしを最大 1 時間で拾う安全網であり、期限切れ削除（「保存期間」節）とあわせて 1 回のスケジュール実行で順に行う。`meta/` 配下の metadata は同時実行数 8 程度の並列で読む（1 回の所要時間がそのまま安全網の反映待ち時間になるため）
+- **日次の定期処理（全件突き合わせ、reconcile）**: `meta/` 全件と KVS 全件を読み、あるべき状態と実際の差分だけを put / delete する。S3 通知の取りこぼしを最大 1 日で拾う安全網である。即時反映は S3 イベントが担っているため日次で足り、KVS の API 呼び出し（課金対象。無料枠が無い）を毎時払わずに済む。`meta/` 配下の metadata は同時実行数 8 程度の並列で読む
+
+S3 イベントで「共有していない（あるべき状態が無い）」と分かったときは、`GetKey` でそのキーの有無を先に見て、無ければ何もせずに終える。共有していないページの操作でも S3 イベントは飛ぶため、そのたびに `DescribeKeyValueStore` + `UpdateKeys` の 2 回を払わないようにするためである。
 
 あるべき状態が無い（=削除対象）のは、metadata が無い / JSON 不正 / `expiresAt` が ISO 文字列でも `null` でもない（形式異常）/ `expiresAt` を過ぎている / `share` 無し / `share` の検証に失敗 / KVS 値が 1KB を超える、のいずれかである。
 
-Lambda は同時実行 1 なので、連続した S3 イベントは非同期呼び出しとして直列に並ぶ。処理は冪等なので何度実行されても壊れない。5 分より古い呼び出しは破棄し（`maxEventAge`）、リトライは 1 回（`retryAttempts`）に絞り、取りこぼしは 1 時間ごとの定期処理に任せる。
+Lambda は同時実行 1 なので、連続した S3 イベントは非同期呼び出しとして直列に並ぶ。処理は冪等なので何度実行されても壊れない。5 分より古い呼び出しは破棄し（`maxEventAge`）、リトライは 1 回（`retryAttempts`）に絞り、取りこぼしは日次の定期処理に任せる。
 
 - `UpdateKeys`（IfMatch = `DescribeKeyValueStore` の ETag）は 50 キーごとにチャンク分割する。同じ Key を 1 回の呼び出しに 2 度含めない。`ConflictException` は ETag を取り直してリトライする
 - 存在しないキーの `delete` を `UpdateKeys` に渡したときの挙動は公式ドキュメントで明記されていない（`ResourceNotFoundException` になる可能性がある）。1 件だけの delete（put 無し）でそれが起きたときだけ、`GetKey` でそのキーが実際に無いことを確かめて成功扱いにする。あれば別の理由のエラーなので再送出する
@@ -463,7 +465,7 @@ Lambda の失敗は CloudWatch Logs と Lambda の `Errors` メトリクスで�
 
 - ブラウザの閲覧履歴
 - チャットやメールの本文（URL をそのまま貼って共有するため）
-- CloudFront の標準アクセスログ。現在は無効化しており出力されない。将来有効化する場合は、share-id を含む URL をログに残すことになるため share-id を credential として扱い、ログ用バケットを private にする
+- CloudFront の標準アクセスログ。外部共有の閲覧を追うために有効にしている。share-id を含む URL が残るため、ログ用バケットは完全 private にし、読めるのはデプロイ権限を持つ人だけとする。Signed Cookie を残さないよう `logIncludesCookies` は既定の false のままにする
 - CloudTrail の KVS データイベント。データイベントを有効化しなければ出力されない
 
 ## 保存期間
@@ -472,13 +474,13 @@ Lambda の失敗は CloudWatch Logs と Lambda の `Errors` メトリクスで�
 
 閲覧時に期限を検査する仕組みは持たない。閲覧経路は CloudFront → S3 の直配信で Lambda を通らず、`expiresAt` を評価するコードが動く場所がないためである。期限の実施は PageMaintenance Lambda の定期処理に一本化する。外部共有の期限も別途 KVS には持たせない。正本は metadata の `expiresAt` のままとし、期限切れで metadata が消えれば次の投影で KVS のキーも消える（詳細は「外部共有」節）。
 
-仕組み（`packages/infra/lib/lambda/page-maintenance/index.ts` の `handleSchedule`）:
+仕組み（`packages/infra/lib/lambda/page-maintenance/index.ts`）:
 
 - metadata の `expiresAt` が唯一の判定材料
-- EventBridge Rule が 1 時間ごとに PageMaintenance Lambda を起動する。この 1 時間ごとのスケジュールは「外部共有」節の KVS 全件突き合わせ（安全網）も兼ねており、Lambda は同じ 1 回の実行で次の順に処理する
+- EventBridge Rule が 1 時間ごとに PageMaintenance Lambda を `cleanup` タスクで起動し、次の順に処理する
   1. `meta/` 全件の metadata を読む（並列 8）
   2. `expiresAt` が現在時刻を過ぎているページを、成果物 → metadata の順に削除する（CLI / Web の削除と同じ順）
-  3. `meta/` 全件（1 で読んだもの）と KVS 全件を突き合わせ、差分を反映する
+- metadata を消すと S3 イベントが飛ぶので、KVS のエントリは日次の突き合わせを待たずに消える
 - 削除処理は CLI / Web の削除と同じ考え方（成果物 → metadata の順）で書く。ロジックを 2 本持たない
 
 期限切れから実際に消えるまで最大 1 時間のズレが出る。チーム向けツールとして十分であり、その間は URL を知っていればまだ見られる（社内向けの `/p/` がこの猶予まで見えるのと同じ許容範囲とする）。
@@ -565,8 +567,8 @@ lib/
                              /errors/* ビヘイビアとカスタムエラーレスポンス /
                              Response Headers Policy / Geo restriction
     page-maintenance.ts      CloudFront KeyValueStore + PageMaintenance Lambda
-                             （S3 イベントでページ単位の投影 + 1 時間ごとの定期処理で
-                             期限切れ削除・KVS全件突き合わせ。アラームは持たない）
+                             （S3 イベントでページ単位の投影 + 毎時の期限切れ削除 +
+                             日次のKVS全件突き合わせ。アラームは持たない）
     app-delivery.ts          app バケット + Distribution + SPA 用 CloudFront Function
     service-domain.ts        独自ドメイン（設定時のみ）。Hosted Zone の参照、
                              pages / app それぞれのホスト名と証明書、Alias レコード
@@ -616,8 +618,8 @@ GitHub Actions からの `cdk deploy` はアクセスキーを置かず、OIDC �
 
 - User Pool は `DESTROY`。Hosted UI ドメインも一緒に消える
 - Google の client secret（Secrets Manager）はスタック外に手で置いたものなので残る。GCP の OAuth クライアントと一緒に手で消す
-- 管理 UI 用バケットは `DESTROY` + `autoDeleteObjects`。ビルドし直せる静的ファイルだけなので中身ごと消す
-- pages バケットは `RETAIN`。アップロード済みオブジェクトはスタック削除後も残る。`autoDeleteObjects` は付けない。課金は続くので、不要なら手で空にしてバケットを消す
+- 管理 UI 用バケットと pages のアクセスログ用バケットは `DESTROY` + `autoDeleteObjects`。ビルドし直せる静的ファイルとログだけなので中身ごと消す
+- pages バケットは `RETAIN`。アップロード済みオブジェクトはスタック削除後も残る。`autoDeleteObjects` は付けない。課金は続くので、不要なら手で空にしてバケットを消す。バージョニングを有効にしているので、空にするには旧バージョンと削除マーカーも消す必要がある
 - CloudFront など残りのリソースはデフォルトどおり消える。Distribution の削除は完了まで待たされる
 - Signed Cookie の鍵の SSM パラメータはカスタムリソースの Delete で消える
 - 独自ドメイン設定時は `Okibasho` → `OkibashoCertificate` の順に消す（`cdk destroy --all` がこの順で消す）
@@ -660,6 +662,8 @@ CloudFront の Geo restriction を日本に絞る。無料である。WAF は月
 ## ログ
 
 CloudWatch Logs に最低限、Signed Cookie 発行の成功/失敗、PageMaintenance の削除件数、authorization 失敗を記録する。JWT と refresh token はログに出さない。
+
+ロググループは保持期間 90 日、スタック削除で一緒に消す。CDK が内部で作る Lambda（S3 通知と `autoDeleteObjects`）と CloudFront Functions のロググループは CDK から指定する口が無いため、この設定の対象外になる。pages のアクセスログも同じ 90 日で、こちらは S3 のライフサイクルで消す。
 
 PageMaintenance の定期処理は削除した prefix を残し、誤削除の調査に使えるようにする。
 

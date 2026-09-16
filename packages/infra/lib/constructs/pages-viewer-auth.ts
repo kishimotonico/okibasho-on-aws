@@ -6,8 +6,10 @@ import { KeyGroup, PublicKey } from 'aws-cdk-lib/aws-cloudfront';
 import type { UserPool, UserPoolClient } from 'aws-cdk-lib/aws-cognito';
 import { Architecture, FunctionUrlAuthType, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { LogGroup } from 'aws-cdk-lib/aws-logs';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
+import { LOG_GROUP_OPTIONS } from '../log-retention.js';
 import type { AppDelivery } from './app-delivery.js';
 import type { PagesStorage } from './pages-storage.js';
 import { SigningKeyPair } from './signing-key-pair.js';
@@ -48,6 +50,7 @@ export class PagesViewerAuth extends Construct {
     const issuer = new NodejsFunction(this, 'CookieIssuerFunction', {
       entry: join(here, '../lambda/pages-cookie/index.ts'),
       handler: 'handler',
+      logGroup: new LogGroup(this, 'CookieIssuerFunctionLogs', LOG_GROUP_OPTIONS),
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
       timeout: Duration.seconds(10),

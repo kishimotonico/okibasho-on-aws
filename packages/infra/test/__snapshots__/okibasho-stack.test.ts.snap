@@ -89,6 +89,12 @@ exports[`OkibashoStack > Google IdP ありのテンプレートが意図せず�
         ],
       },
     },
+    "PagesAccessLogBucketName": {
+      "Description": "pages のアクセスログ bucket名",
+      "Value": {
+        "Ref": "PagesDeliveryAccessLogBucket13C84414",
+      },
+    },
     "PagesBaseUrl": {
       "Description": "pages 閲覧URLのベース（CLI / Web 設定用）",
       "Value": {
@@ -806,6 +812,11 @@ function handler(event) {
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "AuthPreSignUpFunctionLogsA970770A",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "AuthPreSignUpFunctionServiceRole177F00C8",
@@ -816,6 +827,14 @@ function handler(event) {
         "Timeout": 5,
       },
       "Type": "AWS::Lambda::Function",
+    },
+    "AuthPreSignUpFunctionLogsA970770A": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "AuthPreSignUpFunctionServiceRole177F00C8": {
       "Properties": {
@@ -1265,6 +1284,11 @@ def sort_filter_rules(json_obj):
             "Ref": "PagesStorageErrorPagesDeploymentAwsCliLayer489B7929",
           },
         ],
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesStorageErrorPagesDeploymentLogsE2AD2D6B",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265",
@@ -1459,6 +1483,45 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Role",
     },
+    "PageMaintenanceCleanupRule227E074A": {
+      "Properties": {
+        "Description": "期限切れページの削除",
+        "ScheduleExpression": "rate(1 hour)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"cleanup"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceCleanupRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38265B563AA6": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PageMaintenanceMaintenanceFunction6D21CD03",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "PageMaintenanceCleanupRule227E074A",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
     "PageMaintenanceMaintenanceFunction6D21CD03": {
       "DependsOn": [
         "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F",
@@ -1489,6 +1552,11 @@ def sort_filter_rules(json_obj):
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PageMaintenanceMaintenanceFunctionLogsEBB495AC",
+          },
+        },
         "MemorySize": 1024,
         "ReservedConcurrentExecutions": 1,
         "Role": {
@@ -1512,6 +1580,14 @@ def sort_filter_rules(json_obj):
         "Qualifier": "$LATEST",
       },
       "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "PageMaintenanceMaintenanceFunctionLogsEBB495AC": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "PageMaintenanceMaintenanceFunctionServiceRole249912DC": {
       "Properties": {
@@ -1645,7 +1721,27 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Policy",
     },
-    "PageMaintenanceScheduleRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E3826B2363514": {
+    "PageMaintenanceReconcileRule5878C4D1": {
+      "Properties": {
+        "Description": "meta/全件とKVS全件の突き合わせ",
+        "ScheduleExpression": "rate(1 day)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"reconcile"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceReconcileRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38267B6A820E": {
       "Properties": {
         "Action": "lambda:InvokeFunction",
         "FunctionName": {
@@ -1657,31 +1753,12 @@ def sort_filter_rules(json_obj):
         "Principal": "events.amazonaws.com",
         "SourceArn": {
           "Fn::GetAtt": [
-            "PageMaintenanceScheduleRuleFAEEC66D",
+            "PageMaintenanceReconcileRule5878C4D1",
             "Arn",
           ],
         },
       },
       "Type": "AWS::Lambda::Permission",
-    },
-    "PageMaintenanceScheduleRuleFAEEC66D": {
-      "Properties": {
-        "Description": "安全網 + cleanup(期限切れ削除・KVS全件突き合わせ)を1時間毎に実行",
-        "ScheduleExpression": "rate(1 hour)",
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::GetAtt": [
-                "PageMaintenanceMaintenanceFunction6D21CD03",
-                "Arn",
-              ],
-            },
-            "Id": "Target0",
-          },
-        ],
-      },
-      "Type": "AWS::Events::Rule",
     },
     "PageMaintenanceShareKeyValueStoreAB6806D3": {
       "Properties": {
@@ -1689,6 +1766,155 @@ def sort_filter_rules(json_obj):
         "Name": "OkibashoPageMaintenanceShareKeyValueStore1FDA5F9B",
       },
       "Type": "AWS::CloudFront::KeyValueStore",
+    },
+    "PagesDeliveryAccessLogBucket13C84414": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 90,
+              "Id": "ExpireAccessLogs",
+              "Status": "Enabled",
+            },
+          ],
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "ObjectWriter",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketAutoDeleteObjectsCustomResourceEC4F28A6": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "PagesDeliveryAccessLogBucketPolicyC0A09CDC",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketPolicyC0A09CDC": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
     },
     "PagesDeliveryCachePolicy7BBA6710": {
       "Properties": {
@@ -1799,6 +2025,14 @@ def sort_filter_rules(json_obj):
           "Enabled": true,
           "HttpVersion": "http2",
           "IPV6Enabled": false,
+          "Logging": {
+            "Bucket": {
+              "Fn::GetAtt": [
+                "PagesDeliveryAccessLogBucket13C84414",
+                "RegionalDomainName",
+              ],
+            },
+          },
           "Origins": [
             {
               "DomainName": {
@@ -2263,6 +2497,18 @@ function buildQueryString(querystring) {
             },
           ],
         },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpiredObjectDeleteMarker": true,
+              "Id": "ExpireNoncurrentVersions",
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30,
+              },
+              "Status": "Enabled",
+            },
+          ],
+        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
@@ -2275,6 +2521,9 @@ function buildQueryString(querystring) {
             "Value": "true",
           },
         ],
+        "VersioningConfiguration": {
+          "Status": "Enabled",
+        },
       },
       "Type": "AWS::S3::Bucket",
       "UpdateReplacePolicy": "Retain",
@@ -2616,6 +2865,14 @@ function buildQueryString(querystring) {
       "Type": "Custom::CDKBucketDeployment",
       "UpdateReplacePolicy": "Delete",
     },
+    "PagesStorageErrorPagesDeploymentLogsE2AD2D6B": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
   },
   "Rules": {
     "CheckBootstrapVersion": {
@@ -2734,6 +2991,12 @@ exports[`OkibashoStack > テンプレートが意図せず変化していない 
           "AuthUserPool8115E87F",
           "ProviderURL",
         ],
+      },
+    },
+    "PagesAccessLogBucketName": {
+      "Description": "pages のアクセスログ bucket名",
+      "Value": {
+        "Ref": "PagesDeliveryAccessLogBucket13C84414",
       },
     },
     "PagesBaseUrl": {
@@ -3434,6 +3697,11 @@ function handler(event) {
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "AuthPreSignUpFunctionLogsA970770A",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "AuthPreSignUpFunctionServiceRole177F00C8",
@@ -3444,6 +3712,14 @@ function handler(event) {
         "Timeout": 5,
       },
       "Type": "AWS::Lambda::Function",
+    },
+    "AuthPreSignUpFunctionLogsA970770A": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "AuthPreSignUpFunctionServiceRole177F00C8": {
       "Properties": {
@@ -3885,6 +4161,11 @@ def sort_filter_rules(json_obj):
             "Ref": "PagesStorageErrorPagesDeploymentAwsCliLayer489B7929",
           },
         ],
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesStorageErrorPagesDeploymentLogsE2AD2D6B",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265",
@@ -4079,6 +4360,45 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Role",
     },
+    "PageMaintenanceCleanupRule227E074A": {
+      "Properties": {
+        "Description": "期限切れページの削除",
+        "ScheduleExpression": "rate(1 hour)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"cleanup"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceCleanupRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38265B563AA6": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PageMaintenanceMaintenanceFunction6D21CD03",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "PageMaintenanceCleanupRule227E074A",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
     "PageMaintenanceMaintenanceFunction6D21CD03": {
       "DependsOn": [
         "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F",
@@ -4109,6 +4429,11 @@ def sort_filter_rules(json_obj):
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PageMaintenanceMaintenanceFunctionLogsEBB495AC",
+          },
+        },
         "MemorySize": 1024,
         "ReservedConcurrentExecutions": 1,
         "Role": {
@@ -4132,6 +4457,14 @@ def sort_filter_rules(json_obj):
         "Qualifier": "$LATEST",
       },
       "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "PageMaintenanceMaintenanceFunctionLogsEBB495AC": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "PageMaintenanceMaintenanceFunctionServiceRole249912DC": {
       "Properties": {
@@ -4265,7 +4598,27 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Policy",
     },
-    "PageMaintenanceScheduleRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E3826B2363514": {
+    "PageMaintenanceReconcileRule5878C4D1": {
+      "Properties": {
+        "Description": "meta/全件とKVS全件の突き合わせ",
+        "ScheduleExpression": "rate(1 day)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"reconcile"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceReconcileRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38267B6A820E": {
       "Properties": {
         "Action": "lambda:InvokeFunction",
         "FunctionName": {
@@ -4277,31 +4630,12 @@ def sort_filter_rules(json_obj):
         "Principal": "events.amazonaws.com",
         "SourceArn": {
           "Fn::GetAtt": [
-            "PageMaintenanceScheduleRuleFAEEC66D",
+            "PageMaintenanceReconcileRule5878C4D1",
             "Arn",
           ],
         },
       },
       "Type": "AWS::Lambda::Permission",
-    },
-    "PageMaintenanceScheduleRuleFAEEC66D": {
-      "Properties": {
-        "Description": "安全網 + cleanup(期限切れ削除・KVS全件突き合わせ)を1時間毎に実行",
-        "ScheduleExpression": "rate(1 hour)",
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::GetAtt": [
-                "PageMaintenanceMaintenanceFunction6D21CD03",
-                "Arn",
-              ],
-            },
-            "Id": "Target0",
-          },
-        ],
-      },
-      "Type": "AWS::Events::Rule",
     },
     "PageMaintenanceShareKeyValueStoreAB6806D3": {
       "Properties": {
@@ -4309,6 +4643,155 @@ def sort_filter_rules(json_obj):
         "Name": "OkibashoPageMaintenanceShareKeyValueStore1FDA5F9B",
       },
       "Type": "AWS::CloudFront::KeyValueStore",
+    },
+    "PagesDeliveryAccessLogBucket13C84414": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 90,
+              "Id": "ExpireAccessLogs",
+              "Status": "Enabled",
+            },
+          ],
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "ObjectWriter",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketAutoDeleteObjectsCustomResourceEC4F28A6": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "PagesDeliveryAccessLogBucketPolicyC0A09CDC",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketPolicyC0A09CDC": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
     },
     "PagesDeliveryCachePolicy7BBA6710": {
       "Properties": {
@@ -4419,6 +4902,14 @@ def sort_filter_rules(json_obj):
           "Enabled": true,
           "HttpVersion": "http2",
           "IPV6Enabled": false,
+          "Logging": {
+            "Bucket": {
+              "Fn::GetAtt": [
+                "PagesDeliveryAccessLogBucket13C84414",
+                "RegionalDomainName",
+              ],
+            },
+          },
           "Origins": [
             {
               "DomainName": {
@@ -4883,6 +5374,18 @@ function buildQueryString(querystring) {
             },
           ],
         },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpiredObjectDeleteMarker": true,
+              "Id": "ExpireNoncurrentVersions",
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30,
+              },
+              "Status": "Enabled",
+            },
+          ],
+        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
@@ -4895,6 +5398,9 @@ function buildQueryString(querystring) {
             "Value": "true",
           },
         ],
+        "VersioningConfiguration": {
+          "Status": "Enabled",
+        },
       },
       "Type": "AWS::S3::Bucket",
       "UpdateReplacePolicy": "Retain",
@@ -5236,6 +5742,14 @@ function buildQueryString(querystring) {
       "Type": "Custom::CDKBucketDeployment",
       "UpdateReplacePolicy": "Delete",
     },
+    "PagesStorageErrorPagesDeploymentLogsE2AD2D6B": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
   },
   "Rules": {
     "CheckBootstrapVersion": {
@@ -5416,6 +5930,12 @@ exports[`OkibashoStack > 独自ドメインありのテンプレートが意図�
           "AuthUserPool8115E87F",
           "ProviderURL",
         ],
+      },
+    },
+    "PagesAccessLogBucketName": {
+      "Description": "pages のアクセスログ bucket名",
+      "Value": {
+        "Ref": "PagesDeliveryAccessLogBucket13C84414",
       },
     },
     "PagesBaseUrl": {
@@ -6214,6 +6734,11 @@ function handler(event) {
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "AuthPreSignUpFunctionLogsA970770A",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "AuthPreSignUpFunctionServiceRole177F00C8",
@@ -6224,6 +6749,14 @@ function handler(event) {
         "Timeout": 5,
       },
       "Type": "AWS::Lambda::Function",
+    },
+    "AuthPreSignUpFunctionLogsA970770A": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "AuthPreSignUpFunctionServiceRole177F00C8": {
       "Properties": {
@@ -6622,6 +7155,11 @@ def sort_filter_rules(json_obj):
             "Ref": "PagesStorageErrorPagesDeploymentAwsCliLayer489B7929",
           },
         ],
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesStorageErrorPagesDeploymentLogsE2AD2D6B",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265",
@@ -6807,6 +7345,45 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Role",
     },
+    "PageMaintenanceCleanupRule227E074A": {
+      "Properties": {
+        "Description": "期限切れページの削除",
+        "ScheduleExpression": "rate(1 hour)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"cleanup"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceCleanupRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38265B563AA6": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "PageMaintenanceMaintenanceFunction6D21CD03",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "PageMaintenanceCleanupRule227E074A",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
     "PageMaintenanceMaintenanceFunction6D21CD03": {
       "DependsOn": [
         "PageMaintenanceMaintenanceFunctionServiceRoleDefaultPolicy7EFAE69F",
@@ -6835,6 +7412,11 @@ def sort_filter_rules(json_obj):
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PageMaintenanceMaintenanceFunctionLogsEBB495AC",
+          },
+        },
         "MemorySize": 1024,
         "ReservedConcurrentExecutions": 1,
         "Role": {
@@ -6858,6 +7440,14 @@ def sort_filter_rules(json_obj):
         "Qualifier": "$LATEST",
       },
       "Type": "AWS::Lambda::EventInvokeConfig",
+    },
+    "PageMaintenanceMaintenanceFunctionLogsEBB495AC": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "PageMaintenanceMaintenanceFunctionServiceRole249912DC": {
       "Properties": {
@@ -6991,7 +7581,27 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::IAM::Policy",
     },
-    "PageMaintenanceScheduleRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E3826B2363514": {
+    "PageMaintenanceReconcileRule5878C4D1": {
+      "Properties": {
+        "Description": "meta/全件とKVS全件の突き合わせ",
+        "ScheduleExpression": "rate(1 day)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "PageMaintenanceMaintenanceFunction6D21CD03",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+            "Input": "{"task":"reconcile"}",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "PageMaintenanceReconcileRuleAllowEventRuleOkibashoPageMaintenanceMaintenanceFunctionDC5E38267B6A820E": {
       "Properties": {
         "Action": "lambda:InvokeFunction",
         "FunctionName": {
@@ -7003,31 +7613,12 @@ def sort_filter_rules(json_obj):
         "Principal": "events.amazonaws.com",
         "SourceArn": {
           "Fn::GetAtt": [
-            "PageMaintenanceScheduleRuleFAEEC66D",
+            "PageMaintenanceReconcileRule5878C4D1",
             "Arn",
           ],
         },
       },
       "Type": "AWS::Lambda::Permission",
-    },
-    "PageMaintenanceScheduleRuleFAEEC66D": {
-      "Properties": {
-        "Description": "安全網 + cleanup(期限切れ削除・KVS全件突き合わせ)を1時間毎に実行",
-        "ScheduleExpression": "rate(1 hour)",
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::GetAtt": [
-                "PageMaintenanceMaintenanceFunction6D21CD03",
-                "Arn",
-              ],
-            },
-            "Id": "Target0",
-          },
-        ],
-      },
-      "Type": "AWS::Events::Rule",
     },
     "PageMaintenanceShareKeyValueStoreAB6806D3": {
       "Properties": {
@@ -7035,6 +7626,155 @@ def sort_filter_rules(json_obj):
         "Name": "OkibashoPageMaintenanceShareKeyValueStore1FDA5F9B",
       },
       "Type": "AWS::CloudFront::KeyValueStore",
+    },
+    "PagesDeliveryAccessLogBucket13C84414": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 90,
+              "Id": "ExpireAccessLogs",
+              "Status": "Enabled",
+            },
+          ],
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "ObjectWriter",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketAutoDeleteObjectsCustomResourceEC4F28A6": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "PagesDeliveryAccessLogBucketPolicyC0A09CDC",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketPolicyC0A09CDC": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
     },
     "PagesDeliveryCachePolicy7BBA6710": {
       "Properties": {
@@ -7149,6 +7889,14 @@ def sort_filter_rules(json_obj):
           "Enabled": true,
           "HttpVersion": "http2",
           "IPV6Enabled": false,
+          "Logging": {
+            "Bucket": {
+              "Fn::GetAtt": [
+                "PagesDeliveryAccessLogBucket13C84414",
+                "RegionalDomainName",
+              ],
+            },
+          },
           "Origins": [
             {
               "DomainName": {
@@ -7575,6 +8323,18 @@ function buildQueryString(querystring) {
             },
           ],
         },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpiredObjectDeleteMarker": true,
+              "Id": "ExpireNoncurrentVersions",
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30,
+              },
+              "Status": "Enabled",
+            },
+          ],
+        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
@@ -7587,6 +8347,9 @@ function buildQueryString(querystring) {
             "Value": "true",
           },
         ],
+        "VersioningConfiguration": {
+          "Status": "Enabled",
+        },
       },
       "Type": "AWS::S3::Bucket",
       "UpdateReplacePolicy": "Retain",
@@ -7934,6 +8697,14 @@ function buildQueryString(querystring) {
       "Type": "Custom::CDKBucketDeployment",
       "UpdateReplacePolicy": "Delete",
     },
+    "PagesStorageErrorPagesDeploymentLogsE2AD2D6B": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
     "PagesViewerAuthCookieIssuerFunction2CE09860": {
       "DependsOn": [
         "PagesViewerAuthCookieIssuerFunctionServiceRoleDefaultPolicyBBA8F934",
@@ -7964,6 +8735,11 @@ function buildQueryString(querystring) {
           },
         },
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesViewerAuthCookieIssuerFunctionLogs2082B6B0",
+          },
+        },
         "MemorySize": 512,
         "Role": {
           "Fn::GetAtt": [
@@ -7987,6 +8763,14 @@ function buildQueryString(querystring) {
         },
       },
       "Type": "AWS::Lambda::Url",
+    },
+    "PagesViewerAuthCookieIssuerFunctionLogs2082B6B0": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "PagesViewerAuthCookieIssuerFunctionServiceRoleC0D8DAC6": {
       "Properties": {
@@ -8114,6 +8898,11 @@ function buildQueryString(querystring) {
         },
         "Description": "pages: Signed Cookie の鍵ペアを生成して SSM に置く",
         "Handler": "index.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PagesViewerAuthSigningKeyPairFunctionLogsBB55202D",
+          },
+        },
         "Role": {
           "Fn::GetAtt": [
             "PagesViewerAuthSigningKeyPairFunctionServiceRole1E69C3AE",
@@ -8124,6 +8913,14 @@ function buildQueryString(querystring) {
         "Timeout": 30,
       },
       "Type": "AWS::Lambda::Function",
+    },
+    "PagesViewerAuthSigningKeyPairFunctionLogsBB55202D": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
     },
     "PagesViewerAuthSigningKeyPairFunctionServiceRole1E69C3AE": {
       "Properties": {
@@ -8192,6 +8989,14 @@ function buildQueryString(querystring) {
       },
       "Type": "AWS::IAM::Policy",
     },
+    "PagesViewerAuthSigningKeyPairProviderLogs7583B073": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RetentionInDays": 90,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
     "PagesViewerAuthSigningKeyPairProviderframeworkonEvent795FBD1A": {
       "DependsOn": [
         "PagesViewerAuthSigningKeyPairProviderframeworkonEventServiceRoleDefaultPolicy23603E7F",
@@ -8217,6 +9022,9 @@ function buildQueryString(querystring) {
         "LoggingConfig": {
           "ApplicationLogLevel": "FATAL",
           "LogFormat": "JSON",
+          "LogGroup": {
+            "Ref": "PagesViewerAuthSigningKeyPairProviderLogs7583B073",
+          },
         },
         "Role": {
           "Fn::GetAtt": [

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Duration } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import {
   AccessLevel,
   CachePolicy,
@@ -19,8 +19,15 @@ import {
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
-import type { IBucket } from 'aws-cdk-lib/aws-s3';
+import {
+  BlockPublicAccess,
+  Bucket,
+  BucketEncryption,
+  type IBucket,
+  ObjectOwnership,
+} from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { LOG_RETENTION_DURATION } from '../log-retention.js';
 import type { CustomDomain } from './service-domain.js';
 
 export interface PagesDeliveryProps {
@@ -44,6 +51,8 @@ export class PagesDelivery extends Construct {
   readonly distribution: Distribution;
   /** pages のホスト名。独自ドメインか Distribution のデフォルトドメイン */
   readonly domainName: string;
+  /** 外部共有の閲覧を後から追うためのアクセスログの置き場 */
+  readonly accessLogBucket: Bucket;
 
   constructor(scope: Construct, id: string, props: PagesDeliveryProps) {
     super(scope, id);
@@ -110,8 +119,23 @@ export class PagesDelivery extends Construct {
       originAccessLevels: [AccessLevel.READ, AccessLevel.LIST],
     });
 
+    // /s/* のパスに share-id がそのまま残るため、ログはデプロイ権限を持つ人しか読めない置き場にする。
+    // Signed Cookie を残さないよう logIncludesCookies は既定の false のままにする
+    this.accessLogBucket = new Bucket(this, 'AccessLogBucket', {
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      encryption: BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      // CloudFront の標準ログは ACL で書き込むため、ACL を有効にしたバケットしか受け付けない
+      objectOwnership: ObjectOwnership.OBJECT_WRITER,
+      lifecycleRules: [{ id: 'ExpireAccessLogs', expiration: LOG_RETENTION_DURATION }],
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
     this.distribution = new Distribution(this, 'Distribution', {
       comment: 'pages配信',
+      enableLogging: true,
+      logBucket: this.accessLogBucket,
       priceClass: PriceClass.PRICE_CLASS_200,
       geoRestriction: GeoRestriction.allowlist('JP'),
       // IPv4完全一致でのIP制限(share-router.js)を確実に効かせるためIPv6は無効化する

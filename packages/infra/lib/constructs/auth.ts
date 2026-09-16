@@ -18,8 +18,10 @@ import {
 import { Effect, FederatedPrincipal, PolicyStatement, Role } from 'aws-cdk-lib/aws-iam';
 import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { LogGroup } from 'aws-cdk-lib/aws-logs';
 import type { IBucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { LOG_GROUP_OPTIONS } from '../log-retention.js';
 
 /** Google OAuth クライアントの secret を手で置く Secrets Manager のシークレット名 */
 export const GOOGLE_CLIENT_SECRET_NAME = 'okibasho/google-client-secret';
@@ -86,6 +88,7 @@ export class Auth extends Construct {
     const preSignUp = new NodejsFunction(this, 'PreSignUpFunction', {
       entry: join(here, '../lambda/pre-sign-up/index.ts'),
       handler: 'handler',
+      logGroup: new LogGroup(this, 'PreSignUpFunctionLogs', LOG_GROUP_OPTIONS),
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
       timeout: Duration.seconds(5),

@@ -319,8 +319,8 @@ describe('OkibashoStack', () => {
     it('bucketは完全privateでHTTPS必須、Website Hostingは使わない', () => {
       const template = synth();
 
-      template.resourceCountIs('AWS::S3::Bucket', 2);
-      template.resourceCountIs('AWS::S3::BucketPolicy', 2);
+      template.resourceCountIs('AWS::S3::Bucket', 3);
+      template.resourceCountIs('AWS::S3::BucketPolicy', 3);
 
       template.hasResourceProperties('AWS::S3::Bucket', {
         PublicAccessBlockConfiguration: {
@@ -334,7 +334,6 @@ describe('OkibashoStack', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
       for (const bucket of Object.values(buckets)) {
         expect(bucket.Properties?.WebsiteConfiguration).toBeUndefined();
-        expect(bucket.Properties?.LifecycleConfiguration).toBeUndefined();
       }
 
       template.hasResource('AWS::S3::Bucket', {
@@ -354,6 +353,23 @@ describe('OkibashoStack', () => {
               },
             }),
           ]),
+        },
+      });
+    });
+
+    it('バージョニングを有効にし、非現行バージョンは30日で消す', () => {
+      const template = synth();
+
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        VersioningConfiguration: { Status: 'Enabled' },
+        LifecycleConfiguration: {
+          Rules: [
+            {
+              NoncurrentVersionExpiration: { NoncurrentDays: 30 },
+              ExpiredObjectDeleteMarker: true,
+              Status: 'Enabled',
+            },
+          ],
         },
       });
     });
@@ -619,13 +635,19 @@ describe('OkibashoStack', () => {
       });
     });
 
-    it('metadataの作成・削除のS3通知と、EventBridgeの1時間ごとのRule(安全網 + cleanup)の両方で起動する', () => {
+    it('metadataの作成・削除のS3通知と、cleanup(毎時)・reconcile(日次)のRuleで起動する', () => {
       const template = synth();
 
-      template.resourceCountIs('AWS::Events::Rule', 1);
-      template.hasResourceProperties('AWS::Events::Rule', {
-        ScheduleExpression: 'rate(1 hour)',
-      });
+      template.resourceCountIs('AWS::Events::Rule', 2);
+      for (const [schedule, task] of [
+        ['rate(1 hour)', 'cleanup'],
+        ['rate(1 day)', 'reconcile'],
+      ]) {
+        template.hasResourceProperties('AWS::Events::Rule', {
+          ScheduleExpression: schedule,
+          Targets: Match.arrayWith([Match.objectLike({ Input: JSON.stringify({ task }) })]),
+        });
+      }
 
       // pagesバケットのS3通知がprefix=meta/・suffix=.jsonのCreated/RemovedをPageMaintenanceへ流す
       const notifications = Object.values(template.findResources('Custom::S3BucketNotifications'));

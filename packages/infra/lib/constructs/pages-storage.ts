@@ -1,16 +1,21 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { RemovalPolicy } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Effect, type IRole, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket, BucketEncryption, HttpMethods } from 'aws-cdk-lib/aws-s3';
+import { LogGroup } from 'aws-cdk-lib/aws-logs';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { Construct } from 'constructs';
+import { LOG_GROUP_OPTIONS } from '../log-retention.js';
 
 /** ページオブジェクトの S3 prefix。owner 単位のキー空間のルート */
 export const PAGES_PREFIX = 'pages/';
 
 /** カスタムエラーページ(404.htmlなど)を置く S3 prefix */
 export const ERRORS_PREFIX = 'errors/';
+
+/** 上書き・削除で退避した旧バージョンを保持する期間 */
+const NONCURRENT_VERSION_RETENTION = Duration.days(30);
 
 /**
  * pages/ 配下にページ成果物を格納する S3 bucket。
@@ -30,6 +35,17 @@ export class PagesStorage extends Construct {
       enforceSSL: true,
       // ユーザー成果物はスタック削除後も残す。中身の自動削除はしない
       removalPolicy: RemovalPolicy.RETAIN,
+      // 誤削除・誤上書きからの復旧余地。利用者に DeleteObjectVersion は与えないので
+      // 利用者の操作で旧版まで消えることはない
+      versioned: true,
+      lifecycleRules: [
+        {
+          id: 'ExpireNoncurrentVersions',
+          noncurrentVersionExpiration: NONCURRENT_VERSION_RETENTION,
+          // 旧版が尽きた削除マーカーも残さない
+          expiredObjectDeleteMarker: true,
+        },
+      ],
     });
 
     this.restrictCloudFrontToPagesPrefix();
@@ -47,6 +63,7 @@ export class PagesStorage extends Construct {
       ],
       destinationBucket: this.bucket,
       destinationKeyPrefix: ERRORS_PREFIX,
+      logGroup: new LogGroup(this, 'ErrorPagesDeploymentLogs', LOG_GROUP_OPTIONS),
     });
     this.denyDeploymentRoleOutsideErrors(deployment.handlerRole);
     return deployment;

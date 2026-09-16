@@ -1,5 +1,5 @@
-import { extractS3Records, type S3EventRecordLike } from './dispatch.js';
-import { applyPlan, listAllActualEntries, redactId } from './kvs-client.js';
+import { classifyEvent, type S3EventRecordLike } from './dispatch.js';
+import { applyPlan, deleteKeyIfPresent, listAllActualEntries, redactId } from './kvs-client.js';
 import { computeDiff } from './plan.js';
 import { computeShareTag } from './tag.js';
 import {
@@ -29,20 +29,28 @@ function requireEnv(name: string): string {
 }
 
 /**
- * S3イベント(meta/配下のJSONの作成・削除)と1時間ごとのスケジュールの両方から起動される。
- * S3イベントはそのページだけを投影し(ページ単位でUpdateKeysを呼ぶ。all-or-nothingで
- * 他ページを巻き込まないため)、スケジュールは「期限切れページの削除」
- * 「meta/全件とKVS全件の突き合わせ」の2つを順に行う(定期処理をcleanupと統合したもの)
+ * S3イベント(meta/配下のJSONの作成・削除)と、2本のスケジュールから起動される。
+ * S3イベントはそのページだけを投影する(ページ単位でUpdateKeysを呼ぶ。all-or-nothingで
+ * 他ページを巻き込まないため)。スケジュールは cleanup(期限切れページの削除)と
+ * reconcile(meta/全件とKVS全件の突き合わせ)で、どちらも冪等
  */
 export async function handler(event: unknown): Promise<void> {
-  const records = extractS3Records(event);
-  if (records) {
-    console.log(`trigger=s3 records=${records.length}`);
-    await handleS3Records(records);
-    return;
+  const maintenanceEvent = classifyEvent(event);
+
+  switch (maintenanceEvent.kind) {
+    case 's3':
+      console.log(`trigger=s3 records=${maintenanceEvent.records.length}`);
+      await handleS3Records(maintenanceEvent.records);
+      return;
+    case 'cleanup':
+      console.log('trigger=schedule task=cleanup');
+      await deleteExpiredPages(await loadMetaEntries(), new Date());
+      return;
+    case 'reconcile':
+      console.log('trigger=schedule task=reconcile');
+      await reconcileKvs(await loadMetaEntries(), new Date());
+      return;
   }
-  console.log('trigger=schedule');
-  await handleSchedule();
 }
 
 /** イベントのキーをデコードしてprefixを導出し、重複を除いてページ単位で処理する */
@@ -68,7 +76,7 @@ async function handleS3Records(records: S3EventRecordLike[]): Promise<void> {
 
 /**
  * 1ページ分のmetadataを読み、tagのKVSエントリをput/deleteする。
- * 既存値は読まない(putは常に上書き、deleteは存在確認なしで発行し、無ければkvs-client側で成功扱いになる)
+ * putのとき既存値は読まない(常に上書きする)
  */
 async function projectPage(prefix: string, metadataKey: string, now: Date): Promise<void> {
   const tag = await computeShareTag(prefix);
@@ -77,12 +85,16 @@ async function projectPage(prefix: string, metadataKey: string, now: Date): Prom
   // buildDesiredEntry は1KB超過(serializeKvsValueがnullになるケース)も既にnull扱いにしている
   const serialized = desired ? serializeKvsValue(desired.value) : null;
 
-  const plan: DiffPlan = serialized
-    ? { puts: [{ key: tag, value: serialized }], deletes: [] }
-    : { puts: [], deletes: [tag] };
+  if (!serialized) {
+    // 共有していないページの作成・更新でもこのイベントは飛ぶ。その大半はKVSにキーが無いので、
+    // 先に有無を見てDescribe + UpdateKeysの2回を省く
+    const deleted = await deleteKeyIfPresent(KVS_ARN, tag);
+    console.log(`project: prefix=${prefix} ${deleted ? 'delete' : 'skip'} tag=${redactId(tag)}`);
+    return;
+  }
 
-  await applyPlan(KVS_ARN, plan);
-  console.log(`project: prefix=${prefix} ${serialized ? 'put' : 'delete'} tag=${redactId(tag)}`);
+  await applyPlan(KVS_ARN, { puts: [{ key: tag, value: serialized }], deletes: [] });
+  console.log(`project: prefix=${prefix} put tag=${redactId(tag)}`);
 }
 
 interface MetaEntry {
@@ -92,35 +104,26 @@ interface MetaEntry {
   metadataRaw: unknown;
 }
 
-/**
- * 1時間ごとのスケジュール処理。
- * 1. 期限切れページの削除(成果物 → metadataの順)
- * 2. meta/全件とKVS全件の突き合わせ
- *
- * 期限切れページの削除を先に行うが、KVSの突き合わせに使う desired は
- * (削除前に読んだ)metadataから buildDesiredEntry で計算するため、期限切れ分は
- * どのみち null(=削除対象)になる。物理削除の順序に関わらず同じ実行内で整合する
- */
-async function handleSchedule(): Promise<void> {
-  const now = new Date();
+/** meta/全件を読み、prefixとtagを添えて返す。cleanupとreconcileの共通の下ごしらえ */
+async function loadMetaEntries(): Promise<MetaEntry[]> {
   const metadataKeys = await listAllMetadataKeys(PAGES_BUCKET);
 
   const entries = metadataKeys
     .map((key) => ({ key, prefix: prefixFromMetadataKey(key) }))
     .filter((entry): entry is { key: string; prefix: string } => entry.prefix !== null);
 
-  // reconcile 1回の所要時間がそのまま反映の待ち時間になるので、独立な読み取りは並列にする
-  const metaEntries: MetaEntry[] = await mapWithConcurrency(entries, 8, async ({ key, prefix }) => {
+  // 1回の所要時間がそのまま反映の待ち時間になるので、独立な読み取りは並列にする
+  return mapWithConcurrency(entries, 8, async ({ key, prefix }) => {
     const tag = await computeShareTag(prefix);
     const metadataRaw = await getMetadataJson(PAGES_BUCKET, key);
     return { key, prefix, tag, metadataRaw };
   });
-
-  await deleteExpiredPages(metaEntries, now);
-  await reconcileKvs(metaEntries, now);
 }
 
-/** expiresAtを過ぎているページを削除する。ページ成果物 → metadataの順(web/CLIの削除と同じ順) */
+/**
+ * expiresAtを過ぎているページを削除する。ページ成果物 → metadataの順(web/CLIの削除と同じ順)。
+ * metadataを消すとS3イベントが飛ぶので、KVSのエントリはreconcileを待たずに消える
+ */
 async function deleteExpiredPages(metaEntries: MetaEntry[], now: Date): Promise<void> {
   const expired = metaEntries.filter((entry) => {
     const metadata = entry.metadataRaw;
