@@ -223,7 +223,6 @@ pages Distribution のデフォルトビヘイビア（`/p/*`）に Trusted Key 
 - `aws-jwt-verify`（AWS 公式ライブラリ）で User Pool と web 用 App Client の id_token として検証してから、`@aws-sdk/cloudfront-signer` の `getSignedCookies` でカスタムポリシー（Resource は `https://<pages>/p/*`、有効期間 24 時間）に署名する
 - `Domain=<サービスドメイン>` / `Path=/p` / `Secure` / `HttpOnly` / `SameSite=Lax` / `Max-Age=86400` で `CloudFront-Policy` / `CloudFront-Signature` / `CloudFront-Key-Pair-Id` を Set-Cookie し、204 を返す。`Path=/p` にしておくと `/s/*` と app には送られない
 - CORS は要らない。呼び出し元は同じ origin（app）の SPA である
-- Lambda の環境変数は User Pool ID・App Client ID・サービスドメイン・pages の URL・Key Pair ID（`PublicKey` の ID）・秘密鍵のパラメータ名
 
 Signed Cookie は閲覧専用で、漏れても内部ページの閲覧以外の権限を持たない。1 ページが複数ファイルを参照するため、Signed URL ではなく Signed Cookie を使う。有効期間は 24 時間。切れたら下記の再認証フローが走るだけなので、長さに神経質にならない。
 
@@ -580,7 +579,7 @@ PreSignUp の Construct は Google IdP の導入と同時に追加する。導�
 独自ドメインの有無による分岐は次の 2 種類に限り、Construct の中に `if (domain)` を増やさない。
 
 - スタックの組み立て（`okibasho-stack.ts`）で、`ServiceDomain` と `PagesViewerAuth` を作るか作らないか
-- 各 Construct が受け取る optional な props（`customDomain?: { domainName, certificate }`、`viewerAuth?: { keyGroup }`、`cookieIssuer?: origin`）を Distribution の props に渡すか渡さないか
+- 各 Construct が受け取る optional な props（`customDomain?: { domainName, certificate }`、`viewerAuth?: { keyGroup }`）を Distribution の props に渡すか渡さないか
 
 `PagesDelivery` と `AppDelivery` は `domainName`（独自ドメインか CloudFront のデフォルトドメインか）を公開し、CfnOutput・CORS の許可 origin・Cognito のコールバック URL・pages-router に埋め込む app の URL はすべてこの値から組み立てる。下流はどちらのモードかを知らない。
 
