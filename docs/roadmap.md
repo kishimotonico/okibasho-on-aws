@@ -6,42 +6,29 @@
 
 CloudFront のデフォルトドメインで初回デプロイ済み。web / CLI から Cognito ローカルユーザーでログインし、Identity Pool の一時クレデンシャルで S3 に直接 PutObject / GetObject / DeleteObject / ListObjectsV2 する構成が動いている。`/p/<user>/<slug>/` の内部配信と `/s/<tag><share-id>/` の外部共有配信もどちらも実装済みで、KVS への投影と期限切れページの削除は PageMaintenance Lambda が 1 時間ごとのスケジュールで行う（S3 イベントによる該当ページだけの即時投影も別経路で動く）。
 
-まだ入っていないのは、独自ドメインと Signed Cookie による閲覧認証、Google IdP、CLI の npm 配布、CI である。
+独自ドメインと Signed Cookie による閲覧認証はコード上は入っている（実デプロイは未確認）。まだ入っていないのは、Google IdP、CLI の npm 配布、CI である。
 
 ## 残っている作業
 
 ### 独自ドメインと閲覧認証
 
-設計は [architecture.md](architecture.md) の「独自ドメイン」「内部ページの閲覧（Signed Cookie）」「CDK」節に決めてある。2 つの PR に分け、1 つ目だけでもデプロイできる状態にする。ドメイン無しでも synth・deploy できることは両方の PR で保つ。
+設計は [architecture.md](architecture.md) の「独自ドメイン」「内部ページの閲覧（Signed Cookie）」「CDK」節に決めてある。ドメインの付け替え（PR 1）と Signed Cookie 閲覧認証（PR 2）は実装済み。残るのは、手作業だった証明書と鍵ペアを CDK に取り込む PR 3 と、実デプロイでの確認。ドメイン無しでも synth・deploy できることは保つ。
 
-PR 1: ドメインの付け替え（`packages/infra` のみ）
+PR 3: 証明書と鍵ペアの IaC 化（`packages/infra` のみ）
 
-- [x] `config.ts` を `SERVICE_DOMAIN` / `CERTIFICATE_ARN` / `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` に置き換える。pages と app のホスト名は導出し、組み合わせの不備は synth で止める。`.env.example` は更新済み
-- [x] `ServiceDomain` Construct（`constructs/service-domain.ts`）。`Certificate.fromCertificateArn`、`HostedZone.fromHostedZoneAttributes`（渡されたときだけ）、pages / app の `{ domainName, certificate }`、Distribution を受け取って Alias レコード（pages は A のみ。IPv6 を無効にしているため。app は A と AAAA）を作るメソッド
-- [x] `PagesDelivery` / `AppDelivery` に `customDomain?: { domainName, certificate }` を足し、`domainName`（独自ドメインか Distribution ドメイン）を公開する。Distribution の `domainNames` / `certificate` は props の spread で渡すだけにする
-- [x] `Auth` の `appDomain` / `appDistributionDomain` を `appDomainName` 1 つにまとめる。CfnOutput（`PagesBaseUrl` / `AppUrl`）と CORS の許可 origin も `domainName` から組み立てる。Hosted Zone を渡さないときのために `PagesDistributionDomainName` / `AppDistributionDomainName` を Output に足す
-- [x] `pages-router.js` に app の URL を埋め込み、`/` を app へ 302 する（ドメインの有無に関係なく常に）。`pages-router.test.ts` に追加
-- [x] snapshot テストにドメインあり（固定の ARN・Hosted Zone）を追加し、alias・証明書・Alias レコードをアサートする
-- [x] `packages/cli/src/config.ts` と `constructs/auth.ts` に残る `share.example.jp` の例を `okibasho.example.com` に直す
+- [ ] `config.ts`: `CERTIFICATE_ARN` を廃止し、`SERVICE_DOMAIN` / `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` を 3 つそろえて設定する形にする。`.env.example` は更新済み
+- [ ] `certificate-stack.ts`（`OkibashoCertificate`、`env.region: 'us-east-1'`）。`Certificate` + `CertificateValidation.fromDns(hostedZone)`、SAN は pages と app。`certificate` を公開する
+- [ ] `bin/app.ts`: serviceDomain があるときだけ証明書スタックを作り、`OkibashoStack` に `certificate` を渡す。`okibasho.addDependency(certificateStack)`。`cdk.json` に `"@aws-cdk/core:defaultCrossStackReferences": "weak"` を足し、`crossRegionReferences` は使わない
+- [ ] `ServiceDomain`: 証明書を props で受け取る形にし、`Certificate.fromCertificateArn` を消す。Hosted Zone は必須になるので `addAliasRecords` の早期 return を消す。`PagesDistributionDomainName` / `AppDistributionDomainName` の Output も不要になるので消す
+- [ ] `SigningKeyPair` Construct（`pages-viewer-auth.ts` 内か隣のファイル）。`Provider` + `NodejsFunction`（`lambda/signing-key-pair/`）+ `CustomResource`。Lambda は Create で `crypto.generateKeyPairSync('rsa', 2048)`（公開鍵 spki / 秘密鍵 pkcs8、PEM）を作って SSM に 2 つ置き（`/<スタック名>/pages-signing/public-key` は String、`private-key` は SecureString）、`Data.PublicKeyPem` を返す。Update は SSM の公開鍵を読んで同じ値を返す。Delete で 2 つを消す（無くても成功扱い）。`generation` プロパティを props に持ち、変わったら再生成する。鍵の値は一切ログに出さない
+- [ ] `PagesViewerAuth`: `PublicKey.encodedKey` を `keyPair.publicKeyPem`（`getAttString`）にし、`StringParameter.valueForStringParameter` を消す。発行 Lambda には秘密鍵のパラメータ名を渡し、`grantRead` はそのまま
+- [ ] snapshot（ドメインあり）を証明書スタック込みで更新し、`Fn::GetStackOutput` で証明書 ARN を受けていること、`AWS::CertificateManager::Certificate` が us-east-1 のスタックにあること、カスタムリソースと Provider が存在することをアサートする。ドメイン無しの snapshot は変えない。鍵ペア Lambda は SSM 呼び出しを差し替えて Create / Update / Delete を単体テストする
 
-受け入れ: `SERVICE_DOMAIN` 未設定で今までどおり synth・deploy でき、設定すると `PagesBaseUrl` が `https://okibasho.example.com`、`AppUrl` が `https://app.okibasho.example.com/` になり、ブラウザで両方開ける。apex の `/` は app へ飛ぶ。
-
-PR 2: Signed Cookie 閲覧認証（`packages/infra` と `packages/web`）
-
-- [x] `PagesViewerAuth` Construct（`constructs/pages-viewer-auth.ts`）。SSM の公開鍵から `PublicKey` と `KeyGroup`、発行 Lambda（`lambda/pages-cookie/`、`NodejsFunction`、arm64）、Function URL（Lambda OAC）。秘密鍵のパラメータへの `ssm:GetParameter` を Lambda に付与
-- [x] 発行 Lambda。JSON ボディの `idToken` を `aws-jwt-verify` で検証し、`@aws-sdk/cloudfront-signer` の `getSignedCookies` でカスタムポリシー（`https://<pages>/p/*`、24 時間）に署名、`Domain=<サービスドメイン>; Path=/p; Secure; HttpOnly; SameSite=Lax; Max-Age=86400` で 3 つの Cookie を返す。検証失敗は 401、ボディ不正は 400。成功・失敗をログに出す（トークンは出さない）
-- [x] `AppDelivery` に `/auth/*` ビヘイビアを足すメソッド（`allowedMethods: ALLOW_ALL`、キャッシュ無効、`x-amz-content-sha256` を含めて全ヘッダを転送する origin request policy）。スタックで `PagesViewerAuth` があるときだけ呼ぶ
-- [x] `PagesDelivery` に `viewerAuth?: { keyGroup }` を足し、デフォルトビヘイビアの `trustedKeyGroups` と 403 → `/errors/403.html` のカスタムエラーレスポンスを、渡されたときだけ設定する。`/s/*` と `/errors/*` には付けない
-- [x] `static/errors/403.html`。`/p/` で始まるパスだけ `https://<app>/pages-login?return=<元URL>` へ飛ばす。60 秒以内に飛ばした直後なら固定文言。app の URL は `BucketDeployment` の `Source.data` で埋める（404.html と同じ `errors/` に置く）
-- [x] web に `/pages-login` ルート。`return` を検証（`VITE_PAGES_BASE_URL` と同じ origin、`/p/` 始まり）し、`POST /auth/pages-cookie`（`x-amz-content-sha256` 付き）してから `location.replace(return)`。表示は LoadingShell。`/callback` がログイン前の `/pages-login?return=...` を復元できるようにする
-- [x] snapshot（ドメインあり）に Key Group・`/auth/*`・403 を足し、ドメイン無しでは存在しないことをアサートする。Lambda は JWT 検証と署名を差し替えて単体テストする
-
-受け入れ: 未ログインで pages の URL を開くとログインへ誘導され、ログイン後に元のページが表示される。Cookie 発行後 24 時間は再ログインなしで別ページも見られる。`/s/*` は Cookie なしで今までどおり見られる。ドメイン無しの synth・deploy は変わらない。
+受け入れ: `.env` に 3 つ書いて `cdk bootstrap`（デプロイ先と us-east-1）→ `cdk deploy --all` だけで証明書・DNS 検証・Alias レコード・鍵ペアまで揃い、手順書から AWS CLI の操作が消える。`cdk destroy --all` で証明書と SSM パラメータも消える。
 
 デプロイ後に確認する点:
 
 - Lambda OAC 越しの POST が通ること（`x-amz-content-sha256` が無いと 403 になるはず。`Authorization` は CloudFront が上書きするためボディで渡す設計にしている）
-- `StringParameter.valueForStringParameter` で複数行の PEM が `PublicKey` に入ること。入らなければ `valueFromLookup`（`cdk.context.json` は git 管理外）に切り替える
 - viewer-request の CloudFront Function と Signed Cookie の検証のどちらが先か。Cookie 無しで `/` を開いたとき、302 で app へ行くか、403 ページ経由で app へ行くか
 - Geo restriction の 403 で `/s/*` を開いたとき、403.html が固定文言を出して app へ飛ばさないこと
 

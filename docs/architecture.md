@@ -60,7 +60,7 @@ Lambda は次の 3 つ。どれも小さく独立している。API Gateway は�
 
 このほかに、CDK の `BucketDeployment`（pages バケットの `errors/` に固定ページを配置するためだけのカスタムリソース Lambda）が存在する。これは IAM の境界の外にある処理として次節で扱う。
 
-CDK のスタックは 1 つとし、機能的・概念的な境界は Construct で表現する（auth / storage / delivery / page-maintenance / app-site / service-domain / pages-viewer-auth）。Stack 本体は各 Construct の組み立てだけを行う。スタック分割による cross-stack reference の複雑さは持ち込まない。
+CDK のスタックはメインの 1 つ（+ us-east-1 の証明書だけのスタック）とし、機能的・概念的な境界は Construct で表現する（auth / storage / delivery / page-maintenance / app-site / service-domain / pages-viewer-auth）。Stack 本体は各 Construct の組み立てだけを行う。
 
 DynamoDB、WAF、Lambda@Edge、API Gateway、S3 Lifecycle、presigned URL は使わない。CloudFront KeyValueStore は外部共有の投影先として採用したため、この対象からは外れる。
 
@@ -102,8 +102,8 @@ Signed Cookie の `Domain` はサービスドメインにする。Hosted Zone �
 
 DNS と証明書は次のとおり。
 
-- Route 53 の Hosted Zone は他サービスのレコードも入っている共用のもの（`example.com`）を使い、サブゾーンへの委任はしない。Hosted Zone の ID と名前を渡したときだけ、CDK が pages と app の Alias レコード（A。app は AAAA も）を作る。渡さなければレコードは作らず、CloudFront の Distribution ドメインを Output に出すので、外部の DNS に手で CNAME / ALIAS を置く
-- ACM 証明書は us-east-1 で手動で作り（DNS 検証、SAN は pages と app の 2 つ）、ARN を渡す。スタックは 1 つのまま保つ。`crossRegionReferences` は experimental で削除や置き換えが面倒になり、年に 1 回も触らない証明書のためにスタックを増やす価値が薄い。Distribution は証明書の ARN が us-east-1 でないと synth で止まる
+- Route 53 の Hosted Zone は他サービスのレコードも入っている共用のもの（`example.com`）を使い、サブゾーンへの委任はしない。同じ AWS アカウントにあることが前提で、ID と名前を渡す。CDK はゾーンを参照するだけで、作るレコードは証明書の DNS 検証用 CNAME と pages / app の Alias レコード（A。app は AAAA も）に限る。同じ名前のレコードが既にあればデプロイが失敗するだけで、上書きはしない。スタック削除で消えるのもこのレコードだけである
+- ACM 証明書は us-east-1 の `OkibashoCertificate` スタックで作り、`CertificateValidation.fromDns` で検証まで CDK に任せる。SAN は pages と app の 2 つ。メインスタックへは CloudFormation の `Fn::GetStackOutput`（弱参照。`cdk.json` の `@aws-cdk/core:defaultCrossStackReferences: weak`）で渡す。以前の `crossRegionReferences` が生成していたカスタムリソースと SSM の中継は要らない。弱参照なので、証明書スタックはメインスタックより先に消さない
 - Cognito Managed Login のドメインは `amazoncognito.com` のままにする。独自ドメインにしたくなったら、証明書に `auth.` を足して `UserPoolDomain` を `customDomain` に切り替える
 
 独自ドメインを設定しなくても、今までどおり CloudFront のデフォルトドメインでデプロイして使える。そのとき作らないのは証明書の参照・alias・Route 53 レコード・Signed Cookie 閲覧認証一式（`/auth/*`・Key Group・403 エラーページ）である。`cloudfront.net` は Public Suffix List に載っていて親ドメイン Cookie を置けないため、閲覧認証はドメインが無いと原理的に成り立たない。ドメイン無しでは内部ページ `/p/*` はログイン不要のまま配信される。CLI と web は接続先を CfnOutput から受け取るだけなので、ドメインの有無による分岐を持たない。
@@ -209,12 +209,14 @@ authenticated role の信頼ポリシー。`sts:TagSession` を忘れるとプ�
 
 pages Distribution のデフォルトビヘイビア（`/p/*`）に Trusted Key Group を設定する。`/s/*` と `/errors/*` には付けない。
 
-鍵ペアは手で作る。AWS には CloudFront 用の鍵ペアを生成するリソースが無く、カスタムリソースで自動化するより証明書と同じ「手で作って参照を渡す」流儀に揃えるほうが単純なためである。公開鍵も秘密鍵も SSM Parameter Store に置き、ローカルにファイルを残さない（CI からデプロイするときにファイルを配る必要が無い）。パラメータ名は固定で、CDK は環境変数を介さずこの名前を読む。
+鍵ペアはカスタムリソース（`SigningKeyPair`。Provider フレームワーク + Lambda）がデプロイ時に生成する。AWS には CloudFront 用の鍵ペアを生成するリソースが無いためである。Lambda は Node の `crypto` で RSA 2048 の鍵ペアを作り、両方を SSM Parameter Store に置き、公開鍵 PEM だけを属性で返す。秘密鍵は CloudFormation にもログにも出さない。
 
 | パラメータ | 種類 | 使う場所 |
 | --- | --- | --- |
-| `/okibasho/pages-signing/public-key` | String（PEM） | CDK が `PublicKey` の `encodedKey` に渡す（`StringParameter.valueForStringParameter`） |
-| `/okibasho/pages-signing/private-key` | SecureString（PEM） | 発行 Lambda がコールドスタート時に `GetParameter`（復号あり）で読む |
+| `/<スタック名>/pages-signing/public-key` | String（PEM） | Update 時に同じ公開鍵を返すために保持する。`PublicKey` の `encodedKey` には Create / Update の戻り値（`getAttString`）を渡す |
+| `/<スタック名>/pages-signing/private-key` | SecureString（PEM） | 発行 Lambda がコールドスタート時に `GetParameter`（復号あり）で読む |
+
+Create で生成、Update は何もせず同じ公開鍵を返す、Delete で 2 つのパラメータを消す。鍵を作り直したいときはカスタムリソースの `generation` プロパティを進めて再デプロイする。公開鍵が変わって `PublicKey` が置き換わり、古い Cookie は 403 になって再ログインが走るだけで済む。
 
 発行するのは `/auth/*` の Lambda 1 つ。Function URL を Lambda OAC 付きで app Distribution の `/auth/*` ビヘイビアに紐づけ、CloudFront 経由でしか呼べないようにする。
 
@@ -533,11 +535,13 @@ OAuth / PKCE は既存ライブラリ（openid-client）を使い、独自実装
 
 ## CDK
 
-単一スタック。`lib/constructs/` に機能ごとに分ける。
+スタックは `Okibasho`（デプロイ先リージョン）と、独自ドメイン設定時だけ作る `OkibashoCertificate`（us-east-1。ACM 証明書だけ）の 2 つ。CloudFront の証明書が us-east-1 にしか置けないための分割で、それ以外の理由でスタックを増やさない。`lib/constructs/` に機能ごとに分ける。
 
 ```text
+bin/app.ts                 2 つのスタックを組む。証明書スタックは serviceDomain があるときだけ
 lib/
   okibasho-stack.ts        各 Construct の組み立てだけ
+  certificate-stack.ts     us-east-1 の ACM 証明書（DNS 検証）
   config.ts                  環境変数から emailDomain / serviceDomain を読む
   constructs/
     auth.ts                  UserPool / Managed Login / App Client x2 /
@@ -551,13 +555,15 @@ lib/
                              （S3 イベントでページ単位の投影 + 1 時間ごとの定期処理で
                              期限切れ削除・KVS全件突き合わせ。アラームは持たない）
     app-delivery.ts          app バケット + Distribution + SPA 用 CloudFront Function
-    service-domain.ts        独自ドメイン（設定時のみ）。ACM 証明書の参照、Hosted Zone の参照、
-                             pages / app それぞれのホスト名と Alias レコード
-    pages-viewer-auth.ts     Signed Cookie 閲覧認証（独自ドメイン設定時のみ）。PublicKey / KeyGroup、
-                             SSM の鍵の参照、発行 Lambda + Function URL（Lambda OAC）
+    service-domain.ts        独自ドメイン（設定時のみ）。Hosted Zone の参照、
+                             pages / app それぞれのホスト名と証明書、Alias レコード
+    pages-viewer-auth.ts     Signed Cookie 閲覧認証（独自ドメイン設定時のみ）。SigningKeyPair
+                             （鍵ペアのカスタムリソース）、PublicKey / KeyGroup、
+                             発行 Lambda + Function URL（Lambda OAC）
   lambda/
     page-maintenance/
     pages-cookie/            Signed Cookie 発行 Lambda
+    signing-key-pair/        鍵ペアを生成して SSM に置くカスタムリソースの Lambda
   static/errors/             404.html / 403.html
 ```
 
@@ -570,11 +576,9 @@ PreSignUp の Construct は Google IdP の導入と同時に追加する。導�
 | 環境変数 | 必須 | 意味 |
 | --- | --- | --- |
 | `EMAIL_DOMAIN` | 必須 | メンバーのメールドメイン |
-| `SERVICE_DOMAIN` | 任意 | サービスドメイン。設定すると独自ドメインで構築する |
-| `CERTIFICATE_ARN` | `SERVICE_DOMAIN` 設定時は必須 | us-east-1 の ACM 証明書 |
-| `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` | 任意（両方そろえる） | Route 53 の Alias レコードを作るときだけ |
+| `SERVICE_DOMAIN` / `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` | 任意（3 つそろえる） | サービスドメインと、それを含む同一アカウントの Hosted Zone。設定すると独自ドメインで構築する |
 
-`config.ts` は組み合わせの不備（`SERVICE_DOMAIN` があるのに `CERTIFICATE_ARN` が無い、Hosted Zone の ID と名前が片方だけ）を synth の時点で止める。Signed Cookie の鍵の SSM パラメータが無いことはデプロイ時にしか分からないので、README の手順に書く。
+`config.ts` は 3 つのうち一部だけ設定された状態を synth の時点で止める。
 
 独自ドメインの有無による分岐は次の 2 種類に限り、Construct の中に `if (domain)` を増やさない。
 
@@ -585,7 +589,7 @@ PreSignUp の Construct は Google IdP の導入と同時に追加する。導�
 
 Construct の生成順は Storage → PageMaintenance → ServiceDomain → AppDelivery → Auth → PagesViewerAuth → PagesDelivery → Alias レコード。`AppDelivery` の `/auth/*` ビヘイビアは `PagesViewerAuth` が Auth（User Pool ID・App Client ID）に依存するため、`AppDelivery` 生成後に `addBehavior` で足す。
 
-`SERVICE_DOMAIN` が未設定でも `cdk synth` が通ること。snapshot テストはドメイン無し・ドメインあり（固定の証明書 ARN と Hosted Zone を渡す）の両方で合成し、どちらのモードも壊れていないことを守る。
+`SERVICE_DOMAIN` が未設定でも `cdk synth` が通ること。snapshot テストはドメイン無し・ドメインあり（固定の Hosted Zone を渡し、証明書スタックも同じ App に作る）の両方で合成し、どちらのモードも壊れていないことを守る。
 
 Identity Pool は L2 Construct（`aws-cdk-lib/aws-cognito-identitypool`）を使う。attributes for access control（principal tag マッピング）は L2 で設定できないため、`CfnIdentityPoolPrincipalTag` で補う。
 
@@ -599,6 +603,8 @@ GitHub Actions からの `cdk deploy` はアクセスキーを置かず、OIDC �
 - 管理 UI 用バケットは `DESTROY` + `autoDeleteObjects`。ビルドし直せる静的ファイルだけなので中身ごと消す
 - pages バケットは `RETAIN`。アップロード済みオブジェクトはスタック削除後も残る。`autoDeleteObjects` は付けない。課金は続くので、不要なら手で空にしてバケットを消す
 - CloudFront など残りのリソースはデフォルトどおり消える。Distribution の削除は完了まで待たされる
+- Signed Cookie の鍵の SSM パラメータはカスタムリソースの Delete で消える
+- 独自ドメイン設定時は `Okibasho` → `OkibashoCertificate` の順に消す（`cdk destroy --all` がこの順で消す）
 - CDK bootstrap はアカウント共通なので残す
 
 ## 配信
@@ -665,7 +671,7 @@ IAM の境界は、別ユーザーの prefix に書こうとすると `AccessDen
 
 ```text
 packages/
-  infra/   AWS CDK（単一スタック、機能境界は Construct）
+  infra/   AWS CDK（メインスタック + us-east-1 の証明書スタック、機能境界は Construct）
   web/     管理UI（静的 SPA。S3 + CloudFront で配信）
   cli/     okiba（Node.js のみ。AWS CLI に依存しない）
   core/    @okibasho/core。web と CLI が共有するページの規則と S3 操作
