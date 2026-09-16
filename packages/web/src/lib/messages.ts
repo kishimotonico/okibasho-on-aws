@@ -93,7 +93,6 @@ export const messages = {
   /** ログインコールバック */
   loginFailed: 'ログインに失敗しました',
   loginErrorTitle: 'ログインエラー',
-  loginInProgress: 'ログインしています',
 
   /** 読み込み中の画面（LoadingShell） */
   loadingLead: '読み込み中',

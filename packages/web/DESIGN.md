@@ -295,7 +295,7 @@ components:
 
 ### LoadingShell（JS読み込み〜ハイドレーション〜認証確認のあいだ）
 
-- **Role:** 箱は出さず、床の円（`UploadBoxIcon` と同じ位置・大きさ）の上を墨色の短い弧が回るだけの静的な画面。state・effect を持たず、prerender した `_shell.html` に焼き込む。composer・一覧の大きさと位置は本物と揃え、中身だけ一覧スケルトンと同じ視覚言語の薄いバーに置き換える
+- **Role:** 箱は出さず、床の円（`UploadBoxIcon` と同じ位置・大きさ）の上を墨色の短い弧が回るだけの静的な画面。state・effect を持たず、prerender した `_shell.html` に焼き込む。composer・一覧の大きさと位置は本物と揃え、中身だけ一覧スケルトンと同じ視覚言語の薄いバーに置き換える。出すのは `AuthGate` の一箇所だけ（認証確認・未ログイン・`/` と `/callback` の loader 待ちを1つの状態にまとめ、同じインスタンスを出し続けることで弧が巻き戻らない）
 - **ウェル:** composer は地色へ沈め、文字は muted に寄せる。本物の `Composer` がマウントした瞬間だけ、ウェル色が通常へ戻り（0.28s）、箱が床の円からせり上がる（440ms、back-ease）1回きりの CSS アニメーションを流す
 - **reduced-motion:** 弧は回さず、箱は短くフェードインするだけ
 
@@ -358,7 +358,8 @@ components/CopyButton.tsx   URLコピーの共通部品（UploadResult / PageRow
 components/BoxBubble.tsx    箱の直下の吹き出し（error / confirm / success）。
                             success は onCopy を渡すとクリックで公開URLをコピーする
 components/{AlertDialog,Menu,Tooltip}.tsx  radix-ui のラッパー
-components/UtilityMenu.tsx  右上のログアウトメニュー
+components/UtilityMenu.tsx  右上のログアウトメニューと、読み込み中に同じ場所を空けるプレースホルダー。
+                            どちらを出すかは AuthGate が決める
 hooks/useUploadFlow.ts     アップロードの状態機械（useReducer）
 hooks/useWindowFileDrag.ts ウィンドウ全体のドラッグ監視。isDragging だけ返す
 hooks/useCopyToClipboard.ts クリップボードへのコピーと一時表示状態（2秒で idle に戻る）

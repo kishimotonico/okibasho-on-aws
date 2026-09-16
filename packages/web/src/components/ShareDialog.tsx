@@ -94,81 +94,56 @@ export function ShareDialog({
     ? buildShareUrl(pagesBaseUrl, page.shareTag, existingShare.id)
     : null;
 
-  const handleIssue = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      await onSave({ id: generateShareId() });
-      setNotice('issued');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : messages.shareIssueFailed);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePasswordToggle = async (next: boolean) => {
-    if (!existingShare) {
-      return;
-    }
+  const save = async (share: PageShare | null, fallback: string, successNotice: Notice) => {
     setSaving(true);
     setNotice(null);
     setError(null);
     try {
-      if (next) {
-        await onSave({ ...existingShare, password: generateSharePassword() });
-      } else {
-        const { password: _password, ...rest } = existingShare;
-        await onSave(rest);
-      }
+      await onSave(share);
+      setNotice(successNotice);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : next
-            ? messages.sharePasswordOnFailed
-            : messages.sharePasswordOffFailed,
-      );
+      setError(err instanceof Error ? err.message : fallback);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleRecreateConfirmed = async () => {
+  const handleIssue = () => save({ id: generateShareId() }, messages.shareIssueFailed, 'issued');
+
+  const handlePasswordToggle = (next: boolean) => {
+    if (!existingShare) {
+      return;
+    }
+    if (next) {
+      return save(
+        { ...existingShare, password: generateSharePassword() },
+        messages.sharePasswordOnFailed,
+        null,
+      );
+    }
+    const { password: _password, ...rest } = existingShare;
+    return save(rest, messages.sharePasswordOffFailed, null);
+  };
+
+  const handleRecreateConfirmed = () => {
     setConfirmAction(null);
     if (!existingShare) {
       return;
     }
-    setSaving(true);
-    setNotice(null);
-    setError(null);
-    try {
-      await onSave({
+    return save(
+      {
         ...existingShare,
         id: generateShareId(),
         ...(hasPassword ? { password: generateSharePassword() } : {}),
-      });
-      setNotice('issued');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : messages.shareRecreateFailed);
-    } finally {
-      setSaving(false);
-    }
+      },
+      messages.shareRecreateFailed,
+      'issued',
+    );
   };
 
-  const handleStopConfirmed = async () => {
+  const handleStopConfirmed = () => {
     setConfirmAction(null);
-    setSaving(true);
-    setNotice(null);
-    setError(null);
-    try {
-      await onSave(null);
-      setNotice('stop');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : messages.shareStopFailed);
-    } finally {
-      setSaving(false);
-    }
+    return save(null, messages.shareStopFailed, 'stop');
   };
 
   return (

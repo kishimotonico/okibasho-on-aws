@@ -6,12 +6,8 @@ const VIEW_BOX = viewBoxFor(BOX_ICON_PARAMS).join(' ');
 // BOX_ICON_PARAMS.ring は 1 固定なので ring は必ず存在する。値は idle 形状から取り重複させない
 const RING = build(BOX_ICON_PARAMS, idleAnim(BOX_ICON_PARAMS)).ring!;
 
-interface LoadingShellProps {
-  lead: string;
-}
-
 /** JS 読み込み〜認証確認のあいだの静的な画面。prerender で _shell.html に焼き込まれる */
-export function LoadingShell({ lead }: LoadingShellProps) {
+export function LoadingShell() {
   return (
     <div className="page">
       <div className="upload-panel">
@@ -40,7 +36,7 @@ export function LoadingShell({ lead }: LoadingShellProps) {
               </svg>
             </div>
             <p className="composer-brand">okibasho</p>
-            <p className="composer-lead">{lead}</p>
+            <p className="composer-lead">{messages.loadingLead}</p>
             {/* PickLinks と同じ高さの非操作プレースホルダー。無いと本物と1行分ずれる */}
             <div className="composer-pick-links" aria-hidden>
               <span className="text-link">{messages.pickFiles}</span>

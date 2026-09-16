@@ -1,4 +1,3 @@
-import { useRouterState } from '@tanstack/react-router';
 import { CircleUser } from 'lucide-react';
 
 import { useAuth } from '~/auth/auth-context';
@@ -7,11 +6,6 @@ import { messages } from '~/lib/messages';
 
 export function UtilityMenu() {
   const auth = useAuth();
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-
-  if (pathname === '/callback' || !auth.isAuthenticated) {
-    return null;
-  }
 
   return (
     <div className="utility-menu">
@@ -22,6 +16,15 @@ export function UtilityMenu() {
       >
         <MenuItem onSelect={() => void auth.logout()}>{messages.logout}</MenuItem>
       </Menu>
+    </div>
+  );
+}
+
+// モバイル幅では UtilityMenu が行を取るため、同じ寸法のプレースホルダーで場所を空けておく
+export function UtilityMenuPlaceholder() {
+  return (
+    <div className="utility-menu" aria-hidden>
+      <span className="utility-menu__placeholder" />
     </div>
   );
 }
