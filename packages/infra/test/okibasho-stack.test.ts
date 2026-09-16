@@ -319,8 +319,8 @@ describe('OkibashoStack', () => {
     it('bucketは完全privateでHTTPS必須、Website Hostingは使わない', () => {
       const template = synth();
 
-      template.resourceCountIs('AWS::S3::Bucket', 2);
-      template.resourceCountIs('AWS::S3::BucketPolicy', 2);
+      template.resourceCountIs('AWS::S3::Bucket', 3);
+      template.resourceCountIs('AWS::S3::BucketPolicy', 3);
 
       template.hasResourceProperties('AWS::S3::Bucket', {
         PublicAccessBlockConfiguration: {

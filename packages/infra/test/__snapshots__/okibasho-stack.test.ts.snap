@@ -89,6 +89,12 @@ exports[`OkibashoStack > Google IdP ありのテンプレートが意図せず�
         ],
       },
     },
+    "PagesAccessLogBucketName": {
+      "Description": "pages のアクセスログ bucket名",
+      "Value": {
+        "Ref": "PagesDeliveryAccessLogBucket13C84414",
+      },
+    },
     "PagesBaseUrl": {
       "Description": "pages 閲覧URLのベース（CLI / Web 設定用）",
       "Value": {
@@ -1721,6 +1727,155 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::CloudFront::KeyValueStore",
     },
+    "PagesDeliveryAccessLogBucket13C84414": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 90,
+              "Id": "ExpireAccessLogs",
+              "Status": "Enabled",
+            },
+          ],
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "ObjectWriter",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketAutoDeleteObjectsCustomResourceEC4F28A6": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "PagesDeliveryAccessLogBucketPolicyC0A09CDC",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketPolicyC0A09CDC": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
     "PagesDeliveryCachePolicy7BBA6710": {
       "Properties": {
         "CachePolicyConfig": {
@@ -1830,6 +1985,14 @@ def sort_filter_rules(json_obj):
           "Enabled": true,
           "HttpVersion": "http2",
           "IPV6Enabled": false,
+          "Logging": {
+            "Bucket": {
+              "Fn::GetAtt": [
+                "PagesDeliveryAccessLogBucket13C84414",
+                "RegionalDomainName",
+              ],
+            },
+          },
           "Origins": [
             {
               "DomainName": {
@@ -2788,6 +2951,12 @@ exports[`OkibashoStack > テンプレートが意図せず変化していない 
           "AuthUserPool8115E87F",
           "ProviderURL",
         ],
+      },
+    },
+    "PagesAccessLogBucketName": {
+      "Description": "pages のアクセスログ bucket名",
+      "Value": {
+        "Ref": "PagesDeliveryAccessLogBucket13C84414",
       },
     },
     "PagesBaseUrl": {
@@ -4395,6 +4564,155 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::CloudFront::KeyValueStore",
     },
+    "PagesDeliveryAccessLogBucket13C84414": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 90,
+              "Id": "ExpireAccessLogs",
+              "Status": "Enabled",
+            },
+          ],
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "ObjectWriter",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketAutoDeleteObjectsCustomResourceEC4F28A6": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "PagesDeliveryAccessLogBucketPolicyC0A09CDC",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketPolicyC0A09CDC": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
     "PagesDeliveryCachePolicy7BBA6710": {
       "Properties": {
         "CachePolicyConfig": {
@@ -4504,6 +4822,14 @@ def sort_filter_rules(json_obj):
           "Enabled": true,
           "HttpVersion": "http2",
           "IPV6Enabled": false,
+          "Logging": {
+            "Bucket": {
+              "Fn::GetAtt": [
+                "PagesDeliveryAccessLogBucket13C84414",
+                "RegionalDomainName",
+              ],
+            },
+          },
           "Origins": [
             {
               "DomainName": {
@@ -5524,6 +5850,12 @@ exports[`OkibashoStack > 独自ドメインありのテンプレートが意図�
           "AuthUserPool8115E87F",
           "ProviderURL",
         ],
+      },
+    },
+    "PagesAccessLogBucketName": {
+      "Description": "pages のアクセスログ bucket名",
+      "Value": {
+        "Ref": "PagesDeliveryAccessLogBucket13C84414",
       },
     },
     "PagesBaseUrl": {
@@ -7175,6 +7507,155 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::CloudFront::KeyValueStore",
     },
+    "PagesDeliveryAccessLogBucket13C84414": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 90,
+              "Id": "ExpireAccessLogs",
+              "Status": "Enabled",
+            },
+          ],
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "ObjectWriter",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketAutoDeleteObjectsCustomResourceEC4F28A6": {
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "PagesDeliveryAccessLogBucketPolicyC0A09CDC",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "PagesDeliveryAccessLogBucketPolicyC0A09CDC": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "PagesDeliveryAccessLogBucket13C84414",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PagesDeliveryAccessLogBucket13C84414",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "PagesDeliveryAccessLogBucket13C84414",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
     "PagesDeliveryCachePolicy7BBA6710": {
       "Properties": {
         "CachePolicyConfig": {
@@ -7288,6 +7769,14 @@ def sort_filter_rules(json_obj):
           "Enabled": true,
           "HttpVersion": "http2",
           "IPV6Enabled": false,
+          "Logging": {
+            "Bucket": {
+              "Fn::GetAtt": [
+                "PagesDeliveryAccessLogBucket13C84414",
+                "RegionalDomainName",
+              ],
+            },
+          },
           "Origins": [
             {
               "DomainName": {

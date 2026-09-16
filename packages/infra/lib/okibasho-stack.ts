@@ -85,6 +85,11 @@ export class OkibashoStack extends Stack {
       description: 'pages bucket名（手動テスト用）',
     });
 
+    new CfnOutput(this, 'PagesAccessLogBucketName', {
+      value: pagesDelivery.accessLogBucket.bucketName,
+      description: 'pages のアクセスログ bucket名',
+    });
+
     new CfnOutput(this, 'UserPoolId', {
       value: auth.userPool.userPoolId,
       description: 'Cognito User Pool ID',

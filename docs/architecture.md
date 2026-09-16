@@ -463,7 +463,7 @@ Lambda の失敗は CloudWatch Logs と Lambda の `Errors` メトリクスで�
 
 - ブラウザの閲覧履歴
 - チャットやメールの本文（URL をそのまま貼って共有するため）
-- CloudFront の標準アクセスログ。現在は無効化しており出力されない。将来有効化する場合は、share-id を含む URL をログに残すことになるため share-id を credential として扱い、ログ用バケットを private にする
+- CloudFront の標準アクセスログ。外部共有の閲覧を追うために有効にしている。share-id を含む URL が残るため、ログ用バケットは完全 private にし、読めるのはデプロイ権限を持つ人だけとする。Signed Cookie を残さないよう `logIncludesCookies` は既定の false のままにする
 - CloudTrail の KVS データイベント。データイベントを有効化しなければ出力されない
 
 ## 保存期間
@@ -616,7 +616,7 @@ GitHub Actions からの `cdk deploy` はアクセスキーを置かず、OIDC �
 
 - User Pool は `DESTROY`。Hosted UI ドメインも一緒に消える
 - Google の client secret（Secrets Manager）はスタック外に手で置いたものなので残る。GCP の OAuth クライアントと一緒に手で消す
-- 管理 UI 用バケットは `DESTROY` + `autoDeleteObjects`。ビルドし直せる静的ファイルだけなので中身ごと消す
+- 管理 UI 用バケットと pages のアクセスログ用バケットは `DESTROY` + `autoDeleteObjects`。ビルドし直せる静的ファイルとログだけなので中身ごと消す
 - pages バケットは `RETAIN`。アップロード済みオブジェクトはスタック削除後も残る。`autoDeleteObjects` は付けない。課金は続くので、不要なら手で空にしてバケットを消す。バージョニングを有効にしているので、空にするには旧バージョンと削除マーカーも消す必要がある
 - CloudFront など残りのリソースはデフォルトどおり消える。Distribution の削除は完了まで待たされる
 - Signed Cookie の鍵の SSM パラメータはカスタムリソースの Delete で消える
@@ -661,7 +661,7 @@ CloudFront の Geo restriction を日本に絞る。無料である。WAF は月
 
 CloudWatch Logs に最低限、Signed Cookie 発行の成功/失敗、PageMaintenance の削除件数、authorization 失敗を記録する。JWT と refresh token はログに出さない。
 
-ロググループは保持期間 90 日、スタック削除で一緒に消す。CDK が内部で作る Lambda（S3 通知と `autoDeleteObjects`）と CloudFront Functions のロググループは CDK から指定する口が無いため、この設定の対象外になる。
+ロググループは保持期間 90 日、スタック削除で一緒に消す。CDK が内部で作る Lambda（S3 通知と `autoDeleteObjects`）と CloudFront Functions のロググループは CDK から指定する口が無いため、この設定の対象外になる。pages のアクセスログも同じ 90 日で、こちらは S3 のライフサイクルで消す。
 
 PageMaintenance の定期処理は削除した prefix を残し、誤削除の調査に使えるようにする。
 
