@@ -18,7 +18,7 @@ PR 3: 証明書と鍵ペアの IaC 化（`packages/infra` のみ）
 
 - [x] `config.ts`: `CERTIFICATE_ARN` を廃止し、`SERVICE_DOMAIN` / `HOSTED_ZONE_ID` / `HOSTED_ZONE_NAME` を 3 つそろえて設定する形にする。`.env.example` は更新済み
 - [x] `certificate-stack.ts`（`OkibashoCertificate`、`env.region: 'us-east-1'`）。`Certificate` + `CertificateValidation.fromDns(hostedZone)`、SAN は pages と app。`certificate` を公開する
-- [x] `bin/app.ts`: serviceDomain があるときだけ証明書スタックを作り、`OkibashoStack` に `certificate` を渡す。`okibasho.addDependency(certificateStack)`。`cdk.json` に `"@aws-cdk/core:defaultCrossStackReferences": "weak"` を足し、`crossRegionReferences` は使わない
+- [x] `bin/app.ts`: serviceDomain があるときだけ証明書スタックを作り、`OkibashoStack` に `certificate` を渡す。`okibasho.addStackDependency(certificateStack)`。`cdk.json` に `"@aws-cdk/core:defaultCrossStackReferences": "weak"` を足し、`crossRegionReferences` は使わない
 - [x] `ServiceDomain`: 証明書を props で受け取る形にし、`Certificate.fromCertificateArn` を消す。Hosted Zone は必須になるので `addAliasRecords` の早期 return を消す。`PagesDistributionDomainName` / `AppDistributionDomainName` の Output も不要になるので消す
 - [x] `SigningKeyPair` Construct（`pages-viewer-auth.ts` 内か隣のファイル）。`Provider` + `NodejsFunction`（`lambda/signing-key-pair/`）+ `CustomResource`。Lambda は Create で `crypto.generateKeyPairSync('rsa', 2048)`（公開鍵 spki / 秘密鍵 pkcs8、PEM）を作って SSM に 2 つ置き（`/<スタック名>/pages-signing/public-key` は String、`private-key` は SecureString）、`Data.PublicKeyPem` を返す。Update は SSM の公開鍵を読んで同じ値を返す。Delete で 2 つを消す（無くても成功扱い）。`generation` プロパティを props に持ち、変わったら再生成する。鍵の値は一切ログに出さない
 - [x] `PagesViewerAuth`: `PublicKey.encodedKey` を `keyPair.publicKeyPem`（`getAttString`）にし、`StringParameter.valueForStringParameter` を消す。発行 Lambda には秘密鍵のパラメータ名を渡し、`grantRead` はそのまま
