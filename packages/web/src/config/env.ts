@@ -30,7 +30,7 @@ export class WebConfigError extends Error {
   }
 }
 
-const REQUIRED_FIELDS = [
+export const REQUIRED_FIELDS = [
   {
     key: 'hostedUiBaseUrl' as const,
     envVar: 'VITE_HOSTED_UI_BASE_URL',

@@ -5,17 +5,20 @@
   "license": "MIT",
   "description": "ちょっとしたHTML・アーティファクトを共有するためのAWSスタック",
   "packageManager": "pnpm@11.5.0",
+  "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && tsc -p scripts/tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "ship": "node scripts/deploy.ts"
   },
   "devDependencies": {
+    "@types/node": "^24.13.3",
     "prettier": "^3.9.6",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"

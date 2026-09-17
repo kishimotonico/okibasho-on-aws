@@ -50,8 +50,12 @@ JSON は登録後に消す。secret を作り直したときは `put-secret-valu
 
 ```bash
 pnpm --filter @okibasho/infra diff
-pnpm --filter @okibasho/infra exec cdk deploy --all
+pnpm ship
 ```
+
+`pnpm ship`（`scripts/deploy.ts`）は CDK のデプロイ、管理 UI のビルド、S3 へのアップロード、CloudFront invalidation までを順に行う。引数はそのまま `cdk deploy` に渡る。
+
+管理 UI のビルドには Output の値が要る。`cdk synth` を web のビルドに依存させたくないため、アップロードは CDK の BucketDeployment ではなくこのスクリプトが行う。Cache-Control はアップロード時に付けない。CloudFront の Response Headers Policy が `/assets/*` を長期キャッシュ、それ以外（`_shell.html` を含む）を `no-cache` にするので、デプロイのたびに invalidation を打てば十分。
 
 独自ドメイン設定時は、証明書の発行と DNS 検証、Alias レコード、Signed Cookie の鍵ペアまでここで揃う。証明書の検証で数分待つ。
 
@@ -76,20 +80,7 @@ aws cognito-idp admin-create-user --user-pool-id <UserPoolId> \
 
 仮パスワードがメールで届き、初回ログイン時に変更を求められる。
 
-## 4. 管理 UI のビルドとアップロード
-
-`packages/web/.env` を Output から埋める（対応表は `packages/web/.env.example`）。`VITE_PAGES_BASE_URL` は `PagesBaseUrl` で、独自ドメイン設定時は `https://okibasho.example.com` になる。`VITE_APP_BASE_URL` は `AppUrl`（OGP画像などの絶対URL生成に使う）。
-
-```bash
-pnpm --filter @okibasho/web build
-aws s3 sync packages/web/dist/client s3://<AppBucketName> --delete
-aws cloudfront create-invalidation --paths '/*' --distribution-id \
-  "$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='trusted 管理UI配信'].Id" --output text)"
-```
-
-`cdk synth` を web のビルドに依存させたくないため、CDK の BucketDeployment ではなく手でアップロードする。Cache-Control はアップロード時に付けない。CloudFront の Response Headers Policy が `/assets/*` を長期キャッシュ、それ以外（`_shell.html` を含む）を `no-cache` にするので、デプロイのたびに invalidation を打てば十分。
-
-## 5. CLI の設定
+## 4. CLI の設定
 
 `~/.config/okibasho/config.json`（`XDG_CONFIG_HOME` があればその下）か、`OKIBA_*` の環境変数で渡す。項目と Output の対応は `npx okiba --help` に出る。
 
@@ -105,7 +96,7 @@ aws cloudfront create-invalidation --paths '/*' --distribution-id \
 }
 ```
 
-## 6. デプロイ後の確認
+## 5. デプロイ後の確認
 
 独自ドメイン設定時に、ブラウザとシェルから見る。
 
@@ -132,7 +123,7 @@ aws logs tail "$(aws logs describe-log-groups --log-group-name-prefix Okibasho-P
 
 初回デプロイでまだ実機確認できていない点は [roadmap.md](roadmap.md) の「デプロイ後に確認する点」にある。
 
-## 7. 運用
+## 6. 運用
 
 - **鍵の作り直し**: `pages-viewer-auth.ts` の `generation` を 1 増やして `cdk deploy`。新しい世代の鍵ペアが作られ、旧世代は消える。発行済みの Cookie は無効になり、再ログインが走る
 - **証明書**: DNS 検証のレコードが残っている限り ACM が自動更新する

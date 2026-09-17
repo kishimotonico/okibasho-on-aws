@@ -40,14 +40,14 @@ cp packages/infra/.env.example packages/infra/.env   # デプロイ設定。EMAI
 ## よく使うコマンド
 
 ```bash
-pnpm typecheck                          # 全パッケージの型チェック
-pnpm test                               # 全パッケージのテスト（Vitest）
-pnpm format                             # Prettier で整形
+pnpm typecheck                        # 全パッケージの型チェック
+pnpm test                             # 全パッケージのテスト（Vitest）
+pnpm format                           # Prettier で整形
 pnpm --filter @okibasho/infra synth   # CloudFormation テンプレートの生成
 pnpm --filter @okibasho/infra diff    # デプロイ済みスタックとの差分
-pnpm --filter @okibasho/infra deploy  # デプロイ
-pnpm --filter @okibasho/web dev        # 管理UIの開発サーバー
-pnpm --filter @okibasho/cli build      # CLIを単一JSにバンドル
+pnpm ship                             # CDK デプロイ〜管理UIのアップロードまで一括
+pnpm --filter @okibasho/web dev       # 管理UIの開発サーバー
+pnpm --filter @okibasho/cli build     # CLIを単一JSにバンドル
 ```
 
 ## ドキュメント

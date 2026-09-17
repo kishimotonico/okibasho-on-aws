@@ -6,7 +6,7 @@
 
 CloudFront のデフォルトドメインで初回デプロイ済み。web / CLI から Cognito ローカルユーザーでログインし、Identity Pool の一時クレデンシャルで S3 に直接 PutObject / GetObject / DeleteObject / ListObjectsV2 する構成が動いている。`/p/<user>/<slug>/` の内部配信と `/s/<tag><share-id>/` の外部共有配信もどちらも実装済みで、期限切れページの削除は PageMaintenance Lambda が毎時、KVS 全件の突き合わせは日次で行う（S3 イベントによる該当ページだけの即時投影も別経路で動く）。
 
-独自ドメインと Signed Cookie による閲覧認証、Google IdP（任意設定、ローカルユーザーと併用）も実装・デプロイ済み。証明書と鍵ペアも CDK が作る（手順は [deploy.md](deploy.md)）。まだ入っていないのは、CLI の npm 配布と CI である。管理 UI の配置は `cdk deploy` とは別に手でアップロードしており、CDK に寄せるかは未決。
+独自ドメインと Signed Cookie による閲覧認証、Google IdP（任意設定、ローカルユーザーと併用）も実装・デプロイ済み。証明書と鍵ペアも CDK が作る（手順は [deploy.md](deploy.md)）。まだ入っていないのは、CLI の npm 配布と CI である。
 
 ## 残っている作業
 
@@ -38,7 +38,7 @@ CLI の npm 配布:
 CI:
 
 - [ ] GitHub Actions で typecheck / test / synth を回す
-- [ ] GitHub Actions OIDC + 引受ロールで `cdk deploy` できるようにする（アクセスキーは置かない）
+- [ ] GitHub Actions OIDC + 引受ロールで `pnpm ship` できるようにする（アクセスキーは置かない）
 
 入力検証の詰め:
 

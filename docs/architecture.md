@@ -525,7 +525,7 @@ Construct の生成順は Storage → PageMaintenance → ServiceDomain → AppD
 
 Identity Pool は L2 Construct（`aws-cdk-lib/aws-cognito-identitypool`）を使う。attributes for access control（principal tag マッピング）は L2 で設定できないため、`CfnIdentityPoolPrincipalTag` で補う。
 
-GitHub Actions からの `cdk deploy` はアクセスキーを置かず、OIDC プロバイダ + 引受ロールで行う。
+GitHub Actions からの `pnpm ship` はアクセスキーを置かず、OIDC プロバイダ + 引受ロールで行う。
 
 ### スタック削除
 

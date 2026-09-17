@@ -143,5 +143,10 @@ export class OkibashoStack extends Stack {
       value: appDelivery.bucket.bucketName,
       description: 'UI用bucket名（ビルド成果物のアップロード先）',
     });
+
+    new CfnOutput(this, 'AppDistributionId', {
+      value: appDelivery.distribution.distributionId,
+      description: 'UI配信CloudFrontのDistribution ID（invalidation用）',
+    });
   }
 }
