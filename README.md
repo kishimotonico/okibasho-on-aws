@@ -35,7 +35,7 @@ pnpm install
 cp packages/infra/.env.example packages/infra/.env   # デプロイ設定。EMAIL_DOMAIN は必須
 ```
 
-デプロイの手順（独自ドメイン・証明書・鍵の準備、ユーザー作成、管理 UI のアップロードまで）は [docs/deploy.md](docs/deploy.md) にあります。
+デプロイの手順（独自ドメイン・証明書・鍵の準備、ユーザー作成、CLI の設定まで）は [docs/deploy.md](docs/deploy.md) にあります。
 
 ## よく使うコマンド
 

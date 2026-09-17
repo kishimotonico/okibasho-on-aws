@@ -55,8 +55,6 @@ pnpm ship
 
 `pnpm ship`（`scripts/deploy.ts`）は CDK のデプロイ、管理 UI のビルド、S3 へのアップロード、CloudFront invalidation までを順に行う。引数はそのまま `cdk deploy` に渡る。
 
-管理 UI のビルドには Output の値が要る。`cdk synth` を web のビルドに依存させたくないため、アップロードは CDK の BucketDeployment ではなくこのスクリプトが行う。Cache-Control はアップロード時に付けない。CloudFront の Response Headers Policy が `/assets/*` を長期キャッシュ、それ以外（`_shell.html` を含む）を `no-cache` にするので、デプロイのたびに invalidation を打てば十分。
-
 独自ドメイン設定時は、証明書の発行と DNS 検証、Alias レコード、Signed Cookie の鍵ペアまでここで揃う。証明書の検証で数分待つ。
 
 Output は後の手順で使う。

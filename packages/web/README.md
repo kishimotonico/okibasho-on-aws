@@ -10,18 +10,7 @@ TanStack Start（React）を使う。SPA モード + prerender で静的ファ�
 pnpm --filter @okibasho/web dev
 ```
 
-接続先は `packages/web/.env.example` を `.env` にコピーして埋める（`cdk deploy` の CfnOutput に対応）。
-
-| 環境変数                  | CDK CfnOutput     |
-| ------------------------- | ----------------- |
-| `VITE_HOSTED_UI_BASE_URL` | `HostedUiBaseUrl` |
-| `VITE_OIDC_ISSUER`        | `OidcIssuerUrl`   |
-| `VITE_WEB_APP_CLIENT_ID`  | `WebAppClientId`  |
-| `VITE_IDENTITY_POOL_ID`   | `IdentityPoolId`  |
-| `VITE_USER_POOL_ID`       | `UserPoolId`      |
-| `VITE_REGION`             | `Region`          |
-| `VITE_PAGES_BUCKET`       | `PagesBucketName` |
-| `VITE_PAGES_BASE_URL`     | `PagesBaseUrl`    |
+接続先は `packages/web/.env.example` を `.env` にコピーし、`cdk deploy` の CfnOutput から埋める。デプロイ（`pnpm ship`）は `.env` を使わない。
 
 ## ビルド
 

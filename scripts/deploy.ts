@@ -10,6 +10,8 @@ function run(command: string, args: string[]): void {
   execFileSync(command, args, { cwd: root, stdio: 'inherit' });
 }
 
+// web のビルドには Output の値が要る。BucketDeployment に寄せると cdk synth が web のビルドに
+// 依存するため、アップロードは CDK の外で行う
 const outputsFile = join(mkdtempSync(join(tmpdir(), 'okibasho-deploy-')), 'outputs.json');
 
 run('pnpm', [
@@ -32,6 +34,8 @@ for (const field of REQUIRED_FIELDS) {
 }
 run('pnpm', ['--filter', '@okibasho/web', 'build']);
 
+// Cache-Control は付けない。CloudFront の Response Headers Policy が /assets/* を長期キャッシュ、
+// それ以外を no-cache にするので、invalidation だけで足りる
 run('aws', ['s3', 'sync', 'packages/web/dist/client', `s3://${outputs.AppBucketName}`, '--delete']);
 
 run('aws', [
