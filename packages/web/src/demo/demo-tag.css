@@ -1,46 +1,73 @@
-/* 本文（.main、最大 45rem）と重ならない幅のときだけ左上に浮かせ、
-   それより狭いときは本文の上に積む帯にする */
-.demo-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  /* 右上に固定される .utility-menu（top 0.65rem、2.25rem 角）が帯の中に収まる高さと右余白 */
-  min-height: 3.55rem;
-  padding: 0.4rem 3.55rem 0.4rem 1rem;
-  border-bottom: 1px solid var(--line);
-  background: var(--raised);
+/* composer（主役）より目立たせないため、色は罫と muted だけにする */
+.demo-tag {
+  position: fixed;
+  /* マウスオーバーで下がっても、ひもの上端が画面上端から離れないぶんだけ上へはみ出させる */
+  top: -0.5rem;
+  left: 1.5rem;
+  z-index: 5;
+  width: 5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.demo-tag svg {
+  display: block;
+  width: 100%;
+}
+
+/* 引っ込む前兆として少し下がる */
+.demo-tag:hover,
+.demo-tag:focus-visible {
+  transform: translateY(0.4rem);
+}
+
+/* 引っ込み終えてから visibility で操作とフォーカスの対象から外す */
+.demo-tag.demo-tag--hidden {
+  transform: translateY(-100%);
+  visibility: hidden;
+  transition:
+    transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s 0.32s;
+}
+
+.demo-tag__paper {
+  fill: var(--raised);
+  stroke: var(--line);
+}
+
+.demo-tag__hole {
+  fill: var(--bg);
+  stroke: var(--line);
+}
+
+.demo-tag__string {
+  stroke: var(--line);
+}
+
+.demo-tag__label {
+  fill: var(--muted);
   font-family: var(--font);
-  line-height: 1.4;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-anchor: middle;
 }
 
-.demo-badge__label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.demo-badge__note {
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-@media (min-width: 78rem) {
-  .demo-badge {
-    position: fixed;
-    top: 0.65rem;
-    left: 0.65rem;
-    z-index: 20;
-    display: block;
-    width: 14rem;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-overlay);
+@media (prefers-reduced-motion: reduce) {
+  .demo-tag,
+  .demo-tag.demo-tag--hidden {
+    transition: none;
   }
+}
 
-  .demo-badge__label {
-    display: block;
-    margin-bottom: 0.15rem;
+/* 右上の .utility-menu が固定をやめる幅。荷札も本文と一緒に流し、メニュー行の高さに収める */
+@media (max-width: 40rem) {
+  .demo-tag {
+    position: absolute;
+    left: 1rem;
+    width: 3.5rem;
   }
 }
