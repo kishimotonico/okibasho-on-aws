@@ -1,0 +1,148 @@
+<!doctype html>
+<!-- OGP画像のスクリーンショット用。vite.config.ts には登録せずブラウザで直接開く -->
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>ogp</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Noto+Sans+JP:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .card {
+        display: grid;
+        grid-template-columns: 46% 1fr;
+        width: 1200px;
+        height: 630px;
+        font-family: 'Noto Sans JP', sans-serif;
+      }
+
+      .left {
+        height: 100%;
+        background: #e4e7eb;
+        border-right: 1px solid #c6cbd2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .left svg {
+        width: 384px;
+        height: 384px;
+      }
+
+      .right {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 19px;
+        padding-left: 72px;
+      }
+
+      .name {
+        font-weight: 700;
+        font-size: 77px;
+        line-height: 1;
+        letter-spacing: -0.01em;
+        color: #1a1d21;
+      }
+
+      .tagline {
+        font-weight: 500;
+        font-size: 26px;
+        line-height: 1.6;
+        color: #555a62;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-self: flex-start;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 500;
+        font-size: 19px;
+        color: #555a62;
+        border: 1px solid #c6cbd2;
+        border-radius: 6px;
+        padding: 7px 12px;
+      }
+
+      .chip em {
+        font-style: normal;
+        color: #1f7a4d;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="left">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="-24.09 -33.57 48.18 48.18"
+          fill="none"
+          stroke="#1a1d21"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <ellipse cx="0" cy="0" rx="19.6" ry="11.31" fill="none" stroke="#d3d6db" stroke-width="2.6" />
+          <path d="M0 -22.4L13.86 -14.4L19.53 -22.27L5.68 -30.27Z" fill="#ffffff" stroke="none" />
+          <path d="M13.86 -14.4L19.53 -22.27" fill="none" stroke-width="2" />
+          <path d="M19.53 -22.27L5.68 -30.27" fill="none" stroke-width="2" />
+          <path d="M5.68 -30.27L0 -22.4" fill="none" stroke-width="2" />
+          <path d="M0 -22.4L13.86 -14.4" fill="none" stroke-width="1.6" />
+          <path d="M-13.86 -14.4L0 -22.4L-5.68 -30.27L-19.53 -22.27Z" fill="#ffffff" stroke="none" />
+          <path d="M0 -22.4L-5.68 -30.27" fill="none" stroke-width="2" />
+          <path d="M-5.68 -30.27L-19.53 -22.27" fill="none" stroke-width="2" />
+          <path d="M-19.53 -22.27L-13.86 -14.4" fill="none" stroke-width="2" />
+          <path d="M-13.86 -14.4L0 -22.4" fill="none" stroke-width="1.6" />
+          <path d="M0 -22.4L13.86 -14.4L0 -6.4L-13.86 -14.4Z" fill="#98999b" stroke-width="1.6" />
+          <path
+            d="M0 -26.72L9.7 -21.12L0 -15.52L-9.7 -21.12Z"
+            fill="#e0ece6"
+            stroke="#1f7a4d"
+            stroke-width="2.2"
+            opacity="1"
+          />
+          <path d="M13.86 -14.4L0 -6.4L0 8L13.86 0Z" fill="#d8d9d9" stroke="none" />
+          <path d="M13.86 -14.4L13.86 0" fill="none" stroke-width="2" />
+          <path d="M13.86 0L0 8" fill="none" stroke-width="2" />
+          <path d="M0 8L0 -6.4" fill="none" stroke-width="1.6" />
+          <path d="M0 -6.4L-13.86 -14.4L-13.86 0L0 8Z" fill="#e8e8e9" stroke="none" />
+          <path d="M0 -6.4L0 8" fill="none" stroke-width="1.6" />
+          <path d="M0 8L-13.86 0" fill="none" stroke-width="2" />
+          <path d="M-13.86 0L-13.86 -14.4" fill="none" stroke-width="2" />
+          <path d="M13.86 -14.4L0 -6.4L5.4 0.32L19.26 -7.68Z" fill="#ffffff" stroke="none" />
+          <path d="M0 -6.4L5.4 0.32" fill="none" stroke-width="2" />
+          <path d="M5.4 0.32L19.26 -7.68" fill="none" stroke-width="2" />
+          <path d="M19.26 -7.68L13.86 -14.4" fill="none" stroke-width="2" />
+          <path d="M13.86 -14.4L0 -6.4" fill="none" stroke-width="1.6" />
+          <path d="M0 -6.4L-13.86 -14.4L-19.26 -7.68L-5.4 0.32Z" fill="#ffffff" stroke="none" />
+          <path d="M-13.86 -14.4L-19.26 -7.68" fill="none" stroke-width="2" />
+          <path d="M-19.26 -7.68L-5.4 0.32" fill="none" stroke-width="2" />
+          <path d="M-5.4 0.32L0 -6.4" fill="none" stroke-width="2" />
+          <path d="M0 -6.4L-13.86 -14.4" fill="none" stroke-width="1.6" />
+        </svg>
+      </div>
+      <div class="right">
+        <div class="name">okibasho</div>
+        <div class="tagline">生成した HTML を<br />URL ひとつでチームに共有</div>
+        <div class="chip">okibasho/p/<em>you</em>/report/</div>
+      </div>
+    </div>
+  </body>
+</html>

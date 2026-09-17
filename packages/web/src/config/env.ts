@@ -8,6 +8,7 @@ export interface WebConfig {
   region: string;
   pagesBucket: string;
   pagesBaseUrl: string;
+  appBaseUrl: string;
 }
 
 export interface WebConfigEnv {
@@ -19,6 +20,7 @@ export interface WebConfigEnv {
   readonly VITE_REGION?: string;
   readonly VITE_PAGES_BUCKET?: string;
   readonly VITE_PAGES_BASE_URL?: string;
+  readonly VITE_APP_BASE_URL?: string;
 }
 
 export class WebConfigError extends Error {
@@ -69,6 +71,11 @@ const REQUIRED_FIELDS = [
     envVar: 'VITE_PAGES_BASE_URL',
     cfnOutput: 'PagesBaseUrl',
   },
+  {
+    key: 'appBaseUrl' as const,
+    envVar: 'VITE_APP_BASE_URL',
+    cfnOutput: 'AppUrl',
+  },
 ] as const;
 
 export function resolveWebConfig(env: WebConfigEnv): WebConfig {
@@ -107,6 +114,7 @@ export function resolveWebConfig(env: WebConfigEnv): WebConfig {
     region: values.region!,
     pagesBucket: values.pagesBucket!,
     pagesBaseUrl: values.pagesBaseUrl!,
+    appBaseUrl: values.appBaseUrl!,
   };
 }
 

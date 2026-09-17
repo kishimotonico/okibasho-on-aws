@@ -13,11 +13,23 @@ import appCss from '~/styles/app.css?url';
 export const Route = createRootRoute({
   head: () => {
     const config = getWebConfig();
+    // AppUrl の CfnOutput は末尾に `/` が付くため、og:image 側で正規化する
+    const appBaseUrl = config.appBaseUrl.replace(/\/$/, '');
+    const description = '生成した HTML を URL ひとつでチームに共有します。';
     return {
       meta: [
         { charSet: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { title: 'okibasho' },
+        { name: 'description', content: description },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:site_name', content: 'okibasho' },
+        { property: 'og:title', content: 'okibasho' },
+        { property: 'og:description', content: description },
+        { property: 'og:image', content: `${appBaseUrl}/ogp.png` },
+        { property: 'og:image:width', content: '1200' },
+        { property: 'og:image:height', content: '630' },
+        { name: 'twitter:card', content: 'summary_large_image' },
       ],
       links: [
         { rel: 'stylesheet', href: appCss },

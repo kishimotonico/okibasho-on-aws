@@ -11,6 +11,7 @@ const validEnv = {
   VITE_REGION: 'ap-northeast-1',
   VITE_PAGES_BUCKET: 'pages-bucket',
   VITE_PAGES_BASE_URL: 'https://pages.example.com',
+  VITE_APP_BASE_URL: 'https://app.example.com',
 };
 
 describe('resolveWebConfig', () => {
@@ -26,6 +27,7 @@ describe('resolveWebConfig', () => {
       region: 'ap-northeast-1',
       pagesBucket: 'pages-bucket',
       pagesBaseUrl: 'https://pages.example.com',
+      appBaseUrl: 'https://app.example.com',
     });
   });
 
@@ -51,6 +53,8 @@ describe('resolveWebConfig', () => {
       expect(message).toContain('PagesBucketName');
       expect(message).toContain('VITE_PAGES_BASE_URL');
       expect(message).toContain('PagesBaseUrl');
+      expect(message).toContain('VITE_APP_BASE_URL');
+      expect(message).toContain('AppUrl');
     }
   });
 });

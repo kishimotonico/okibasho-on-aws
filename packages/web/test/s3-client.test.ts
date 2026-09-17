@@ -12,6 +12,7 @@ const config: WebConfig = {
   region: 'ap-northeast-1',
   pagesBucket: 'pages-bucket',
   pagesBaseUrl: 'https://pages.example.com',
+  appBaseUrl: 'https://app.example.com',
 };
 
 describe('cognitoLoginKey', () => {

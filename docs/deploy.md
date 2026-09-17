@@ -78,7 +78,7 @@ aws cognito-idp admin-create-user --user-pool-id <UserPoolId> \
 
 ## 4. 管理 UI のビルドとアップロード
 
-`packages/web/.env` を Output から埋める（対応表は `packages/web/.env.example`）。`VITE_PAGES_BASE_URL` は `PagesBaseUrl` で、独自ドメイン設定時は `https://okibasho.example.com` になる。
+`packages/web/.env` を Output から埋める（対応表は `packages/web/.env.example`）。`VITE_PAGES_BASE_URL` は `PagesBaseUrl` で、独自ドメイン設定時は `https://okibasho.example.com` になる。`VITE_APP_BASE_URL` は `AppUrl`（OGP画像などの絶対URL生成に使う）。
 
 ```bash
 pnpm --filter @okibasho/web build
