@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CallbackRouteImport } from './routes/callback'
+import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as PagesLoginRouteImport } from './routes/pages-login'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const CallbackRoute = CallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LogoutRoute = LogoutRouteImport.update({
+  id: '/logout',
+  path: '/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PagesLoginRoute = PagesLoginRouteImport.update({
   id: '/pages-login',
   path: '/pages-login',
@@ -32,30 +38,34 @@ const PagesLoginRoute = PagesLoginRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
+  '/logout': typeof LogoutRoute
   '/pages-login': typeof PagesLoginRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
+  '/logout': typeof LogoutRoute
   '/pages-login': typeof PagesLoginRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
+  '/logout': typeof LogoutRoute
   '/pages-login': typeof PagesLoginRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/callback' | '/pages-login'
+  fullPaths: '/' | '/callback' | '/logout' | '/pages-login'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/callback' | '/pages-login'
-  id: '__root__' | '/' | '/callback' | '/pages-login'
+  to: '/' | '/callback' | '/logout' | '/pages-login'
+  id: '__root__' | '/' | '/callback' | '/logout' | '/pages-login'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CallbackRoute: typeof CallbackRoute
+  LogoutRoute: typeof LogoutRoute
   PagesLoginRoute: typeof PagesLoginRoute
 }
 
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/logout': {
+      id: '/logout'
+      path: '/logout'
+      fullPath: '/logout'
+      preLoaderRoute: typeof LogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pages-login': {
       id: '/pages-login'
       path: '/pages-login'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CallbackRoute: CallbackRoute,
+  LogoutRoute: LogoutRoute,
   PagesLoginRoute: PagesLoginRoute,
 }
 export const routeTree = rootRouteImport

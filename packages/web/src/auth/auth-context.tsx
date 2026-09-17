@@ -10,14 +10,11 @@ import {
 import type { User, UserManager } from 'oidc-client-ts';
 
 import {
-  getLogoutUrl,
   getUserManager,
   saveReturnPath,
   sessionFromUser,
   type AuthSession,
 } from '~/auth/user-manager';
-import { clearPersistedPages } from '~/lib/query-persistence';
-import { clearPagesCredentialsCache } from '~/lib/s3-client';
 
 export interface AuthState {
   isLoading: boolean;
@@ -26,7 +23,6 @@ export interface AuthState {
   /** S3 を呼ぶのに必要な email と idToken。未ログイン・期限切れでは null */
   session: AuthSession | null;
   login: (returnPath?: string) => Promise<void>;
-  logout: () => Promise<void>;
 }
 
 const ssrAuthState: AuthState = {
@@ -35,7 +31,6 @@ const ssrAuthState: AuthState = {
   user: null,
   session: null,
   login: async () => {},
-  logout: async () => {},
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -65,17 +60,12 @@ function ClientAuthProvider({ children }: { children: ReactNode }) {
     const handleUserLoaded = (loaded: User) => {
       setUser(loaded);
     };
-    const handleUserUnloaded = () => {
-      setUser(null);
-    };
 
     userManager.events.addUserLoaded(handleUserLoaded);
-    userManager.events.addUserUnloaded(handleUserUnloaded);
 
     return () => {
       active = false;
       userManager.events.removeUserLoaded(handleUserLoaded);
-      userManager.events.removeUserUnloaded(handleUserUnloaded);
     };
   }, [userManager]);
 
@@ -87,15 +77,6 @@ function ClientAuthProvider({ children }: { children: ReactNode }) {
     [userManager],
   );
 
-  const logout = useCallback(async () => {
-    // Cognitoは標準のRP-Initiated Logoutに対応していないため、
-    // ローカルの状態を消してから独自形式の /logout へ自分で飛ばす
-    await clearPersistedPages();
-    clearPagesCredentialsCache();
-    await userManager.removeUser();
-    window.location.assign(getLogoutUrl());
-  }, [userManager]);
-
   const value = useMemo<AuthState>(
     () => ({
       isLoading,
@@ -103,9 +84,8 @@ function ClientAuthProvider({ children }: { children: ReactNode }) {
       user,
       session: sessionFromUser(user),
       login,
-      logout,
     }),
-    [isLoading, login, logout, user],
+    [isLoading, login, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
