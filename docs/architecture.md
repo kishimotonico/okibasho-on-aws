@@ -1,10 +1,8 @@
 # アーキテクチャ
 
-本書が設計の正本である。決定済みの設計だけを書く。設計に至る背景は文末の「検討の経緯」にある。
+本書が設計の正本である。決定済みの設計だけを書く。
 
 ## 全体構成
-
-構成図: [architecture.drawio](architecture.drawio)（draw.io 形式。VS Code の Draw.io Integration 拡張か [app.diagrams.net](https://app.diagrams.net) で開く）。外部共有（`/s/*`、KVS、PageMaintenance Lambda）を追加する前の図のままで、更新していない。
 
 ```text
    ブラウザ（管理UI）                        CLI（okiba）
@@ -60,7 +58,7 @@ Lambda は次の 3 つ。どれも小さく独立している。API Gateway は�
 
 このほかに、CDK の `BucketDeployment`（pages バケットの `errors/` に固定ページを配置するためだけのカスタムリソース Lambda）が存在する。これは IAM の境界の外にある処理として次節で扱う。
 
-CDK のスタックはメインの 1 つ（+ us-east-1 の証明書だけのスタック）とし、機能的・概念的な境界は Construct で表現する（auth / storage / delivery / page-maintenance / app-site / service-domain / pages-viewer-auth）。Stack 本体は各 Construct の組み立てだけを行う。
+CDK のスタックはメインの 1 つ（+ us-east-1 の証明書だけのスタック）とし、機能的・概念的な境界は Construct で表現する（一覧は「CDK」節）。Stack 本体は各 Construct の組み立てだけを行う。
 
 DynamoDB、WAF、Lambda@Edge、API Gateway、S3 Lifecycle、presigned URL は使わない。CloudFront KeyValueStore は外部共有の投影先として採用したため、この対象からは外れる。
 
@@ -82,7 +80,7 @@ trusted な管理アプリと untrusted な共有ページを別 origin に分�
 
 `<user>` はメールのローカル部だけを見せる。全員が同じ Workspace ドメインなので、ドメイン部は CloudFront Function で静的に補完する。
 
-内部 URL のパスに `/p/` を置くのは、外部共有用の `/s/` と名前空間を分けるためである。旧 `/<user>/<slug>/` は未公開だったため互換リダイレクトを持たない。
+内部 URL のパスに `/p/` を置くのは、外部共有用の `/s/` と名前空間を分けるためである。
 
 ホスト名は pages と app の 2 つとする。外部への URL 共有はページ単位のオプトインとして実装した（詳細は「外部共有」節）。共有していないページは従来どおりログイン必須である。
 
@@ -96,56 +94,25 @@ trusted な管理アプリと untrusted な共有ページを別 origin に分�
 | app | `app.okibasho.example.com` | `app.` + `SERVICE_DOMAIN` |
 | Signed Cookie の `Domain` | `okibasho.example.com` | `SERVICE_DOMAIN` そのもの |
 
-pages を apex に置くのは共有 URL を短くするためである。かつては `pages.` を置き、第 3 のホスト `shares.` を作る構想もあったが、外部共有を同じ Distribution の `/s/*` に集約したので apex が空いた。app が apex でないことによる違いはない。Cookie の届く範囲は app が apex でも `app.` でも同じで、アップロードできるのは信頼済みのメンバーだけなので、apex に偽のログイン画面を置かれる懸念は考えない。
+pages を apex に置くのは共有 URL を短くするためである。app が apex でないことによる違いはない。Cookie の届く範囲は app が apex でも `app.` でも同じで、アップロードできるのは信頼済みのメンバーだけなので、apex に偽のログイン画面を置かれる懸念は考えない。
 
 Signed Cookie の `Domain` はサービスドメインにする。Hosted Zone のドメイン（`example.com`）にすると、同じゾーンに同居する他サービスへ Cookie が送られてしまう。サービスドメインと Hosted Zone のドメインは別の概念として扱う。
 
 DNS と証明書は次のとおり。
 
 - Route 53 の Hosted Zone は他サービスのレコードも入っている共用のもの（`example.com`）を使い、サブゾーンへの委任はしない。同じ AWS アカウントにあることが前提で、ID と名前を渡す。CDK はゾーンを参照するだけで、作るレコードは証明書の DNS 検証用 CNAME と pages / app の Alias レコード（A。app は AAAA も）に限る。同じ名前のレコードが既にあればデプロイが失敗するだけで、上書きはしない。スタック削除で消えるのもこのレコードだけである
-- ACM 証明書は us-east-1 の `OkibashoCertificate` スタックで作り、`CertificateValidation.fromDns` で検証まで CDK に任せる。SAN は pages と app の 2 つ。メインスタックへは CloudFormation の `Fn::GetStackOutput`（弱参照。`cdk.json` の `@aws-cdk/core:defaultCrossStackReferences: weak`）で渡す。以前の `crossRegionReferences` が生成していたカスタムリソースと SSM の中継は要らない。弱参照なので、証明書スタックはメインスタックより先に消さない
+- ACM 証明書は us-east-1 の `OkibashoCertificate` スタックで作り、`CertificateValidation.fromDns` で検証まで CDK に任せる。SAN は pages と app の 2 つ。メインスタックへは CloudFormation の `Fn::GetStackOutput`（弱参照。`cdk.json` の `@aws-cdk/core:defaultCrossStackReferences: weak`）で渡す。弱参照なので、証明書スタックはメインスタックより先に消さない
 - Cognito Managed Login のドメインは `amazoncognito.com` のままにする。独自ドメインにしたくなったら、証明書に `auth.` を足して `UserPoolDomain` を `customDomain` に切り替える
 
-独自ドメインを設定しなくても、今までどおり CloudFront のデフォルトドメインでデプロイして使える。そのとき作らないのは証明書の参照・alias・Route 53 レコード・Signed Cookie 閲覧認証一式（`/auth/*`・Key Group・403 エラーページ）である。`cloudfront.net` は Public Suffix List に載っていて親ドメイン Cookie を置けないため、閲覧認証はドメインが無いと原理的に成り立たない。ドメイン無しでは内部ページ `/p/*` はログイン不要のまま配信される。CLI と web は接続先を CfnOutput から受け取るだけなので、ドメインの有無による分岐を持たない。
+独自ドメインを設定しなくても、今までどおり CloudFront のデフォルトドメインでデプロイして使える。そのとき作らないのは証明書の参照・alias・Route 53 レコード・Signed Cookie 閲覧認証一式（`/auth/*`・Key Group・403 エラーページ）である。`cloudfront.net` は Public Suffix List に載っていて親ドメイン Cookie を置けないため、閲覧認証はドメインが無いと原理的に成り立たない。ドメイン無しでは内部ページ `/p/*` はログイン不要のまま配信される。
 
 CloudFront の Distribution は app 用と pages 用の 2 つ。pages 用の 1 つに `/p/*`（内部）と `/s/*`（外部共有）の 2 ビヘイビアを持たせる。別 Distribution や第 3 ホストにはしない。理由は「外部共有」節にまとめる。
 
 ## 認可は IAM ポリシーに委譲する
 
-owner 認可はアプリコードに置かない。ブラウザと CLI は Cognito Identity Pool 経由の一時 IAM クレデンシャルで S3 を直接操作し、触れられる範囲は IAM の Resource ARN と条件キーが決める。
+owner 認可はアプリコードに置かず IAM に委譲する（[concept.md](concept.md) の優先順位: シンプル > 境界の明確さ > 低コスト）。ブラウザと CLI は Cognito Identity Pool 経由の一時 IAM クレデンシャルで S3 を直接操作し、触れられる範囲は IAM の Resource ARN と条件キーが決める。
 
-authenticated role の権限ポリシーが唯一のセキュリティ境界である。
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "ListOwnPages",
-      "Effect": "Allow",
-      "Action": "s3:ListBucket",
-      "Resource": "arn:aws:s3:::<pages-bucket>",
-      "Condition": {
-        "StringLike": {
-          "s3:prefix": [
-            "pages/${aws:PrincipalTag/email}/*",
-            "meta/${aws:PrincipalTag/email}/*"
-          ]
-        }
-      }
-    },
-    {
-      "Sid": "ReadWriteOwnPages",
-      "Effect": "Allow",
-      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
-      "Resource": [
-        "arn:aws:s3:::<pages-bucket>/pages/${aws:PrincipalTag/email}/*",
-        "arn:aws:s3:::<pages-bucket>/meta/${aws:PrincipalTag/email}/*"
-      ]
-    }
-  ]
-}
-```
+authenticated role の権限ポリシーが唯一のセキュリティ境界である。自分のメール（PrincipalTag）prefix の `pages/` と `meta/` に対する PutObject / GetObject / DeleteObject と、`s3:prefix` 条件で同じ範囲に絞った ListBucket だけを許可する。
 
 - 他人の prefix への Put / Get / Delete / List は `AccessDenied` になる。`pages/` と `meta/` の両方が対象で、ページ成果物と metadata（正本）を同じ条件で守る
 - metadata に owner を持たせていない。所有者はキー（`pages/<email>/...` `meta/<email>/...`）そのものが表しており、認可も IAM だけが行うため、アプリのバグで他人のページを壊せない
@@ -199,22 +166,7 @@ Web と CLI で認証方式を分けず、同じ User Pool を使う。CLI の�
 
 Attributes for access control で、User Pool の `email` クレームをプリンシパルタグ `email` にマッピングする（カスタムマッピング）。
 
-authenticated role の信頼ポリシー。`sts:TagSession` を忘れるとプリンシパルタグが乗らず、原因の分かりにくい `AccessDenied` になる。
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Principal": { "Federated": "cognito-identity.amazonaws.com" },
-    "Action": ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"],
-    "Condition": {
-      "StringEquals": { "cognito-identity.amazonaws.com:aud": "<identity-pool-id>" },
-      "ForAnyValue:StringLike": { "cognito-identity.amazonaws.com:amr": "authenticated" }
-    }
-  }]
-}
-```
+authenticated role の信頼ポリシーは、`Federated` プリンシパルを `cognito-identity.amazonaws.com` とし、`cognito-identity.amazonaws.com:aud` が対象の Identity Pool と一致し、`amr` に `authenticated` を含むときだけ `sts:AssumeRoleWithWebIdentity` と `sts:TagSession` を許可する。`sts:TagSession` を忘れるとプリンシパルタグが乗らず、原因の分かりにくい `AccessDenied` になる。
 
 クライアントは id_token を Identity Pool に渡し、一時 IAM クレデンシャルを得る。Cognito のアクセストークンには `email` クレームが入らないため、id_token を使う。
 
@@ -308,17 +260,7 @@ metadata はページ成果物の prefix（配信対象）の外にあるため�
 
 - 完全 private + Public Access Block。S3 Website Hosting は使わない
 - バケットバージョニングを有効にし、非現行バージョンは 30 日で消す（誤削除・誤上書きからの復旧余地）。利用者のロールに `s3:DeleteObjectVersion` は与えないので、利用者の操作で旧版まで消えることはない
-- CORS を設定する（ブラウザから直接 PUT / LIST / DELETE するため。忘れると Web UI だけ落ちる）
-
-```json
-[{
-  "AllowedOrigins": ["https://app.okibasho.example.com"],
-  "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
-  "AllowedHeaders": ["*"],
-  "ExposeHeaders": ["ETag"],
-  "MaxAgeSeconds": 3000
-}]
-```
+- CORS を設定する（ブラウザから直接 PUT / LIST / DELETE するため。忘れると Web UI だけ落ちる）。許可するメソッドは GET / PUT / POST / DELETE / HEAD、ヘッダは全許可、`ExposeHeaders` に `ETag`、`MaxAgeSeconds` は 3000 とする
 
 `POST` は `DeleteObjects` が使う。AllowedOrigins は app Distribution が公開するホスト名（独自ドメインか CloudFront のデフォルトドメイン）から組み立てる。開発時は `http://localhost:<port>` も AllowedOrigins に足す。
 
@@ -370,12 +312,12 @@ metadata の無い pages/ 配下のファイルは削除しない。metadata を
 
 別 Distribution や第 3 ホストにはしていない。Trusted Key Group・CloudFront Function・Response Headers Policy・Cache Policy はいずれもビヘイビア単位で設定できるため、1 つの Distribution に `/p/*`（内部）と `/s/*`（外部共有）を共存させられる。
 
-- Signed Cookie は今後も `/p/*` だけに付ける。`/s/*` には付けない
-- カスタムエラーレスポンス（404 → `errors/404.html`。403 は将来の Signed Cookie ログイン誘導のために設定しない）は Distribution 単位の設定だが、CloudFront Function が返したレスポンスには適用されない。そのため `/s/*` が返す 401 / 403 / 404 はこの導線に巻き込まれない
+- Signed Cookie は `/p/*` だけに付ける（理由は「認証」節）
+- カスタムエラーレスポンスは Distribution 単位の設定だが、CloudFront Function が返したレスポンスには適用されない。そのため `/s/*` が返す 401 / 403 / 404 はこの導線に巻き込まれない
 
 Distribution 単位の設定は `/s/*` にも及ぶ副作用がある。
 
-- Geo restriction（JP のみ）は `/s/*` にも効くため、外部共有も日本国外からは見られない。現状は受容し、海外の相手に共有する要件が出たら別 Distribution を再検討する
+- Geo restriction（「配信」節）は `/s/*` にも効くため、外部共有も日本国外からは見られない。現状は受容し、海外の相手に共有する要件が出たら別 Distribution を再検討する
 - `enableIpv6: false` は pages Distribution 全体に効く。`/s/*` の IP 完全一致判定を IPv4 に絞るための設定である
 
 ### `/p/` と `/s/` が同一 origin であることのリスク評価
@@ -409,16 +351,12 @@ tag の衝突（66bit）は考慮しない。1 万ページ規模でも偶然の
 
 ### KVS エントリと投影の規則
 
-CloudFront KeyValueStore には、正本（metadataの `share`）から導出した投影だけを置く。キーは tag（1 ページ 1 キー）、値は次の JSON 文字列（1KB 以内。超えたらそのエントリは投影しない）。
-
-```json
-{ "p": "pages/<email>/<slug>/", "id": "V1StGXR8_Z5jdHi6B-myT", "b": "Z3Vlc3Q6azdtcS0zeHdwLTlydGQtaDJ2bg==", "ips": ["203.0.113.5"] }
-```
+CloudFront KeyValueStore には、正本（metadataの `share`）から導出した投影だけを置く。キーは tag（1 ページ 1 キー）、値は次のフィールドを持つ JSON 文字列（1KB 以内。超えたらそのエントリは投影しない）。
 
 - `p` はそのページの prefix、`id` は share-id。router 側は URL 後半 22 文字とこの `id` を照合する
 - `b` は `base64("guest:" + パスワード)`。パスワードを付けているときだけ設定し、router 側は `Authorization` ヘッダと `"Basic " + b` を文字列比較するだけで Basic 認証を判定できる（ハッシュ比較も `crypto` も使わない）。`b` が無ければ router 側は Basic 認証をせず通す
 - `ips` は IP 制限（完全一致リスト）があるときだけ。router 側は `ips.indexOf(clientIp) !== -1` だけで判定する
-- キーが prefix から一意に決まるため、旧仕様（キーがクライアントの選ぶ share-id だった頃）にあった墓標・hijack 判定・prefix の辞書順による先勝ちは無くなった。あるページの tag は常にそのページだけが使う。URL の再発行は「作り直す」という操作で行い、パスワードを付けている場合はそのタイミングでパスワードも作り直す。同じキーの値を上書きする。パスワードの付け外し・共有の停止・削除・期限切れはキーの上書き・削除で表す
+- キーが prefix から一意に決まるため、あるページの tag は常にそのページだけが使う。URL の再発行は「作り直す」という操作で行い、パスワードを付けている場合はそのタイミングでパスワードも作り直す。同じキーの値を上書きする。パスワードの付け外し・共有の停止・削除・期限切れはキーの上書き・削除で表す
 
 投影は 2 つの経路から行う。実装は `packages/infra/lib/lambda/page-maintenance/`。
 
@@ -433,7 +371,6 @@ Lambda は同時実行 1 なので、連続した S3 イベントは非同期呼
 
 - `UpdateKeys`（IfMatch = `DescribeKeyValueStore` の ETag）は 50 キーごとにチャンク分割する。同じ Key を 1 回の呼び出しに 2 度含めない。`ConflictException` は ETag を取り直してリトライする
 - 存在しないキーの `delete` を `UpdateKeys` に渡したときの挙動は公式ドキュメントで明記されていない（`ResourceNotFoundException` になる可能性がある）。1 件だけの delete（put 無し）でそれが起きたときだけ、`GetKey` でそのキーが実際に無いことを確かめて成功扱いにする。あれば別の理由のエラーなので再送出する
-- 監査用に、put・delete それぞれで prefix（email/slug を含む）と tag を出す。tag はログに全体を出さない（先頭 4 文字 + `…`）
 
 共有を OFF にする操作は `share` フィールドを削除すること。URL の再発行は `share.id` の差し替えで行う。どちらも次の投影で KVS のキーが削除・上書きされる。
 
@@ -455,9 +392,8 @@ Lambda の失敗は CloudWatch Logs と Lambda の `Errors` メトリクスで�
 
 ### 外部向けに新たに塞いだもの
 
-- S3 の `NoSuchKey` エラー XML に `pages/<email>/<slug>/...` が出て、メールアドレスとキー構成が見えてしまう問題。Distribution のカスタムエラーレスポンス（404 → `/errors/404.html`）で差し替える。viewer-response の CloudFront Function はオリジンが 400 以上を返すと実行されないため使えない。エラーページは owner や URL の情報を含まない固定文言の HTML で、`BucketDeployment` で pages バケットの `errors/` に配置し、関数を付けない `/errors/*` ビヘイビアから配信する。配置ロールは bucket policy の Deny で `errors/` 配下にだけ書けるようにしている。403 は将来の Signed Cookie ログイン誘導に使うため設定しない。デプロイ後の確認はまだ済んでいない
-- Referer 経由の share-id 漏れ。Response Headers Policy に `Referrer-Policy: no-referrer` を追加した
-- 検索エンジンによる索引化。同じポリシーに `X-Robots-Tag: noindex, nofollow` を追加した
+- S3 の `NoSuchKey` エラー XML に `pages/<email>/<slug>/...` が出て、メールアドレスとキー構成が見えてしまう問題。Distribution のカスタムエラーレスポンス（404 → `/errors/404.html`）で差し替える。viewer-response の CloudFront Function はオリジンが 400 以上を返すと実行されないため使えない。エラーページは owner や URL の情報を含まない固定文言の HTML で、`BucketDeployment` で pages バケットの `errors/` に配置し、関数を付けない `/errors/*` ビヘイビアから配信する。配置ロールは bucket policy の Deny で `errors/` 配下にだけ書けるようにしている。
+- Referer 経由の share-id 漏れと検索エンジンによる索引化への対策は「配信」節のヘッダ設定を参照
 
 ### 受容している share-id の漏れ経路
 
@@ -488,7 +424,7 @@ Lambda の失敗は CloudWatch Logs と Lambda の `Errors` メトリクスで�
 保存期間の起点は「最後にそのページを操作した時刻から 30 日」で統一する。オブジェクトタグも Lifecycle も追随させない。`createdAt` は初回アップロードの値を維持し、期限の計算にだけ使う保存期間変更・再アップロードの時刻とは別物である。
 
 - アップロード（新規・再アップロードとも）: `expiresAt` はアップロード時刻から数え直す。ただし permanent 化済みのページは、`--permanent` を付けずに再アップロードしても permanent のまま維持する（temporary への変更は保存期間変更の操作で行う）
-- 保存期間の変更: temporary → permanent、permanent → temporary のどちらも変更時刻から数え直す。以前は permanent → temporary の起点が `createdAt` のままだったため、作成から 30 日以上経つと戻した瞬間に期限切れになる問題があったが、これで解消した
+- 保存期間の変更: temporary → permanent、permanent → temporary のどちらも変更時刻から数え直す
 
 ## 管理UI（web）
 
@@ -552,36 +488,15 @@ OAuth / PKCE は既存ライブラリ（openid-client）を使い、独自実装
 
 スタックは `Okibasho`（デプロイ先リージョン）と、独自ドメイン設定時だけ作る `OkibashoCertificate`（us-east-1。ACM 証明書だけ）の 2 つ。CloudFront の証明書が us-east-1 にしか置けないための分割で、それ以外の理由でスタックを増やさない。`lib/constructs/` に機能ごとに分ける。
 
-```text
-bin/app.ts                 2 つのスタックを組む。証明書スタックは serviceDomain があるときだけ
-lib/
-  okibasho-stack.ts        各 Construct の組み立てだけ
-  certificate-stack.ts     us-east-1 の ACM 証明書（DNS 検証）
-  config.ts                  環境変数から emailDomain / serviceDomain / googleClientId を読む
-  constructs/
-    auth.ts                  UserPool / Managed Login / App Client x2 / Google IdP（設定時のみ）/
-                             PreSignUp Lambda / IdentityPool / authenticated role / principal tag
-    pages-storage.ts         pages バケット（private, PAB, CORS）/ errors/ への BucketDeployment
-                             （配置ロールは bucket policy の Deny で errors/ だけに限定）
-    pages-delivery.ts        pages Distribution / OAC / CloudFront Function（/p/* /s/*）/
-                             /errors/* ビヘイビアとカスタムエラーレスポンス /
-                             Response Headers Policy / Geo restriction
-    page-maintenance.ts      CloudFront KeyValueStore + PageMaintenance Lambda
-                             （S3 イベントでページ単位の投影 + 毎時の期限切れ削除 +
-                             日次のKVS全件突き合わせ。アラームは持たない）
-    app-delivery.ts          app バケット + Distribution + SPA 用 CloudFront Function
-    service-domain.ts        独自ドメイン（設定時のみ）。Hosted Zone の参照、
-                             pages / app それぞれのホスト名と証明書、Alias レコード
-    pages-viewer-auth.ts     Signed Cookie 閲覧認証（独自ドメイン設定時のみ）。SigningKeyPair
-                             （鍵ペアのカスタムリソース）、PublicKey / KeyGroup、
-                             発行 Lambda + Function URL（Lambda OAC）
-  lambda/
-    page-maintenance/
-    pre-sign-up/             メールドメイン制限の PreSignUp トリガー
-    pages-cookie/            Signed Cookie 発行 Lambda
-    signing-key-pair/        鍵ペアを生成して SSM に置くカスタムリソースの Lambda
-  static/errors/             404.html / 403.html
-```
+Construct ごとの役割:
+
+- `auth`: UserPool / Managed Login / App Client x2 / Google IdP（設定時のみ）/ PreSignUp Lambda / IdentityPool / authenticated role / principal tag
+- `pages-storage`: pages バケット（private, PAB, CORS）/ errors/ への BucketDeployment（配置ロールは bucket policy の Deny で errors/ だけに限定）
+- `pages-delivery`: pages Distribution / OAC / CloudFront Function（/p/* /s/*）/ /errors/* ビヘイビアとカスタムエラーレスポンス / Response Headers Policy / Geo restriction
+- `page-maintenance`: CloudFront KeyValueStore + PageMaintenance Lambda（S3 イベントでページ単位の投影 + 毎時の期限切れ削除 + 日次の KVS 全件突き合わせ。アラームは持たない）
+- `app-delivery`: app バケット + Distribution + SPA 用 CloudFront Function
+- `service-domain`: 独自ドメイン（設定時のみ）。Hosted Zone の参照、pages / app それぞれのホスト名と証明書、Alias レコード
+- `pages-viewer-auth`: Signed Cookie 閲覧認証（独自ドメイン設定時のみ）。SigningKeyPair（鍵ペアのカスタムリソース）、PublicKey / KeyGroup、発行 Lambda + Function URL（Lambda OAC）
 
 PageMaintenance Lambda 本体（`packages/infra/lib/lambda/page-maintenance/`）は SigV4A が必要な `@aws-sdk/client-cloudfront-keyvaluestore` を呼ぶため、副作用 import で純 JS の `@aws-sdk/signature-v4a` を読み込んでいる（ネイティブの `@aws-sdk/signature-v4-crt` は使わない）。`NodejsFunction` の bundling では `@aws-sdk/*` を external にしない。
 
@@ -719,7 +634,3 @@ CloudFront KeyValueStore は外部共有の投影先として採用した。「�
 外部共有専用の第 3 origin は作らない。`/s/*` は既存の pages Distribution にビヘイビアとして追加しており、origin は増えていない（理由は「外部共有」節）。
 
 ALB は S3 をターゲットにできず、Lambda ターゲット経由だとレスポンス 1MB 上限で配信に使えないため、この構成には組み込みどころがない。
-
-## 検討の経緯
-
-- [decision-adpot-iam-direct.md](decision-adpot-iam-direct.md) — 旧設計（静的 SPA + API Gateway + JWT Authorizer + presigned PUT）を破棄し、Identity Pool の一時クレデンシャルで S3 を直接操作する現設計を採用した判断

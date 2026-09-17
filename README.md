@@ -45,4 +45,3 @@ pnpm --filter @okibasho/cli build      # CLIを単一JSにバンドル
 - [docs/architecture.md](docs/architecture.md) — どう作るか。決定済みの設計
 - [docs/roadmap.md](docs/roadmap.md) — 実装の進め方。フェーズ分けと受け入れ条件
 - [docs/deploy.md](docs/deploy.md) — デプロイと運用の手順
-- [docs/decision-adpot-iam-direct.md](docs/decision-adpot-iam-direct.md) — 案3（IAM 活用）へ切り替えた経緯
