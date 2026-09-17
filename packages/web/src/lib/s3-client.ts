@@ -65,7 +65,7 @@ interface CachedCredentials {
 // GetCredentialsForIdentity は SDK がキャッシュしないため、有効期限に余裕がある間だけ使い回す
 function loadCachedCredentials(idToken: string): PagesCredentials | null {
   try {
-    const raw = window.sessionStorage.getItem(CREDENTIALS_STORAGE_KEY);
+    const raw = window.localStorage.getItem(CREDENTIALS_STORAGE_KEY);
     if (!raw) {
       return null;
     }
@@ -79,7 +79,7 @@ function loadCachedCredentials(idToken: string): PagesCredentials | null {
     }
     return { ...cached.credentials, expiration };
   } catch {
-    // sessionStorage が使えなくても、毎回取り直すだけで壊れない
+    // localStorage が使えなくても、毎回取り直すだけで壊れない
     return null;
   }
 }
@@ -87,23 +87,23 @@ function loadCachedCredentials(idToken: string): PagesCredentials | null {
 function saveCachedCredentials(idToken: string, credentials: PagesCredentials): void {
   try {
     const cached: CachedCredentials = { idToken, credentials };
-    window.sessionStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(cached));
+    window.localStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(cached));
   } catch {
     // 保存できなくても致命的ではない（毎回 GetCredentialsForIdentity するだけ）
   }
 }
 
-/** ログアウト時、sessionStorage の一時クレデンシャルと S3Client の使い回し（cached）をまとめて消す */
+/** ログアウト時、localStorage の一時クレデンシャルと S3Client の使い回し（cached）をまとめて消す */
 export function clearPagesCredentialsCache(): void {
   try {
-    window.sessionStorage.removeItem(CREDENTIALS_STORAGE_KEY);
+    window.localStorage.removeItem(CREDENTIALS_STORAGE_KEY);
   } catch {
     // 消せなくても次回 GetCredentialsForIdentity するだけなので致命的ではない
   }
   cached = null;
 }
 
-function withSessionCredentialsCache(
+function withCredentialsCache(
   idToken: string,
   provider: ReturnType<typeof FromCognitoIdentityPoolType>,
 ): ReturnType<typeof FromCognitoIdentityPoolType> {
@@ -133,7 +133,7 @@ export async function createPagesS3Client(
     // S3 の応答は Cache-Control を持たず、同じ URL の GET が
     // メモリキャッシュから返ると変更前のメタデータが見えてしまう
     requestHandler: { cache: 'no-store' },
-    credentials: withSessionCredentialsCache(
+    credentials: withCredentialsCache(
       session.idToken,
       fromCognitoIdentityPool({
         clientConfig: { region: config.region },

@@ -4,13 +4,6 @@ import { getWebConfig } from '~/config/env';
 
 const RETURN_PATH_KEY = 'okibasho:auth:returnTo';
 
-function createSessionStorage(): WebStorageStateStore {
-  // アップロードされた untrusted な HTML は別 origin（pages 側）で配信されるため、
-  // Same-Origin Policy により管理アプリの storage を読めない。これが設計上の主要な防御になる。
-  // localStorage ではなく sessionStorage にするのは、タブを閉じたら消えるぶん露出時間が短いため。
-  return new WebStorageStateStore({ store: window.sessionStorage });
-}
-
 /**
  * discoveryに頼らず、エンドポイントを明示する。
  *
@@ -47,7 +40,6 @@ export function getUserManager(): UserManager {
 
 function createUserManager(): UserManager {
   const config = getWebConfig();
-  const storage = createSessionStorage();
 
   return new UserManager({
     authority: config.oidcIssuer,
@@ -57,8 +49,9 @@ function createUserManager(): UserManager {
     post_logout_redirect_uri: window.location.origin,
     response_type: 'code',
     scope: 'openid email profile',
-    userStore: storage,
-    stateStore: storage,
+    // untrusted な HTML は別 origin（pages 側）で配信され storage を読めないので、トークンはタブ間で共有する
+    userStore: new WebStorageStateStore({ store: window.localStorage }),
+    stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
     automaticSilentRenew: true,
   });
 }
