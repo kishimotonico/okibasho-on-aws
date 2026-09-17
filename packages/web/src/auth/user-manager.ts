@@ -1,6 +1,8 @@
 import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
 
 import { getWebConfig } from '~/config/env';
+import { clearPersistedPages } from '~/lib/query-persistence';
+import { clearPagesCredentialsCache } from '~/lib/s3-client';
 
 const RETURN_PATH_KEY = 'okibasho:auth:returnTo';
 
@@ -73,7 +75,11 @@ export function buildLogoutUrl(
   return `${hostedUi}/logout?${params.toString()}`;
 }
 
-export function getLogoutUrl(): string {
+/** ローカルのログイン状態を消し、続けて遷移する先（Cognito の /logout）を返す */
+export async function signOut(): Promise<string> {
+  await clearPersistedPages();
+  clearPagesCredentialsCache();
+  await getUserManager().removeUser();
   const config = getWebConfig();
   return buildLogoutUrl(config.hostedUiBaseUrl, config.webAppClientId, window.location.origin);
 }

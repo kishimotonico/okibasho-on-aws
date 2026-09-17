@@ -45,10 +45,11 @@ function devHarness(name: string, harnessUrl: string, htmlFile: string): Plugin 
 
 /**
  * demo モード（`--mode demo`）は AWS を使わない GitHub Pages 向けビルド。
- * 認証と S3 のモジュールを src/demo 配下の同名ファイルに差し替え、
+ * 認証・S3・一覧キャッシュの保存のモジュールを src/demo 配下の同名ファイルに差し替え、
  * AWS SDK と oidc-client-ts をバンドルから外す。接続先は .env.demo
  */
-const DEMO_MODULES = /^~\/(lib\/s3-client|auth\/auth-context|auth\/user-manager)$/;
+const DEMO_MODULES =
+  /^~\/(lib\/s3-client|lib\/query-persistence|auth\/auth-context|auth\/user-manager)$/;
 
 export default defineConfig(({ mode }) => {
   const demo = mode === 'demo';

@@ -38,11 +38,6 @@ function seedPages(now: Date): DemoPages {
 
 let pages: DemoPages = seedPages(new Date());
 
-/** 見本のページからやり直す */
-export function resetDemoPages(): void {
-  pages = seedPages(new Date());
-}
-
 function updateMetadata(
   slug: string,
   update: (existing: PageMetadata) => PageMetadata,
