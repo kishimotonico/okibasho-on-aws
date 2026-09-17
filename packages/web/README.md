@@ -27,7 +27,7 @@ pnpm --filter @okibasho/web dev:demo
 pnpm --filter @okibasho/web build:demo
 ```
 
-`--mode demo` では `src/demo` 配下のモジュールが認証と S3 の代わりになり（`vite.config.ts` の alias）、ログイン済みのダミーセッションで localStorage にページの metadata だけを持つ。接続先は `.env.demo`。成果物は `index.html` / `404.html` を含み、`.github/workflows/demo-pages.yml` が main への push で GitHub Pages に公開する。メニューの「ログアウト」は見本のページに戻すリセットになる。
+`--mode demo` では `src/demo` 配下のモジュールが認証と S3 の代わりになり（`vite.config.ts` の alias）、ログイン済みのダミーセッションでページの metadata だけをメモリに持ち、リロードで消える。デモであることは左上のバッジで示す。接続先は `.env.demo`。成果物は `index.html` / `404.html` を含み、`.github/workflows/demo-pages.yml` が main への push で GitHub Pages に公開する。メニューの「ログアウト」は見本のページに戻すリセットになる。
 
 ## 機能
 
