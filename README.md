@@ -1,8 +1,21 @@
 # okibasho
 
-ちょっとした HTML・アーティファクトを共有するための AWS スタック。生成した HTML やモックを、URL ひとつでチームメンバーへ共有する。
+ちょっとしたHTMLファイルを共有するための AWS スタックです。AIエージェントで生成したアーティファクトやモック、ツールなどを、URLひとつで共有できることが目的です。
 
-認可は IAM ポリシーに委譲する。ブラウザと CLI は Cognito Identity Pool 経由の一時クレデンシャルで S3 を直接操作し、API Gateway は持たない。
+## コンセプト
+
+- AWSの運用コストがかからないミニマムなサーバーレス構成
+- 独自のAPIをもたず、S3バケットを配信するだけのプリミティブな仕様
+- AWS CDKで作成・取り壊しがかんたんにできるスタック
+
+## アーキテクチャ
+
+![アーキテクチャ図](./docs/architecture.png)
+
+- S3 にアップロードしたファイルを CloudFront で配信します
+- 内部ユーザーは、Cognito Identity Pool 経由の一時クレデンシャルで S3 を直接操作します
+- 内部ユーザーは、認証済みの場合はURLを知っていれば全てのページを閲覧できます
+- 外部ユーザーは、外部公開を設定したページの共有URLにアクセスすることで閲覧できます
 
 ## リポジトリ構成
 
@@ -12,10 +25,8 @@ pnpm workspaces によるモノレポ。
 | ---------------- | -------------------------------------------------- |
 | `packages/infra` | AWS CDK。全 AWS リソースの定義                     |
 | `packages/web`   | 管理 UI（静的 SPA。S3 をブラウザから直接操作する） |
-| `packages/cli`   | アップロード用 CLI（`npx okiba`。AWS CLI 不要）    |
+| `packages/cli`   | アップロード用 CLI（`npx okiba`）                  |
 | `packages/core`  | web と CLI が共有するページの規則と S3 操作        |
-
-CDK をリポジトリのルートに置かずひとつのパッケージとして扱っているのは、フロントエンドや CLI と TypeScript の設定・依存が混ざらないようにするため。
 
 ## セットアップ
 
@@ -24,7 +35,7 @@ pnpm install
 cp packages/infra/.env.example packages/infra/.env   # デプロイ設定。EMAIL_DOMAIN は必須
 ```
 
-デプロイの手順（独自ドメイン・証明書・鍵の準備、ユーザー作成、管理 UI のアップロードまで）は [docs/deploy.md](docs/deploy.md) にある。
+デプロイの手順（独自ドメイン・証明書・鍵の準備、ユーザー作成、管理 UI のアップロードまで）は [docs/deploy.md](docs/deploy.md) にあります。
 
 ## よく使うコマンド
 
