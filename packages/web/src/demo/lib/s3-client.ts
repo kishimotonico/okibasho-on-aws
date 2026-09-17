@@ -1,5 +1,6 @@
 import {
   buildUploadMetadata,
+  generateRandomSlug,
   generateShareId,
   generateSharePassword,
   withRetention,
@@ -20,19 +21,25 @@ function daysAgo(now: Date, days: number): Date {
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
-/** 一覧へ出す見本のページ */
+/** 一覧へ出す見本のページ。実際の一覧と同じく、名前を付けずに上げた乱数 slug を混ぜる */
 function seedPages(now: Date): DemoPages {
   return {
-    'q3-report': buildUploadMetadata(null, { retention: 'temporary' }, daysAgo(now, 2)),
-    'ui-mock': buildUploadMetadata(
+    [generateRandomSlug()]: buildUploadMetadata(null, { retention: 'temporary' }, now),
+    'yabai-incident-report': buildUploadMetadata(
+      null,
+      { retention: 'temporary', share: { id: generateShareId() } },
+      daysAgo(now, 1),
+    ),
+    '2026-09-sales-report': buildUploadMetadata(null, { retention: 'permanent' }, daysAgo(now, 9)),
+    'ui-mock-final-v2-honto-ni-final': buildUploadMetadata(
       null,
       {
         retention: 'permanent',
         share: { id: generateShareId(), password: generateSharePassword() },
       },
-      daysAgo(now, 9),
+      daysAgo(now, 16),
     ),
-    'onboarding-guide': buildUploadMetadata(null, { retention: 'temporary' }, daysAgo(now, 20)),
+    [generateRandomSlug()]: buildUploadMetadata(null, { retention: 'temporary' }, daysAgo(now, 28)),
   };
 }
 
