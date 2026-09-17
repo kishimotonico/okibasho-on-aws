@@ -9,6 +9,14 @@ export function cognitoLoginKey(config: WebConfig): string {
   return `cognito-idp.${config.region}.amazonaws.com/${config.userPoolId}`;
 }
 
+/** 一覧取得で必ず呼ぶ Cognito Identity と pages バケットの S3 エンドポイント。実際のリクエスト前に接続だけ済ませる */
+export function pagesPreconnectUrls(config: WebConfig): string[] {
+  return [
+    `https://cognito-identity.${config.region}.amazonaws.com`,
+    `https://${config.pagesBucket}.s3.${config.region}.amazonaws.com`,
+  ];
+}
+
 // 一覧取得（getPageStore 経由でどのみち読み込む）を待たず、SDK チャンクの読み込みだけ並行させる
 export function preloadPagesSdk(): void {
   void import('@aws-sdk/client-s3');
