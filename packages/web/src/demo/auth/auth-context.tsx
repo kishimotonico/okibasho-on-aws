@@ -1,6 +1,6 @@
 import type { AuthState } from '~/auth/auth-context';
 
-import { DemoTag } from '../DemoTag';
+import { DemoCard } from '../DemoCard';
 import { demoSession } from './user-manager';
 
 /** 本物（~/auth/auth-context）と同じ export を、同じ型で用意する */
@@ -16,7 +16,7 @@ const demoAuthState: AuthState = {
 
 export const AuthProvider: AuthContextModule['AuthProvider'] = ({ children }) => (
   <>
-    <DemoTag />
+    <DemoCard />
     {children}
   </>
 );
