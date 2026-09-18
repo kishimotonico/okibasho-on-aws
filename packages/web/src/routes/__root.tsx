@@ -8,6 +8,7 @@ import { NotFoundPage } from '~/components/NotFoundPage';
 import { TooltipProvider } from '~/components/Tooltip';
 import { getWebConfig } from '~/config/env';
 import { queryClient } from '~/lib/query-client';
+import { pagesPreconnectUrls } from '~/lib/s3-client';
 import appCss from '~/styles/app.css?url';
 
 export const Route = createRootRoute({
@@ -33,19 +34,12 @@ export const Route = createRootRoute({
       ],
       links: [
         { rel: 'stylesheet', href: appCss },
-        { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
-        // 一覧取得で必ず呼ぶ Cognito Identity と pages バケットの S3 エンドポイントに、
-        // 実際のリクエスト前に接続だけ済ませておく
-        {
+        { rel: 'icon', href: `${import.meta.env.BASE_URL}favicon.svg`, type: 'image/svg+xml' },
+        ...pagesPreconnectUrls(config).map((href) => ({
           rel: 'preconnect',
-          href: `https://cognito-identity.${config.region}.amazonaws.com`,
-          crossOrigin: 'anonymous',
-        },
-        {
-          rel: 'preconnect',
-          href: `https://${config.pagesBucket}.s3.${config.region}.amazonaws.com`,
-          crossOrigin: 'anonymous',
-        },
+          href,
+          crossOrigin: 'anonymous' as const,
+        })),
       ],
     };
   },

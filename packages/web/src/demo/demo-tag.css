@@ -1,0 +1,73 @@
+/* composer（主役）より目立たせないため、色は罫と muted だけにする */
+.demo-tag {
+  position: fixed;
+  /* マウスオーバーで下がっても、ひもの上端が画面上端から離れないぶんだけ上へはみ出させる */
+  top: -0.5rem;
+  left: 1.5rem;
+  z-index: 5;
+  width: 5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.demo-tag svg {
+  display: block;
+  width: 100%;
+}
+
+/* 引っ込む前兆として少し下がる */
+.demo-tag:hover,
+.demo-tag:focus-visible {
+  transform: translateY(0.4rem);
+}
+
+/* 引っ込み終えてから visibility で操作とフォーカスの対象から外す */
+.demo-tag.demo-tag--hidden {
+  transform: translateY(-100%);
+  visibility: hidden;
+  transition:
+    transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s 0.32s;
+}
+
+.demo-tag__paper {
+  fill: var(--raised);
+  stroke: var(--line);
+}
+
+.demo-tag__hole {
+  fill: var(--bg);
+  stroke: var(--line);
+}
+
+.demo-tag__string {
+  stroke: var(--line);
+}
+
+.demo-tag__label {
+  fill: var(--muted);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-anchor: middle;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-tag,
+  .demo-tag.demo-tag--hidden {
+    transition: none;
+  }
+}
+
+/* 右上の .utility-menu が固定をやめる幅。荷札も本文と一緒に流し、メニュー行の高さに収める */
+@media (max-width: 40rem) {
+  .demo-tag {
+    position: absolute;
+    left: 1rem;
+    width: 3.5rem;
+  }
+}

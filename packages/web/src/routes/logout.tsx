@@ -1,8 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 
-import { getLogoutUrl, getUserManager } from '~/auth/user-manager';
-import { clearPersistedPages } from '~/lib/query-persistence';
-import { clearPagesCredentialsCache } from '~/lib/s3-client';
+import { signOut } from '~/auth/user-manager';
 
 export const Route = createFileRoute('/logout')({
   // storage を扱う処理をサーバーで走らせないための明示
@@ -11,8 +9,5 @@ export const Route = createFileRoute('/logout')({
 });
 
 async function handleLogout(): Promise<void> {
-  await clearPersistedPages();
-  clearPagesCredentialsCache();
-  await getUserManager().removeUser();
-  throw redirect({ href: getLogoutUrl() });
+  throw redirect({ href: await signOut() });
 }
