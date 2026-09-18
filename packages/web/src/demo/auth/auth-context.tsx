@@ -1,3 +1,5 @@
+import { createContext, useContext, useEffect, useState } from 'react';
+
 import type { AuthState } from '~/auth/auth-context';
 
 import { DemoCard } from '../DemoCard';
@@ -14,11 +16,21 @@ const demoAuthState: AuthState = {
   login: async () => {},
 };
 
-export const AuthProvider: AuthContextModule['AuthProvider'] = ({ children }) => (
-  <>
-    <DemoCard />
-    {children}
-  </>
-);
+const loadingAuthState: AuthState = { ...demoAuthState, isLoading: true };
 
-export const useAuth: AuthContextModule['useAuth'] = () => demoAuthState;
+const AuthContext = createContext<AuthState>(demoAuthState);
+
+export const AuthProvider: AuthContextModule['AuthProvider'] = ({ children }) => {
+  // 本物と同じく最初は認証確認中として描き、prerender の _shell.html に読み込み表示を焼き込む
+  const [isLoading, setIsLoading] = useState(true);
+  useEffect(() => setIsLoading(false), []);
+
+  return (
+    <AuthContext.Provider value={isLoading ? loadingAuthState : demoAuthState}>
+      <DemoCard />
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth: AuthContextModule['useAuth'] = () => useContext(AuthContext);
