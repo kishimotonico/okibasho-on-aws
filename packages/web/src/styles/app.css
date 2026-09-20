@@ -30,6 +30,12 @@
   --radius: 10px;
   --shadow: 0 10px 26px color-mix(in srgb, var(--text) 12%, transparent);
   --shadow-overlay: 0 4px 12px color-mix(in srgb, var(--text) 10%, transparent);
+  /* 画面の隅に固定する要素の左右の余白。広い画面で画面端に張り付かないよう、幅 64rem の
+     見えない枠の左右端に置く。64rem は本文（45rem）の外側にアイコンが並んでも本文と
+     重ならない幅。画面がそれより狭くなったら 1.25rem まで詰める */
+  --edge-inset: max(1.25rem, (100vw - 64rem) / 2);
+  /* 画面の隅に置く要素の上の余白 */
+  --edge-top: 1.25rem;
   font-family: var(--font);
   line-height: 1.5;
   color: var(--text);
@@ -1562,9 +1568,12 @@ button.text-link,
 
 .utility-menu {
   position: fixed;
-  top: 0.65rem;
-  right: 0.65rem;
+  top: var(--edge-top);
+  right: var(--edge-inset);
   z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.05rem;
 }
 
 /* 読み込み中（AuthGate）は本物のトリガー（.icon-button, 2.25rem角）の代わりに置く、
@@ -1626,11 +1635,16 @@ button.text-link,
 
 @media (max-width: 50rem) {
   .main {
-    padding-top: 3.25rem;
+    /* 固定の .utility-menu の下端（--edge-top 1.25rem + アイコン 2.25rem）より下から始める */
+    padding-top: 3.85rem;
   }
 }
 
 @media (max-width: 40rem) {
+  :root {
+    --edge-top: 0.5rem;
+  }
+
   .main {
     padding-top: 1.75rem;
     padding-left: 1rem;
@@ -1639,9 +1653,8 @@ button.text-link,
 
   .utility-menu {
     position: static;
-    display: flex;
     justify-content: flex-end;
-    padding: 0.5rem 1rem 0;
+    padding: var(--edge-top) 1rem 0;
   }
 
   .composer {

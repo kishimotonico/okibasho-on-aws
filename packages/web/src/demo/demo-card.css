@@ -1,0 +1,169 @@
+/* composer（主役）より目立たせないため、色は罫と muted だけにする。
+   本体のレイアウトは変えずに上へ重ねるだけにし、スクロールでは本文と一緒に流して
+   一覧などの上に居座らないようにする */
+.demo-card {
+  position: absolute;
+  /* × で下がったときもひもが画面上端から離れないよう、下がるぶん上へはみ出させておく */
+  top: -0.5rem;
+  left: var(--edge-inset);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* × に hover / focus すると、引っ張られる前兆としてひもごと少し下がる。
+   押した直後もポインタは × の上にあり、:has の詳細度が --hidden に勝つので隠す状態は除く */
+.demo-card:not(.demo-card--hidden):has(.demo-card__close:hover),
+.demo-card:not(.demo-card--hidden):has(.demo-card__close:focus-visible) {
+  transform: translateY(0.4rem);
+}
+
+/* 引っ込み終えてから visibility で操作とフォーカスの対象から外す */
+.demo-card.demo-card--hidden {
+  transform: translateY(-100%);
+  visibility: hidden;
+  transition:
+    transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s 0.32s;
+}
+
+.demo-card__string {
+  width: 1px;
+  height: 1.5rem;
+  background: var(--line);
+}
+
+.demo-card__paper {
+  position: relative;
+  width: max-content;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  transform: rotate(-3deg);
+  transform-origin: top center;
+}
+
+/* カード全体に hover したとき（× を除く）だけ、穴を支点にほんの少し揺れる */
+.demo-card__paper:hover:not(:has(.demo-card__close:hover)) {
+  animation: demo-card-wiggle 0.9s ease-out 1;
+}
+
+@keyframes demo-card-wiggle {
+  0% {
+    transform: rotate(-3deg);
+  }
+  25% {
+    transform: rotate(-0.5deg);
+  }
+  55% {
+    transform: rotate(-3.6deg);
+  }
+  80% {
+    transform: rotate(-2.6deg);
+  }
+  100% {
+    transform: rotate(-3deg);
+  }
+}
+
+.demo-card__hole {
+  position: absolute;
+  top: -0.3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+.demo-card__close {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.demo-card__close:hover,
+.demo-card__close:focus-visible {
+  color: var(--text);
+}
+
+.demo-card__close svg {
+  display: block;
+  width: 0.72rem;
+  height: 0.72rem;
+}
+
+.demo-card__label {
+  /* 右上の × と重ならず、DEMO が中央に来るよう左右を同じだけ空ける */
+  padding: 0.6rem 1.9rem 0.45rem;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.demo-card__rule {
+  height: 1px;
+  background: var(--line);
+  margin: 0 0.75rem;
+}
+
+.demo-card__github {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 1rem 0.5rem;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 0.75rem;
+  font-weight: 400;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.demo-card__github svg {
+  flex-shrink: 0;
+}
+
+.demo-card__github:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-card,
+  .demo-card.demo-card--hidden {
+    transition: none;
+  }
+
+  .demo-card__paper:hover:not(:has(.demo-card__close:hover)) {
+    animation: none;
+  }
+}
+
+/* 右上の .utility-menu と同じく、本文の左右の余白にそろえる */
+@media (max-width: 40rem) {
+  .demo-card {
+    left: 1rem;
+  }
+}

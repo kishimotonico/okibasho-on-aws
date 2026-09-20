@@ -96,7 +96,7 @@
 
 ### Utility menu
 
-- **Placement:** 画面右上の固定。アップロード UI より目立たせない。40rem 以下では固定をやめてページ最上部に通常配置（スクロールで流れる）にし、composer との重なりを避ける
+- **Placement:** 画面右上の固定。左右の位置は画面端ではなく、本文の外側に取った幅 64rem の見えない枠の右端（`--edge-inset`）、上は `--edge-top`。アップロード UI より目立たせない。40rem 以下では固定をやめてページ最上部に通常配置（スクロールで流れる）にし、composer との重なりを避ける
 - **Trigger:** `CircleUser` の icon button。hover では開かない
 - **Menu:** いまはログアウトのみ。項目を足せる構造。Esc・外側クリック・矢印キー、閉じたらトリガーへフォーカス復帰
 - **Tooltip:** hover と focus-visible の両方。操作自体は hover 前提にしない
