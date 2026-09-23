@@ -5,8 +5,6 @@ type UserManagerModule = typeof import('~/auth/user-manager');
 
 export const demoSession: AuthSession = { email: 'demo@example.com', idToken: 'demo' };
 
-export const restoreUser: UserManagerModule['restoreUser'] = async () => null;
-
 export const loadUser: UserManagerModule['loadUser'] = async () => null;
 
 export const loadAuthSession: UserManagerModule['loadAuthSession'] = async () => demoSession;
