@@ -11,6 +11,7 @@ import type { User, UserManager } from 'oidc-client-ts';
 
 import {
   getUserManager,
+  loadUser,
   saveReturnPath,
   sessionFromUser,
   type AuthSession,
@@ -44,8 +45,7 @@ function ClientAuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    userManager
-      .getUser()
+    loadUser()
       .then((loaded) => {
         if (active) {
           setUser(loaded);

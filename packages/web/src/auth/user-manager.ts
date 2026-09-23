@@ -102,9 +102,44 @@ export function sessionFromUser(user: User | null): AuthSession | null {
   return { email, idToken: user.id_token };
 }
 
+/** getUser / signinSilent だけ借りる。テストで UserManager 全体を組まないため */
+export interface UserRestorer {
+  getUser: () => Promise<User | null>;
+  signinSilent: () => Promise<User | null>;
+}
+
+/**
+ * 保存済みユーザーを返す。期限切れなら refresh token で更新してから返す。
+ * automaticSilentRenew は期限切れ前のタイマーだけで、タブを開き直したあとは動かない。
+ */
+export async function restoreUser(manager: UserRestorer): Promise<User | null> {
+  const user = await manager.getUser();
+  if (!user || !user.expired) {
+    return user;
+  }
+  if (!user.refresh_token) {
+    return null;
+  }
+  try {
+    return await manager.signinSilent();
+  } catch {
+    return null;
+  }
+}
+
+let loadUserPromise: Promise<User | null> | null = null;
+
+/** AuthProvider と loader が同時に走っても、signinSilent は一度だけにする */
+export function loadUser(): Promise<User | null> {
+  loadUserPromise ??= restoreUser(getUserManager()).finally(() => {
+    loadUserPromise = null;
+  });
+  return loadUserPromise;
+}
+
 /** route の loader など、React の外からログイン情報を読む */
 export async function loadAuthSession(): Promise<AuthSession | null> {
-  return sessionFromUser(await getUserManager().getUser());
+  return sessionFromUser(await loadUser());
 }
 
 export function saveReturnPath(path: string): void {
