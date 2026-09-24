@@ -1,18 +1,12 @@
 import type { ReactNode } from 'react';
-import {
-  createRootRoute,
-  HeadContent,
-  Outlet,
-  Scripts,
-  useRouterState,
-} from '@tanstack/react-router';
+import { createRootRoute, HeadContent, Scripts, useRouterState } from '@tanstack/react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 
 import { SessionBanner } from '~/auth/SessionBanner';
 import { LoadingShell } from '~/components/LoadingShell';
 import { NotFoundPage } from '~/components/NotFoundPage';
 import { TooltipProvider } from '~/components/Tooltip';
-import { UtilityMenuPlaceholder } from '~/components/UtilityMenu';
+import { UtilityMenu, UtilityMenuPlaceholder } from '~/components/UtilityMenu';
 import { getWebConfig } from '~/config/env';
 import { queryClient } from '~/lib/query-client';
 import { pagesPreconnectUrls } from '~/lib/s3-client';
@@ -51,7 +45,6 @@ export const Route = createRootRoute({
     };
   },
   notFoundComponent: NotFoundPage,
-  component: RootComponent,
   shellComponent: RootDocument,
 });
 
@@ -60,21 +53,27 @@ export const Route = createRootRoute({
  * status: 'pending' になる。ここで一括りに LoadingShell へ差し替えることで、
  * ハイドレーションからページ表示までを同じ1インスタンスにする（差し替えるたびに弧アニメーションが巻き戻るため）。
  * _authed 配下は ssr:false（サーバーでは読み込まない）なので SSR 時点では status が
- * 'pending' にならず、prerender の _shell.html にこの画面を焼き込むには SSR 自体も明示的にローディング扱いにする
+ * 'pending' にならず、prerender の _shell.html にこの画面を焼き込むには SSR 自体も明示的にローディング扱いにする。
+ * main は notFound・error 画面も含めて常にここでマウントするので、404 やログインエラーもアプリの枠の中に出る
  */
-function RootComponent() {
-  const isRoutePending = useRouterState({ select: (state) => state.status === 'pending' });
-  if (import.meta.env.SSR || isRoutePending) {
-    return (
-      <>
-        <UtilityMenuPlaceholder />
-        <main className="main">
-          <LoadingShell />
-        </main>
-      </>
-    );
-  }
-  return <Outlet />;
+function AppFrame({ children }: { children: ReactNode }) {
+  // isLoading と isAuthedMatch を別々の useRouterState/useMatch で読むと、それぞれの
+  // ストア通知が別コミットで届き、両者が食い違う一瞬だけ LoadingShell が余分に付け外しされる
+  // （弧アニメーションが巻き戻る）。1つの select で同時に読んで常に同じスナップショットにする
+  const { isLoading, isAuthedMatch } = useRouterState({
+    select: (state) => ({
+      isLoading: import.meta.env.SSR || state.status === 'pending',
+      isAuthedMatch: state.matches.some((match) => match.routeId === '/_authed'),
+    }),
+    structuralSharing: true,
+  });
+
+  return (
+    <>
+      {!isLoading && isAuthedMatch ? <UtilityMenu /> : <UtilityMenuPlaceholder />}
+      <main className="main">{isLoading ? <LoadingShell /> : children}</main>
+    </>
+  );
 }
 
 function RootDocument({ children }: { children: ReactNode }) {
@@ -87,7 +86,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
             <SessionBanner />
-            {children}
+            <AppFrame>{children}</AppFrame>
           </TooltipProvider>
         </QueryClientProvider>
         <Scripts />
