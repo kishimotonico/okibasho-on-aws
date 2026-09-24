@@ -176,10 +176,11 @@ export async function signOut(): Promise<string> {
 
 let signinCallbackPromise: Promise<string> | null = null;
 
-// loader が複数回走っても signinCallback（code_verifier を使い切る）は一度しか送らない
+// loader が複数回走っても signinRedirectCallback（code_verifier を使い切る）は一度しか送らない。
+// signinCallback は state の request_type で振り分けるが、createSigninRequest の state には request_type が無い
 export function completeSignInCallbackOnce(): Promise<string> {
   const manager = getUserManager();
-  signinCallbackPromise ??= withTokenLock(() => manager.signinCallback()).then(() =>
+  signinCallbackPromise ??= withTokenLock(() => manager.signinRedirectCallback()).then(() =>
     consumeReturnPath(),
   );
   return signinCallbackPromise;
