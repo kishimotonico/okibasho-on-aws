@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { createRootRoute, HeadContent, Scripts, useRouterState } from '@tanstack/react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 
-import { SessionBanner } from '~/auth/SessionBanner';
+import { DemoCardSlot } from '~/components/DemoCardSlot';
 import { LoadingShell } from '~/components/LoadingShell';
 import { NotFoundPage } from '~/components/NotFoundPage';
 import { TooltipProvider } from '~/components/Tooltip';
@@ -85,7 +85,7 @@ function RootDocument({ children }: { children: ReactNode }) {
       <body>
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
-            <SessionBanner />
+            <DemoCardSlot />
             <AppFrame>{children}</AppFrame>
           </TooltipProvider>
         </QueryClientProvider>

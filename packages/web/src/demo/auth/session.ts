@@ -3,13 +3,6 @@ type SessionModule = typeof import('~/auth/session');
 
 const DEMO_EMAIL = 'demo@example.com';
 
-export class NotSignedInError extends Error {
-  constructor() {
-    super('not signed in');
-    this.name = 'NotSignedInError';
-  }
-}
-
 export const requireSignedIn: SessionModule['requireSignedIn'] = async () => ({
   email: DEMO_EMAIL,
 });

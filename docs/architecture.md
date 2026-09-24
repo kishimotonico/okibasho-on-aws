@@ -203,7 +203,7 @@ Signed Cookie は閲覧専用で、漏れても内部ページの閲覧以外の
 okibasho.example.com/p/<user>/<slug>/ → 403（Cookie が無い・期限切れ）
  → CloudFront カスタムエラーページ /errors/403.html
      元 URL を持って https://app.okibasho.example.com/pages-login?return=<元URL> へ location.replace
- → app: AuthGate が Cognito ログインを要求（済んでいればスキップ）
+ → app: `_authed` の beforeLoad が Cognito ログインを要求（済んでいればスキップ）
  → /pages-login: return を検証し、POST /auth/pages-cookie で Signed Cookie 発行
  → 元の pages URL へ location.replace
 ```

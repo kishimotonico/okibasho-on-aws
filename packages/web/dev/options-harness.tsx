@@ -61,7 +61,7 @@ export function OptionsHarness() {
       <main className="harness">
         <h1>オプションチップ ハーネス</h1>
         <p className="harness__note">
-          Vite の serve 専用。本番 dist には含まれない。AuthGate は通らない。
+          Vite の serve 専用。本番 dist には含まれない。`_authed` の beforeLoad は通らない。
         </p>
 
         <h2>SlugField（公開URL）</h2>
