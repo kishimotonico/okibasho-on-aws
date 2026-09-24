@@ -23,6 +23,7 @@ function buildMetadata(hostedUiBaseUrl: string, issuer: string) {
     authorization_endpoint: `${hostedUi}/oauth2/authorize`,
     token_endpoint: `${hostedUi}/oauth2/token`,
     userinfo_endpoint: `${hostedUi}/oauth2/userInfo`,
+    revocation_endpoint: `${hostedUi}/oauth2/revoke`,
     jwks_uri: `${issuerUrl}/.well-known/jwks.json`,
   };
 }
@@ -89,12 +90,18 @@ export function buildLogoutUrl(
   return `${hostedUi}/logout?${params.toString()}`;
 }
 
-/** ローカルのログイン状態を消し、続けて遷移する先（Cognito の /logout）を返す */
+/**
+ * ローカルのログイン状態を消し、続けて遷移する先（Cognito の /logout）を返す。
+ * Cognito の /logout は refresh token を失効させないので、持ち出された token が 30 日使えないよう先に失効させる。
+ */
 export async function signOut(): Promise<string> {
   await clearPersistedPages();
   clearPagesCredentialsCache();
   const manager = getUserManager();
-  await withTokenLock(() => manager.removeUser());
+  await withTokenLock(async () => {
+    await manager.revokeTokens(['refresh_token']);
+    await manager.removeUser();
+  });
   const config = getWebConfig();
   return buildLogoutUrl(config.hostedUiBaseUrl, config.webAppClientId, window.location.origin);
 }

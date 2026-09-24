@@ -156,7 +156,7 @@ App Client は 2 つ。どちらも public client（client secret なし）+ PKC
 
 メールアドレスが S3 キーになる。大文字や `+` を含むアドレスを PreSignUp で拒否するのは、キーの揺れを増やさないためである。
 
-ID / access token の有効期間は 1 時間、refresh token は 30 日。web は oidc-client-ts の refresh token grant（`signinSilent`）で id_token を更新する。タブを閉じたあとに id_token が切れていても、起動時に同じ更新をかけてから未ログインとみなす。refresh token が生きている間は Managed Login に戻さない。保存済みトークンを書き換える処理（起動時と期限前の更新、ログイン完了、ログアウト）は Web Locks でタブをまたいで直列にし、ログアウト後に進行中だった更新がトークンを書き戻さないようにする。
+ID / access token の有効期間は 1 時間、refresh token は 30 日。web は oidc-client-ts の refresh token grant（`signinSilent`）で id_token を更新する。タブを閉じたあとに id_token が切れていても、起動時に同じ更新をかけてから未ログインとみなす。refresh token が生きている間は Managed Login に戻さない。保存済みトークンを書き換える処理（起動時と期限前の更新、ログイン完了、ログアウト）は Web Locks でタブをまたいで直列にし、ログアウト後に進行中だった更新がトークンを書き戻さないようにする。ログアウトはローカルの状態を消す前に Cognito の `/oauth2/revoke` で refresh token を失効させる。
 
 ### CLI
 
