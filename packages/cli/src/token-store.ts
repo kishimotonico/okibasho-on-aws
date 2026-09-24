@@ -45,8 +45,12 @@ export async function saveTokens(
   await chmod(tokenPath, FILE_MODE);
 }
 
-export async function loadTokens(
-  config: Pick<ResolvedConfig, 'issuer' | 'clientId'>,
+/**
+ * トークンファイルを読み、形式だけ検証して返す。issuer / clientId の一致は見ない。
+ * ログアウト時の revoke はトークンファイルに記録された issuer 宛てに行うため、
+ * 現在の config と一致しないトークンも扱えるようにこの関数を分けている。
+ */
+export async function readStoredTokens(
   options: TokenStoreOptions = {},
 ): Promise<StoredTokens | null> {
   const tokenPath = options.tokenPath ?? getTokenFilePath(options.env);
@@ -92,10 +96,6 @@ export async function loadTokens(
     return null;
   }
 
-  if (issuer !== config.issuer || clientId !== config.clientId) {
-    return null;
-  }
-
   return {
     refreshToken,
     idToken,
@@ -104,6 +104,22 @@ export async function loadTokens(
     issuer,
     clientId,
   };
+}
+
+export async function loadTokens(
+  config: Pick<ResolvedConfig, 'issuer' | 'clientId'>,
+  options: TokenStoreOptions = {},
+): Promise<StoredTokens | null> {
+  const stored = await readStoredTokens(options);
+  if (!stored) {
+    return null;
+  }
+
+  if (stored.issuer !== config.issuer || stored.clientId !== config.clientId) {
+    return null;
+  }
+
+  return stored;
 }
 
 export async function clearTokens(options: TokenStoreOptions = {}): Promise<void> {

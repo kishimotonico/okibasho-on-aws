@@ -160,7 +160,7 @@ ID / access token の有効期間は 1 時間、refresh token は 30 日。web �
 
 ### CLI
 
-Web と CLI で認証方式を分けず、同じ User Pool を使う。CLI のログインは OAuth 2.0 Authorization Code + PKCE。CLI が一時的に 127.0.0.1 の HTTP サーバーを立てて callback を受ける。初回認証後は refresh token を XDG state ディレクトリ（`~/.local/state/okibasho/`、`XDG_STATE_HOME` 準拠）にパーミッション 0600 のファイルで保存し、毎回のブラウザログインを不要にする。設定ファイル（`~/.config/okibasho/`）とは置き場所を分ける。OS Credential Store は使わない（ネイティブ依存を持ち込むと単一 JS バンドル配布が崩れる）。token をログに出さない。独自の Personal API Token は作らない。
+Web と CLI で認証方式を分けず、同じ User Pool を使う。CLI のログインは OAuth 2.0 Authorization Code + PKCE。CLI が一時的に 127.0.0.1 の HTTP サーバーを立てて callback を受ける。初回認証後は refresh token を XDG state ディレクトリ（`~/.local/state/okibasho/`、`XDG_STATE_HOME` 準拠）にパーミッション 0600 のファイルで保存し、毎回のブラウザログインを不要にする。設定ファイル（`~/.config/okibasho/`）とは置き場所を分ける。OS Credential Store は使わない（ネイティブ依存を持ち込むと単一 JS バンドル配布が崩れる）。token をログに出さない。独自の Personal API Token は作らない。ログアウトは web と同じく、ローカルのファイルを消す前に Cognito の `/oauth2/revoke` で refresh token を失効させる。
 
 ### Cognito Identity Pool
 
