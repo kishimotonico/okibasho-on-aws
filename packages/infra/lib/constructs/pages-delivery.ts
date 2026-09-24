@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { Annotations, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import {
   AccessLevel,
   CachePolicy,
@@ -204,6 +204,11 @@ export class PagesDelivery extends Construct {
           : []),
       ],
     });
+    // LIST 付き origin への一律の警告。"/" は router 関数が管理UIへリダイレクトするので、
+    // バケットの一覧は返らない
+    Annotations.of(this.distribution).acknowledgeWarning(
+      '@aws-cdk/aws-cloudfront-origins:listBucketSecurityRisk',
+    );
     this.domainName = props.customDomain?.domainName ?? this.distribution.distributionDomainName;
   }
 }
