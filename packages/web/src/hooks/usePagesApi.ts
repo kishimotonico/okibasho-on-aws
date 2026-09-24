@@ -9,7 +9,7 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
-import { NotSignedInError } from '~/auth/session';
+import { NotSignedInError } from '~/auth/not-signed-in-error';
 import { getWebConfig, type WebConfig } from '~/config/env';
 import type { UploadFileEntry } from '~/lib/collect-upload-files';
 import { listedPageFromMetadata, listPages, type ListedPage } from '~/lib/listed-page';

@@ -1,6 +1,7 @@
 import { OidcClient, UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
 import { redirect } from '@tanstack/react-router';
 
+import { NotSignedInError } from '~/auth/not-signed-in-error';
 import { getWebConfig } from '~/config/env';
 
 const RETURN_PATH_KEY = 'okibasho:auth:returnTo';
@@ -90,13 +91,6 @@ export function buildLogoutUrl(
   const hostedUi = hostedUiBaseUrl.replace(/\/$/, '');
   const params = new URLSearchParams({ client_id: clientId, logout_uri: returnTo });
   return `${hostedUi}/logout?${params.toString()}`;
-}
-
-export class NotSignedInError extends Error {
-  constructor() {
-    super('not signed in');
-    this.name = 'NotSignedInError';
-  }
 }
 
 /** email は S3 のキーに使うため小文字で揃える */

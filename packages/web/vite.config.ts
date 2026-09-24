@@ -49,7 +49,7 @@ function devHarness(name: string, harnessUrl: string, htmlFile: string): Plugin 
  * AWS SDK と oidc-client-ts をバンドルから外す。接続先は .env.demo
  */
 const DEMO_MODULES =
-  /^~\/(lib\/s3-client|lib\/query-persistence|auth\/session|auth\/SessionBanner)$/;
+  /^~\/(lib\/s3-client|lib\/query-persistence|auth\/session|components\/DemoCardSlot)$/;
 
 export default defineConfig(({ mode }) => {
   const demo = mode === 'demo';
@@ -59,7 +59,7 @@ export default defineConfig(({ mode }) => {
     base: demo ? new URL(env['VITE_APP_BASE_URL'] ?? '').pathname : '/',
     server: {
       port: 3000,
-      // dev はルート直下の認証ゲートからトップページまで数十の未バンドル ESM を配信するため、
+      // dev は _authed の beforeLoad（認証ゲート）からトップページまで数十の未バンドル ESM を配信するため、
       // その経路のファイルを起動時に先読み変換させ、最初のアクセスでの変換待ちを減らす
       warmup: {
         clientFiles: [

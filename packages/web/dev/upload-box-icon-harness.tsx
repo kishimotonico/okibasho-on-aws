@@ -42,7 +42,7 @@ export function UploadBoxIconHarness() {
       <main className="harness">
         <h1>箱アイコン ハーネス</h1>
         <p className="harness__note">
-          Vite の serve 専用。本番 dist には含まれない。AuthGate は通らない。
+          Vite の serve 専用。本番 dist には含まれない。`_authed` の beforeLoad は通らない。
           「success」にしてから箱にマウスを乗せると蓋が少し開きかけ（ホバー）、クリックまたは
           Enter/Space で箱がヨー回転しながら開いて idle に戻る（次のファイルを置く相当）。
         </p>
