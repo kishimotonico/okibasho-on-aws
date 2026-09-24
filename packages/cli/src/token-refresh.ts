@@ -1,4 +1,4 @@
-import { discovery, None, refreshTokenGrant } from 'openid-client';
+import { discovery, None, refreshTokenGrant, tokenRevocation } from 'openid-client';
 import type { ResolvedConfig } from './config.js';
 import { loadTokens, saveTokens, type StoredTokens } from './token-store.js';
 
@@ -38,6 +38,17 @@ export async function ensureIdToken(
       'トークンの更新に失敗しました。もう一度 `okiba login` を実行してください。',
     );
   }
+}
+
+/**
+ * 持ち出された refresh token が使えないよう、Cognito 側で失効させる。
+ * 現在の config ではなく、トークンファイルに記録された issuer / clientId 宛てに行う。
+ */
+export async function revokeRefreshToken(
+  stored: Pick<StoredTokens, 'issuer' | 'clientId' | 'refreshToken'>,
+): Promise<void> {
+  const oidcConfig = await discovery(new URL(stored.issuer), stored.clientId, undefined, None());
+  await tokenRevocation(oidcConfig, stored.refreshToken);
 }
 
 async function refreshStoredTokens(

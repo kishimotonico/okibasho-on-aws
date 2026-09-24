@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { clearTokens, loadTokens, saveTokens } from '../src/token-store.js';
+import { clearTokens, loadTokens, readStoredTokens, saveTokens } from '../src/token-store.js';
 
 describe('token-store', () => {
   const dirs: string[] = [];
@@ -76,6 +76,14 @@ describe('token-store', () => {
       { tokenPath },
     );
     expect(loaded2).toBeNull();
+  });
+
+  it('readStoredTokens は issuer / clientId の一致を見ずに読み戻す', async () => {
+    const tokenPath = await makeTokenPath();
+    await saveTokens(sampleTokens, { tokenPath });
+
+    const loaded = await readStoredTokens({ tokenPath });
+    expect(loaded).toEqual(sampleTokens);
   });
 
   it('clearTokens で削除できる', async () => {
