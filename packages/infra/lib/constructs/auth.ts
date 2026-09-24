@@ -127,7 +127,7 @@ export class Auth extends Construct {
     const tokenValidity = {
       accessTokenValidity: Duration.hours(1),
       idTokenValidity: Duration.hours(1),
-      // CLIが毎回ブラウザログインしなくて済むようにする
+      // web / CLI が毎回ブラウザログインしなくて済むようにする
       refreshTokenValidity: Duration.days(30),
     };
 
