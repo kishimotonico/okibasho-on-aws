@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { Annotations, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import {
   AccessLevel,
   AllowedMethods,
@@ -125,6 +125,11 @@ export class AppDelivery extends Construct {
         },
       },
     });
+    // LIST 付き origin への一律の警告。"/" は defaultRootObject と router 関数で _shell.html に
+    // 寄せるので、バケットの一覧は返らない
+    Annotations.of(this.distribution).acknowledgeWarning(
+      '@aws-cdk/aws-cloudfront-origins:listBucketSecurityRisk',
+    );
     this.domainName = props.customDomain?.domainName ?? this.distribution.distributionDomainName;
   }
 
