@@ -119,17 +119,10 @@ export function loadUser(): Promise<User | null> {
 async function restoreUser(): Promise<User | null> {
   const manager = getUserManager();
   const user = await manager.getUser();
-  if (!user || !user.expired) {
+  if (!user?.expired) {
     return user;
   }
-  if (!user.refresh_token) {
-    return null;
-  }
-  try {
-    return await manager.signinSilent();
-  } catch {
-    return null;
-  }
+  return manager.signinSilent().catch(() => null);
 }
 
 /** route の loader など、React の外からログイン情報を読む */
