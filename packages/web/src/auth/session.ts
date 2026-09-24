@@ -43,23 +43,27 @@ function buildOidcSettings() {
   };
 }
 
+// UserManager と OidcClient で settings（stateStore 含む）が食い違わないよう、一度だけ作って共有する
+let oidcSettings: ReturnType<typeof buildOidcSettings> | null = null;
+
+function getOidcSettings(): ReturnType<typeof buildOidcSettings> {
+  oidcSettings ??= buildOidcSettings();
+  return oidcSettings;
+}
+
 let userManager: UserManager | null = null;
 
 function getUserManager(): UserManager {
-  userManager ??= new UserManager(buildOidcSettings());
+  userManager ??= new UserManager(getOidcSettings());
   return userManager;
 }
 
 let oidcClient: OidcClient | null = null;
 
-/**
- * signinRedirect は即座に window.location を書き換えるため、route の beforeLoad から
- * throw redirect(...) する形に載せられない。OidcClient.createSigninRequest は
- * UserManager と同じ stateStore に PKCE の state を書き込みつつ authorize URL だけを返す
- * 公開 API なので、遷移せずに URL を組み立てるのに使う。
- */
+// signinRedirect は即座に遷移するため、route の beforeLoad から throw redirect(...) する形に載せられない。
+// createSigninRequest は遷移せずに authorize URL だけを返す公開 API なのでこちらを使う
 function getOidcClient(): OidcClient {
-  oidcClient ??= new OidcClient(buildOidcSettings());
+  oidcClient ??= new OidcClient(getOidcSettings());
   return oidcClient;
 }
 
@@ -119,10 +123,15 @@ export function saveReturnPath(path: string): void {
   sessionStorage.setItem(RETURN_PATH_KEY, path);
 }
 
+/** 保存した戻り先を消費する。同じ origin の相対パス以外（"//evil.example" や絶対 URL）は "/" に寄せる */
 export function consumeReturnPath(): string {
   const value = sessionStorage.getItem(RETURN_PATH_KEY);
   sessionStorage.removeItem(RETURN_PATH_KEY);
-  return value && value.startsWith('/') ? value : '/';
+  if (!value) {
+    return '/';
+  }
+  const url = new URL(value, window.location.origin);
+  return url.origin === window.location.origin ? `${url.pathname}${url.search}` : '/';
 }
 
 /** S3 を呼ぶ直前など、使う時点で読む。未ログイン・期限切れの更新失敗では投げる */
@@ -139,8 +148,9 @@ export async function requireIdToken(): Promise<string> {
  * 管理UIはチーム内専用でIAMがセキュリティ境界のため、未ログインで見せる画面は用意しない
  */
 export async function requireSignedIn(returnPath: string): Promise<{ email: string }> {
+  // loadUser は期限切れなら更新し、失敗すれば null を返すので、ここでは期限切れを気にしなくてよい
   const user = await loadUser();
-  const email = user && !user.expired ? emailFromUser(user) : null;
+  const email = user ? emailFromUser(user) : null;
   if (email) {
     return { email };
   }
