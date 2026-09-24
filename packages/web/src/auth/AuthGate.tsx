@@ -14,11 +14,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
       isRoutePending: state.status === 'pending',
     }),
   });
-  const isCallback = pathname === '/callback';
+  // ログインの出入りの途中なので、未ログインに見えても自動ログインをかけない。
+  // /logout でかけると、Cognito の /logout への遷移と競合してログアウトできないことがある
+  const isAuthFlow = pathname === '/callback' || pathname === '/logout';
   const hasRequestedLogin = useRef(false);
 
   useEffect(() => {
-    if (auth.isLoading || isCallback || auth.isAuthenticated) {
+    if (auth.isLoading || isAuthFlow || auth.isAuthenticated) {
       return;
     }
     if (hasRequestedLogin.current) {
@@ -26,17 +28,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
     hasRequestedLogin.current = true;
     void auth.login(`${window.location.pathname}${window.location.search}`);
-  }, [auth, isCallback]);
+  }, [auth, isAuthFlow]);
 
   // 認証確認・未ログイン・loader 待ちを1つの状態にまとめ、常に同じ LoadingShell インスタンスを
-  // 描画する（切り替えると弧アニメーションが巻き戻る）。/callback は未ログインのまま loader を
-  // 走らせ、失敗したら errorComponent を見せるので、認証の条件だけ外す
-  const isLoading = isRoutePending || (!isCallback && (auth.isLoading || !auth.isAuthenticated));
+  // 描画する（切り替えると弧アニメーションが巻き戻る）。/callback と /logout は未ログインのまま
+  // loader を走らせ、失敗したら errorComponent を見せるので、認証の条件だけ外す
+  const isLoading = isRoutePending || (!isAuthFlow && (auth.isLoading || !auth.isAuthenticated));
 
   return (
     <>
-      {/* /callback で見せるのはログイン失敗の画面だけなので、メニューは出さず場所だけ空ける */}
-      {isLoading || isCallback ? <UtilityMenuPlaceholder /> : <UtilityMenu />}
+      {/* ここで見せるのは失敗の画面だけなので、メニューは出さず場所だけ空ける */}
+      {isLoading || isAuthFlow ? <UtilityMenuPlaceholder /> : <UtilityMenu />}
       <main className="main">{isLoading ? <LoadingShell /> : children}</main>
     </>
   );

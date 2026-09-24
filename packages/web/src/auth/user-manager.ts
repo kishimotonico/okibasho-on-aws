@@ -43,7 +43,7 @@ export function getUserManager(): UserManager {
 function createUserManager(): UserManager {
   const config = getWebConfig();
 
-  return new UserManager({
+  const manager = new UserManager({
     authority: config.oidcIssuer,
     metadata: buildMetadata(config.hostedUiBaseUrl, config.oidcIssuer),
     client_id: config.webAppClientId,
@@ -54,8 +54,22 @@ function createUserManager(): UserManager {
     // untrusted な HTML は別 origin（pages 側）で配信され storage を読めないので、トークンはタブ間で共有する
     userStore: new WebStorageStateStore({ store: window.localStorage }),
     stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
-    automaticSilentRenew: true,
+    // automaticSilentRenew はロックの外でトークンを保存するので使わず、同じ更新を自前でロックに通す
+    automaticSilentRenew: false,
   });
+  manager.events.addAccessTokenExpiring(() => {
+    void withTokenLock(() => manager.signinSilent()).catch(() => {});
+  });
+  return manager;
+}
+
+/**
+ * 保存済みトークンを書き換える処理（更新・ログイン完了・ログアウト）は、タブをまたいで一つずつ走らせる。
+ * 並ぶと、ログアウトで消したトークンを先に始まっていた更新が書き戻したり、
+ * 失敗した更新の結果がそのあとのログイン完了より遅れて AuthProvider に届いたりする。
+ */
+async function withTokenLock<T>(operation: () => Promise<T>): Promise<T> {
+  return navigator.locks.request('okibasho:auth:tokens', operation);
 }
 
 /**
@@ -79,7 +93,8 @@ export function buildLogoutUrl(
 export async function signOut(): Promise<string> {
   await clearPersistedPages();
   clearPagesCredentialsCache();
-  await getUserManager().removeUser();
+  const manager = getUserManager();
+  await withTokenLock(() => manager.removeUser());
   const config = getWebConfig();
   return buildLogoutUrl(config.hostedUiBaseUrl, config.webAppClientId, window.location.origin);
 }
@@ -102,27 +117,20 @@ export function sessionFromUser(user: User | null): AuthSession | null {
   return { email, idToken: user.id_token };
 }
 
-let loadUserPromise: Promise<User | null> | null = null;
-
 /**
  * 保存済みユーザーを返す。期限切れなら refresh token で更新してから返す。
- * automaticSilentRenew は期限切れ前のタイマーだけで、タブを開き直したあとは動かない。
- * AuthProvider と loader が同時に走っても、signinSilent は一度だけにする。
+ * 期限切れ前の更新タイマーは、タブを閉じている間に切れたトークンには張られない。
+ * AuthProvider と loader が同時に呼んでも、後のほうはロックの中で更新済みのトークンを読む。
  */
 export function loadUser(): Promise<User | null> {
-  loadUserPromise ??= restoreUser().finally(() => {
-    loadUserPromise = null;
-  });
-  return loadUserPromise;
-}
-
-async function restoreUser(): Promise<User | null> {
   const manager = getUserManager();
-  const user = await manager.getUser();
-  if (!user?.expired) {
-    return user;
-  }
-  return manager.signinSilent().catch(() => null);
+  return withTokenLock(async () => {
+    const user = await manager.getUser();
+    if (!user?.expired) {
+      return user;
+    }
+    return manager.signinSilent().catch(() => null);
+  });
 }
 
 /** route の loader など、React の外からログイン情報を読む */
@@ -144,8 +152,9 @@ let signinCallbackPromise: Promise<string> | null = null;
 
 // loader が複数回走っても signinCallback（code_verifier を使い切る）は一度しか送らない
 export function completeSignInCallbackOnce(): Promise<string> {
-  signinCallbackPromise ??= getUserManager()
-    .signinCallback()
-    .then(() => consumeReturnPath());
+  const manager = getUserManager();
+  signinCallbackPromise ??= withTokenLock(() => manager.signinCallback()).then(() =>
+    consumeReturnPath(),
+  );
   return signinCallbackPromise;
 }
