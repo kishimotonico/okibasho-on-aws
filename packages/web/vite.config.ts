@@ -49,7 +49,7 @@ function devHarness(name: string, harnessUrl: string, htmlFile: string): Plugin 
  * AWS SDK と oidc-client-ts をバンドルから外す。接続先は .env.demo
  */
 const DEMO_MODULES =
-  /^~\/(lib\/s3-client|lib\/query-persistence|auth\/auth-context|auth\/user-manager)$/;
+  /^~\/(lib\/s3-client|lib\/query-persistence|auth\/session|auth\/SessionBanner)$/;
 
 export default defineConfig(({ mode }) => {
   const demo = mode === 'demo';

@@ -2,7 +2,7 @@ import type { S3Client as S3ClientType } from '@aws-sdk/client-s3';
 import type { fromCognitoIdentityPool as FromCognitoIdentityPoolType } from '@aws-sdk/credential-providers';
 import type { PageStore } from '@okibasho/core/page-store';
 
-import type { AuthSession } from '~/auth/user-manager';
+import { requireIdToken } from '~/auth/session';
 import type { WebConfig } from '~/config/env';
 
 export function cognitoLoginKey(config: WebConfig): string {
@@ -24,22 +24,19 @@ export function preloadPagesSdk(): void {
   void import('@okibasho/core/page-store');
 }
 
-let cached: { idToken: string; clientPromise: Promise<S3ClientType> } | null = null;
+let cached: { email: string; clientPromise: Promise<S3ClientType> } | null = null;
 
 /**
- * 同じ idToken なら同じクライアントを使い回す。
+ * 同じ email なら同じクライアントを使い回す。
  * S3Client の中で Cognito の一時認証情報がキャッシュされるため、
  * 操作のたびに作り直すと毎回 GetCredentialsForIdentity を往復することになる。
  * config はビルド時に固定なので鍵に含めない。
  */
-export async function getPagesS3Client(
-  config: WebConfig,
-  session: AuthSession,
-): Promise<S3ClientType> {
-  if (cached?.idToken !== session.idToken) {
+export async function getPagesS3Client(config: WebConfig, email: string): Promise<S3ClientType> {
+  if (cached?.email !== email) {
     // await 前にキャッシュへ載せ、同時呼び出しが同じ Promise を共有するようにする
-    const clientPromise = createPagesS3Client(config, session);
-    cached = { idToken: session.idToken, clientPromise };
+    const clientPromise = createPagesS3Client(config, email);
+    cached = { email, clientPromise };
     // 失敗したら次回作り直せるようキャッシュから外す
     clientPromise.catch(() => {
       if (cached?.clientPromise === clientPromise) {
@@ -51,12 +48,12 @@ export async function getPagesS3Client(
 }
 
 /** ログイン中のユーザーのページに対する S3 操作 */
-export async function getPageStore(config: WebConfig, session: AuthSession): Promise<PageStore> {
+export async function getPageStore(config: WebConfig, email: string): Promise<PageStore> {
   const [{ createPageStore }, s3] = await Promise.all([
     import('@okibasho/core/page-store'),
-    getPagesS3Client(config, session),
+    getPagesS3Client(config, email),
   ]);
-  return createPageStore({ s3, bucket: config.pagesBucket, email: session.email });
+  return createPageStore({ s3, bucket: config.pagesBucket, email });
 }
 
 const CREDENTIALS_STORAGE_KEY = 'okibasho:pages-credentials';
@@ -66,19 +63,19 @@ const CREDENTIALS_MIN_REMAINING_MS = 5 * 60 * 1000;
 type PagesCredentials = Awaited<ReturnType<ReturnType<typeof FromCognitoIdentityPoolType>>>;
 
 interface CachedCredentials {
-  idToken: string;
+  email: string;
   credentials: PagesCredentials;
 }
 
 // GetCredentialsForIdentity は SDK がキャッシュしないため、有効期限に余裕がある間だけ使い回す
-function loadCachedCredentials(idToken: string): PagesCredentials | null {
+function loadCachedCredentials(email: string): PagesCredentials | null {
   try {
     const raw = window.localStorage.getItem(CREDENTIALS_STORAGE_KEY);
     if (!raw) {
       return null;
     }
     const cached: CachedCredentials = JSON.parse(raw);
-    if (cached.idToken !== idToken || !cached.credentials.expiration) {
+    if (cached.email !== email || !cached.credentials.expiration) {
       return null;
     }
     const expiration = new Date(cached.credentials.expiration);
@@ -92,9 +89,9 @@ function loadCachedCredentials(idToken: string): PagesCredentials | null {
   }
 }
 
-function saveCachedCredentials(idToken: string, credentials: PagesCredentials): void {
+function saveCachedCredentials(email: string, credentials: PagesCredentials): void {
   try {
-    const cached: CachedCredentials = { idToken, credentials };
+    const cached: CachedCredentials = { email, credentials };
     window.localStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(cached));
   } catch {
     // 保存できなくても致命的ではない（毎回 GetCredentialsForIdentity するだけ）
@@ -112,24 +109,21 @@ export function clearPagesCredentialsCache(): void {
 }
 
 function withCredentialsCache(
-  idToken: string,
+  email: string,
   provider: ReturnType<typeof FromCognitoIdentityPoolType>,
 ): ReturnType<typeof FromCognitoIdentityPoolType> {
   return async (props) => {
-    const cached = loadCachedCredentials(idToken);
+    const cached = loadCachedCredentials(email);
     if (cached) {
       return cached;
     }
     const credentials = await provider(props);
-    saveCachedCredentials(idToken, credentials);
+    saveCachedCredentials(email, credentials);
     return credentials;
   };
 }
 
-export async function createPagesS3Client(
-  config: WebConfig,
-  session: AuthSession,
-): Promise<S3ClientType> {
+export async function createPagesS3Client(config: WebConfig, email: string): Promise<S3ClientType> {
   const [{ S3Client }, { fromCognitoIdentityPool }] = await Promise.all([
     import('@aws-sdk/client-s3'),
     import('@aws-sdk/credential-providers'),
@@ -142,14 +136,15 @@ export async function createPagesS3Client(
     // メモリキャッシュから返ると変更前のメタデータが見えてしまう
     requestHandler: { cache: 'no-store' },
     credentials: withCredentialsCache(
-      session.idToken,
+      email,
       fromCognitoIdentityPool({
         clientConfig: { region: config.region },
         identityPoolId: config.identityPoolId,
         // 未指定だと logins を渡した時点で GetId のキャッシュが無効になり、リロードのたびに GetId が走る
-        userIdentifier: session.email,
+        userIdentifier: email,
+        // SDK が認証情報を要求する時点で id_token を読む。呼び出し側は idToken を持ち回らない
         logins: {
-          [cognitoLoginKey(config)]: session.idToken,
+          [cognitoLoginKey(config)]: requireIdToken,
         },
       }),
     ),

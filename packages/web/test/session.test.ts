@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildLogoutUrl } from '../src/auth/user-manager';
+import { buildLogoutUrl } from '../src/auth/session';
 
 describe('buildLogoutUrl', () => {
   it('Cognito独自形式(client_id + logout_uri)のログアウトURLを組み立てる', () => {

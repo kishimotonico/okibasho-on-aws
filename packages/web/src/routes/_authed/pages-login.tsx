@@ -1,18 +1,18 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 
-import { loadAuthSession } from '~/auth/user-manager';
+import { requireIdToken } from '~/auth/session';
 import { getWebConfig } from '~/config/env';
 import { messages } from '~/lib/messages';
 import { parsePagesReturnUrl, requestPagesCookie } from '~/lib/pages-cookie';
 
 // pages の 403 ページから飛んでくる。Cookie を受け取って元の内部ページへ戻す
-export const Route = createFileRoute('/pages-login')({
+export const Route = createFileRoute('/_authed/pages-login')({
   ssr: false,
   validateSearch: (search: Record<string, unknown>): { return?: string } => ({
     return: typeof search.return === 'string' ? search.return : undefined,
   }),
   loaderDeps: ({ search }) => ({ returnUrl: search.return }),
-  // 戻るまで loader を終わらせず、読み込み中の画面は AuthGate に出させる
+  // 戻るまで loader を終わらせず、読み込み中の画面は defaultPendingComponent に出させる
   loader: ({ deps }) => issueCookieAndReturn(deps.returnUrl),
   errorComponent: PagesLoginError,
 });
@@ -23,13 +23,7 @@ async function issueCookieAndReturn(returnValue: string | undefined): Promise<vo
     throw redirect({ to: '/' });
   }
 
-  // 未ログインなら AuthGate がログインへ送り、戻ってきたときに loader が走り直す
-  const session = await loadAuthSession();
-  if (!session) {
-    return;
-  }
-
-  await requestPagesCookie(session.idToken);
+  await requestPagesCookie(await requireIdToken());
   window.location.replace(returnUrl);
   await new Promise(() => {});
 }
