@@ -105,3 +105,6 @@ export const preloadPagesSdk: S3ClientModule['preloadPagesSdk'] = () => {};
 export const pagesPreconnectUrls: S3ClientModule['pagesPreconnectUrls'] = () => [];
 
 export const getPageStore: S3ClientModule['getPageStore'] = async () => demoPageStore;
+
+// クレデンシャルのキャッシュ自体を持たないので消すものも無い。/logout の loader が呼ぶので置く
+export const clearPagesCredentialsCache: S3ClientModule['clearPagesCredentialsCache'] = () => {};

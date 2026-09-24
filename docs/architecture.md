@@ -156,7 +156,7 @@ App Client は 2 つ。どちらも public client（client secret なし）+ PKC
 
 メールアドレスが S3 キーになる。大文字や `+` を含むアドレスを PreSignUp で拒否するのは、キーの揺れを増やさないためである。
 
-ID / access token の有効期間は 1 時間、refresh token は 30 日。web は oidc-client-ts の refresh token grant（`signinSilent`）で id_token を更新する。タブを閉じたあとに id_token が切れていても、起動時に同じ更新をかけてから未ログインとみなす。refresh token が生きている間は Managed Login に戻さない。保存済みトークンを書き換える処理（起動時と期限前の更新、ログイン完了、ログアウト）は Web Locks でタブをまたいで直列にし、ログアウト後に進行中だった更新がトークンを書き戻さないようにする。ログアウトはローカルの状態を消す前に Cognito の `/oauth2/revoke` で refresh token を失効させる。
+ID / access token の有効期間は 1 時間、refresh token は 30 日。web は id_token を保持する専用の状態を持たず、S3 を呼ぶ直前など使う時点で `auth/session.ts` から読む。期限切れなら oidc-client-ts の refresh token grant（`signinSilent`）でそのつど更新し、refresh token が生きている間は Managed Login に戻さない。保存済みトークンを書き換える処理（更新、ログイン完了、ログアウト）は Web Locks でタブをまたいで直列にし、ログアウト後に進行中だった更新がトークンを書き戻さないようにする。ログアウトはローカルの状態を消す前に Cognito の `/oauth2/revoke` で refresh token を失効させる。
 
 ### CLI
 
@@ -436,7 +436,7 @@ Lambda の失敗は CloudWatch Logs と Lambda の `Errors` メトリクスで�
 
 API クライアントは書かない。ブラウザから直接 AWS SDK for JavaScript v3 で S3 を叩く。
 
-全ページログイン必須。SPA のルート直下に認証ゲートを置き、未ログインで開くと即 Cognito Managed Login へリダイレクトする。ログイン画面やログインボタンは持たない。唯一の例外は `/callback`（Managed Login からのリダイレクト先）。
+全ページログイン必須。`/` と `/pages-login` を束ねるパスレスなレイアウトルート `_authed` の `beforeLoad` に認証ゲートを置き、未ログインで開くと即 Cognito Managed Login へリダイレクトする。ログイン画面やログインボタンは持たない。この外側にあるのは `/callback`（Managed Login からのリダイレクト先）と `/logout` だけ。
 
 画面:
 

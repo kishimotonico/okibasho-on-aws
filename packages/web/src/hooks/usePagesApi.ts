@@ -6,10 +6,10 @@ import {
   type PageStore,
   type Retention,
 } from '@okibasho/core';
+import { useRouteContext } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
-import { useAuth } from '~/auth/auth-context';
-import type { AuthSession } from '~/auth/user-manager';
+import { NotSignedInError } from '~/auth/session';
 import { getWebConfig, type WebConfig } from '~/config/env';
 import type { UploadFileEntry } from '~/lib/collect-upload-files';
 import { listedPageFromMetadata, listPages, type ListedPage } from '~/lib/listed-page';
@@ -59,23 +59,20 @@ export interface PagesApi {
 }
 
 /**
- * ページに対する変更をまとめる。呼び出し側は auth / config / S3 を知らなくてよい。
- * React に依存しないので、route の loader とコンポーネントの両方から同じ実装を使える
+ * ページに対する変更をまとめる。呼び出し側は config / S3 を知らなくてよい。
+ * React に依存しないので、route の loader とコンポーネントの両方から同じ実装を使える。
+ * email は _authed のゲートを通った後にしか呼ばれないので必ずある前提でよい
  */
-export function createPagesApi(config: WebConfig, session: AuthSession | null): PagesApi {
+export function createPagesApi(config: WebConfig, email: string): PagesApi {
   const urlOrigin = config.pagesBaseUrl.replace(/\/$/, '');
-
-  async function target() {
-    if (!session) {
-      throw new PagesApiError(messages.loginRequired);
-    }
-    return { store: await getPageStore(config, session), email: session.email };
-  }
 
   async function run<T>(fallback: string, action: () => Promise<T>): Promise<T> {
     try {
       return await action();
     } catch (error) {
+      if (error instanceof NotSignedInError) {
+        throw new PagesApiError(messages.loginRequired);
+      }
       throw error instanceof PagesApiError
         ? error
         : new PagesApiError(toUserMessage(error, fallback));
@@ -89,7 +86,7 @@ export function createPagesApi(config: WebConfig, session: AuthSession | null): 
     action: (store: PageStore) => Promise<PageMetadata>,
   ): Promise<ListedPage> {
     return run(fallback, async () => {
-      const { store, email } = await target();
+      const store = await getPageStore(config, email);
       const metadata = await action(store);
       return listedPageFromMetadata(email, slug, metadata, config.pagesBaseUrl);
     });
@@ -97,20 +94,20 @@ export function createPagesApi(config: WebConfig, session: AuthSession | null): 
 
   return {
     urlOrigin,
-    userPath: session ? `/p/${emailLocalPart(session.email)}/` : '',
+    userPath: `/p/${emailLocalPart(email)}/`,
 
-    viewUrl: (slug) => (session ? buildViewUrl(config.pagesBaseUrl, session.email, slug) : ''),
+    viewUrl: (slug) => buildViewUrl(config.pagesBaseUrl, email, slug),
 
     list: (previous) =>
       run(messages.listLoadFailed, async () => {
-        const { store, email } = await target();
+        const store = await getPageStore(config, email);
         const pages = await listPages(store, email, config.pagesBaseUrl, previous);
         return sortPagesByCreatedAt(pages);
       }),
 
     find: (slug) =>
       run(messages.listLoadFailed, async () => {
-        const { store, email } = await target();
+        const store = await getPageStore(config, email);
         const metadata = await store.getMetadata(slug);
         return metadata ? listedPageFromMetadata(email, slug, metadata, config.pagesBaseUrl) : null;
       }),
@@ -131,7 +128,7 @@ export function createPagesApi(config: WebConfig, session: AuthSession | null): 
 
     remove: (slug) =>
       run(messages.removeFailed, async () => {
-        const { store } = await target();
+        const store = await getPageStore(config, email);
         await store.remove(slug);
       }),
 
@@ -143,9 +140,9 @@ export function createPagesApi(config: WebConfig, session: AuthSession | null): 
   };
 }
 
-/** 薄いラッパー。認証情報・接続先を context / env から拾って createPagesApi に渡す */
+/** 薄いラッパー。email は _authed の route context から、接続先は env から拾って createPagesApi に渡す */
 export function usePagesApi(): PagesApi {
-  const { session } = useAuth();
+  const { email } = useRouteContext({ from: '/_authed' });
   const config = useMemo(() => getWebConfig(), []);
-  return useMemo(() => createPagesApi(config, session), [config, session]);
+  return useMemo(() => createPagesApi(config, email), [config, email]);
 }

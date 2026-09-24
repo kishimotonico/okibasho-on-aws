@@ -1,14 +1,17 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 
-import { completeSignInCallbackOnce } from '~/auth/user-manager';
+import { completeSignInCallbackOnce } from '~/auth/session';
+import { AuthFlowShell } from '~/components/AuthFlowShell';
+import { LoadingShell } from '~/components/LoadingShell';
 import { messages } from '~/lib/messages';
 
 export const Route = createFileRoute('/callback')({
   // defaultSsr: false（src/start.ts）で全ルート既定になったが、
   // signinCallback を誤ってサーバーで実行させないための明示
   ssr: false,
-  // loader は必ず redirect か例外で終わるので component は無い。読み込み中の画面は AuthGate が出す
+  // loader は必ず redirect か例外で終わるので component は無い
   loader: handleCallback,
+  pendingComponent: CallbackPending,
   errorComponent: CallbackError,
 });
 
@@ -23,12 +26,22 @@ async function handleCallback(): Promise<void> {
   throw redirect({ to: '/', search: slug ? { slug } : {} });
 }
 
+function CallbackPending() {
+  return (
+    <AuthFlowShell>
+      <LoadingShell />
+    </AuthFlowShell>
+  );
+}
+
 function CallbackError({ error }: { error: unknown }) {
   const message = error instanceof Error ? error.message : messages.loginFailed;
   return (
-    <div className="page">
-      <h1>{messages.loginErrorTitle}</h1>
-      <p>{message}</p>
-    </div>
+    <AuthFlowShell>
+      <div className="page">
+        <h1>{messages.loginErrorTitle}</h1>
+        <p>{message}</p>
+      </div>
+    </AuthFlowShell>
   );
 }

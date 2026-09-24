@@ -2,8 +2,7 @@ import type { ReactNode } from 'react';
 import { createRootRoute, HeadContent, Scripts } from '@tanstack/react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 
-import { AuthGate } from '~/auth/AuthGate';
-import { AuthProvider } from '~/auth/auth-context';
+import { SessionBanner } from '~/auth/SessionBanner';
 import { NotFoundPage } from '~/components/NotFoundPage';
 import { TooltipProvider } from '~/components/Tooltip';
 import { getWebConfig } from '~/config/env';
@@ -55,11 +54,10 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <TooltipProvider>
-              <AuthGate>{children}</AuthGate>
-            </TooltipProvider>
-          </AuthProvider>
+          <TooltipProvider>
+            <SessionBanner />
+            {children}
+          </TooltipProvider>
         </QueryClientProvider>
         <Scripts />
       </body>

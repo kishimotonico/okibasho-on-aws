@@ -1,8 +1,7 @@
-import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
+import { OidcClient, UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
+import { redirect } from '@tanstack/react-router';
 
 import { getWebConfig } from '~/config/env';
-import { clearPersistedPages } from '~/lib/query-persistence';
-import { clearPagesCredentialsCache } from '~/lib/s3-client';
 
 const RETURN_PATH_KEY = 'okibasho:auth:returnTo';
 
@@ -28,23 +27,9 @@ function buildMetadata(hostedUiBaseUrl: string, issuer: string) {
   };
 }
 
-let userManager: UserManager | null = null;
-
-/**
- * UserManager はアプリでひとつだけ持つ。
- * React の外（route の loader）からもログイン状態を読むため、
- * AuthProvider の内側に閉じ込めず、モジュールで共有する。
- * 複数インスタンスを作るとトークンの自動更新タイマーが二重に走る。
- */
-export function getUserManager(): UserManager {
-  userManager ??= createUserManager();
-  return userManager;
-}
-
-function createUserManager(): UserManager {
+function buildOidcSettings() {
   const config = getWebConfig();
-
-  const manager = new UserManager({
+  return {
     authority: config.oidcIssuer,
     metadata: buildMetadata(config.hostedUiBaseUrl, config.oidcIssuer),
     client_id: config.webAppClientId,
@@ -55,19 +40,32 @@ function createUserManager(): UserManager {
     // untrusted な HTML は別 origin（pages 側）で配信され storage を読めないので、トークンはタブ間で共有する
     userStore: new WebStorageStateStore({ store: window.localStorage }),
     stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
-    // automaticSilentRenew はロックの外でトークンを保存するので使わず、同じ更新を自前でロックに通す
-    automaticSilentRenew: false,
-  });
-  manager.events.addAccessTokenExpiring(() => {
-    void withTokenLock(() => manager.signinSilent()).catch(() => {});
-  });
-  return manager;
+  };
+}
+
+let userManager: UserManager | null = null;
+
+function getUserManager(): UserManager {
+  userManager ??= new UserManager(buildOidcSettings());
+  return userManager;
+}
+
+let oidcClient: OidcClient | null = null;
+
+/**
+ * signinRedirect は即座に window.location を書き換えるため、route の beforeLoad から
+ * throw redirect(...) する形に載せられない。OidcClient.createSigninRequest は
+ * UserManager と同じ stateStore に PKCE の state を書き込みつつ authorize URL だけを返す
+ * 公開 API なので、遷移せずに URL を組み立てるのに使う。
+ */
+function getOidcClient(): OidcClient {
+  oidcClient ??= new OidcClient(buildOidcSettings());
+  return oidcClient;
 }
 
 /**
  * 保存済みトークンを書き換える処理（更新・ログイン完了・ログアウト）は、タブをまたいで一つずつ走らせる。
- * 並ぶと、ログアウトで消したトークンを先に始まっていた更新が書き戻したり、
- * 失敗した更新の結果がそのあとのログイン完了より遅れて AuthProvider に届いたりする。
+ * ログアウトで消したトークンを、別タブで先に始まっていた更新が後から書き戻すのを防ぐ。
  */
 async function withTokenLock<T>(operation: () => Promise<T>): Promise<T> {
   return navigator.locks.request('okibasho:auth:tokens', operation);
@@ -90,44 +88,21 @@ export function buildLogoutUrl(
   return `${hostedUi}/logout?${params.toString()}`;
 }
 
-/**
- * ローカルのログイン状態を消し、続けて遷移する先（Cognito の /logout）を返す。
- * Cognito の /logout は refresh token を失効させないので、持ち出された token が 30 日使えないよう先に失効させる。
- */
-export async function signOut(): Promise<string> {
-  await clearPersistedPages();
-  clearPagesCredentialsCache();
-  const manager = getUserManager();
-  await withTokenLock(async () => {
-    await manager.revokeTokens(['refresh_token']);
-    await manager.removeUser();
-  });
-  const config = getWebConfig();
-  return buildLogoutUrl(config.hostedUiBaseUrl, config.webAppClientId, window.location.origin);
+export class NotSignedInError extends Error {
+  constructor() {
+    super('not signed in');
+    this.name = 'NotSignedInError';
+  }
 }
 
-/** S3 を呼ぶのに必要なログイン情報。email は S3 のキーに使うため小文字で揃える */
-export interface AuthSession {
-  email: string;
-  idToken: string;
-}
-
-export function sessionFromUser(user: User | null): AuthSession | null {
-  if (!user || user.expired) {
-    return null;
-  }
-  const email =
-    typeof user.profile.email === 'string' ? user.profile.email.trim().toLowerCase() : null;
-  if (!email || !user.id_token) {
-    return null;
-  }
-  return { email, idToken: user.id_token };
+/** email は S3 のキーに使うため小文字で揃える */
+function emailFromUser(user: User): string | null {
+  return typeof user.profile.email === 'string' ? user.profile.email.trim().toLowerCase() : null;
 }
 
 /**
  * 保存済みユーザーを返す。期限切れなら refresh token で更新してから返す。
- * 期限切れ前の更新タイマーは、タブを閉じている間に切れたトークンには張られない。
- * AuthProvider と loader が同時に呼んでも、後のほうはロックの中で更新済みのトークンを読む。
+ * 呼び出し側が同時に呼んでも、後のほうはロックの中で更新済みのトークンを読む。
  */
 export function loadUser(): Promise<User | null> {
   const manager = getUserManager();
@@ -140,11 +115,6 @@ export function loadUser(): Promise<User | null> {
   });
 }
 
-/** route の loader など、React の外からログイン情報を読む */
-export async function loadAuthSession(): Promise<AuthSession | null> {
-  return sessionFromUser(await loadUser());
-}
-
 export function saveReturnPath(path: string): void {
   sessionStorage.setItem(RETURN_PATH_KEY, path);
 }
@@ -153,6 +123,45 @@ export function consumeReturnPath(): string {
   const value = sessionStorage.getItem(RETURN_PATH_KEY);
   sessionStorage.removeItem(RETURN_PATH_KEY);
   return value && value.startsWith('/') ? value : '/';
+}
+
+/** S3 を呼ぶ直前など、使う時点で読む。未ログイン・期限切れの更新失敗では投げる */
+export async function requireIdToken(): Promise<string> {
+  const user = await loadUser();
+  if (!user?.id_token) {
+    throw new NotSignedInError();
+  }
+  return user.id_token;
+}
+
+/**
+ * ルート直下の認証ゲート。未ログインなら戻り先を保存して Managed Login へ redirect する。
+ * 管理UIはチーム内専用でIAMがセキュリティ境界のため、未ログインで見せる画面は用意しない
+ */
+export async function requireSignedIn(returnPath: string): Promise<{ email: string }> {
+  const user = await loadUser();
+  const email = user && !user.expired ? emailFromUser(user) : null;
+  if (email) {
+    return { email };
+  }
+
+  saveReturnPath(returnPath);
+  const signinRequest = await getOidcClient().createSigninRequest({});
+  throw redirect({ href: signinRequest.url });
+}
+
+/**
+ * ローカルのログイン状態を消し、続けて遷移する先（Cognito の /logout）を返す。
+ * Cognito の /logout は refresh token を失効させないので、持ち出された token が 30 日使えないよう先に失効させる。
+ */
+export async function signOut(): Promise<string> {
+  const manager = getUserManager();
+  await withTokenLock(async () => {
+    await manager.revokeTokens(['refresh_token']);
+    await manager.removeUser();
+  });
+  const config = getWebConfig();
+  return buildLogoutUrl(config.hostedUiBaseUrl, config.webAppClientId, window.location.origin);
 }
 
 let signinCallbackPromise: Promise<string> | null = null;

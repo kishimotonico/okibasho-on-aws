@@ -8,8 +8,6 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
-import { useAuth } from '~/auth/auth-context';
-import { loadAuthSession } from '~/auth/user-manager';
 import { Composer, type BoxSpinSignal, type ComposerSignal } from '~/components/Composer';
 import { PagesSection } from '~/components/PagesSection';
 import { ShareDialog } from '~/components/ShareDialog';
@@ -22,31 +20,26 @@ import { queryClient } from '~/lib/query-client';
 import { pagesRestored } from '~/lib/query-persistence';
 import { preloadPagesSdk } from '~/lib/s3-client';
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute('/_authed/')({
   validateSearch: (search: Record<string, unknown>): { slug?: string } => ({
     slug: typeof search.slug === 'string' && isValidSlug(search.slug) ? search.slug : undefined,
   }),
-  loader: prefetchPages,
+  loader: ({ context }) => prefetchPages(context.email),
   component: HomePage,
 });
 
-async function prefetchPages(): Promise<void> {
+async function prefetchPages(email: string): Promise<void> {
   // 一覧取得を待たず、S3・Cognito の SDK チャンクの読み込みだけ並行して始める
   preloadPagesSdk();
-
-  const session = await loadAuthSession();
-  if (!session) {
-    return;
-  }
 
   // 復元前に prefetch すると差分の材料が無く全件取り直しになる
   await pagesRestored;
 
   const config = getWebConfig();
-  const api = createPagesApi(config, session);
+  const api = createPagesApi(config, email);
   // リロードのたびに裏で取り直す（ETag 差分なので安い）
   void queryClient.prefetchQuery({
-    ...pagesListQueryOptions(api, session.email),
+    ...pagesListQueryOptions(api, email),
     staleTime: 0,
   });
 }
@@ -101,8 +94,7 @@ function isBoxSpinBackground(target: EventTarget | null): boolean {
 
 function HomePage() {
   const api = usePagesApi();
-  const { session } = useAuth();
-  const email = session?.email ?? '';
+  const { email } = Route.useRouteContext();
   const { slug: initialSlug } = Route.useSearch();
   const uploadSectionRef = useRef<HTMLDivElement>(null);
 
